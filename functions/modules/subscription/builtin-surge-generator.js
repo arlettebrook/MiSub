@@ -189,6 +189,8 @@ function clashProxyToSurgeResult(proxy) {
         if (proxy.version) parts.push(`version=${proxy.version}`);
         // 连接复用（Snell V4 可选）
         if (proxy.reuse !== undefined) parts.push(`reuse=${proxy.reuse}`);
+        // TCP Fast Open
+        if (proxy.tfo !== undefined) parts.push(`tfo=${proxy.tfo}`);
         // obfs
         const obfsOpts = proxy['obfs-opts'];
         if (obfsOpts) {
