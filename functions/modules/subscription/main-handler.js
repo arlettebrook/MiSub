@@ -464,62 +464,69 @@ export async function handleMisubRequest(context) {
         }
     }
 
-    // [新增] 内置 Surge 生成器 - Surge 格式默认使用内置生成器
-    // 原因：SubConverter 后端不支持 hysteria2 等新协议转 Surge 格式，导致节点丢失
-    if (targetFormat.startsWith('surge')) {
-        try {
-            const publicBaseUrl = getPublicBaseUrl(env, url);
-            const callbackPath = profileIdentifier ? `/${token}/${profileIdentifier}` : `/${token}`;
-            const managedUrl = `${publicBaseUrl.origin}${callbackPath}?surge`;
+    // [修改] 内置 Surge 生成器 - 仅在显式请求时使用，默认走 subconverter
+    const useBuiltinSurge = url.searchParams.get('builtin') === '1' ||
+        url.searchParams.get('builtin') === 'surge' ||
+        url.searchParams.get('native') === '1';
 
-            const surgeConfig = generateBuiltinSurgeConfig(combinedNodeList, {
-                fileName: subName,
-                managedConfigUrl: managedUrl,
-                skipCertVerify: shouldSkipCertificateVerify,
-                enableUdp: shouldEnableUdp
-            });
+    const buildBuiltinSurgeResponse = () => {
+        const publicBaseUrl = getPublicBaseUrl(env, url);
+        const callbackPath = profileIdentifier ? `/${token}/${profileIdentifier}` : `/${token}`;
+        const managedUrl = `${publicBaseUrl.origin}${callbackPath}?surge`;
 
-            const responseHeaders = new Headers({
-                "Content-Disposition": `attachment; filename*=utf-8''${encodeURIComponent(subName)}`,
-                'Content-Type': 'text/plain; charset=utf-8',
-                'Cache-Control': 'no-store, no-cache',
-                'X-MiSub-Mode': 'builtin-surge'
-            });
+        const surgeConfig = generateBuiltinSurgeConfig(combinedNodeList, {
+            fileName: subName,
+            managedConfigUrl: managedUrl,
+            skipCertVerify: shouldSkipCertificateVerify,
+            enableUdp: shouldEnableUdp
+        });
 
-            Object.entries(cacheHeaders).forEach(([key, value]) => {
-                responseHeaders.set(key, value);
-            });
+        const responseHeaders = new Headers({
+            "Content-Disposition": `attachment; filename*=utf-8''${encodeURIComponent(subName)}`,
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache',
+            'X-MiSub-Mode': 'builtin-surge'
+        });
 
-            if (!url.searchParams.has('callback_token') && !shouldSkipLogging) {
-                const clientIp = request.headers.get('CF-Connecting-IP')
-                    || request.headers.get('X-Real-IP')
-                    || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-                    || 'N/A';
-                context.waitUntil(
-                    sendEnhancedTgNotification(
-                        config,
-                        '🛰️ *订阅被访问* (内置Surge转换)',
-                        clientIp,
-                        `*域名:* \`${domain}\`\n*客户端:* \`${userAgentHeader}\`\n*请求格式:* \`${targetFormat}\`\n*订阅组:* \`${subName}\``
-                    )
-                );
+        Object.entries(cacheHeaders).forEach(([key, value]) => {
+            responseHeaders.set(key, value);
+        });
 
-                if (config.enableAccessLog) {
-                    logAccessSuccess({
-                        context,
-                        env,
-                        request,
-                        userAgentHeader,
-                        targetFormat: 'surge (builtin)',
-                        token,
-                        profileIdentifier,
-                        subName,
-                        domain
-                    });
-                }
+        if (!url.searchParams.has('callback_token') && !shouldSkipLogging) {
+            const clientIp = request.headers.get('CF-Connecting-IP')
+                || request.headers.get('X-Real-IP')
+                || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
+                || 'N/A';
+            context.waitUntil(
+                sendEnhancedTgNotification(
+                    config,
+                    '🛰️ *订阅被访问* (内置Surge转换)',
+                    clientIp,
+                    `*域名:* \`${domain}\`\n*客户端:* \`${userAgentHeader}\`\n*请求格式:* \`${targetFormat}\`\n*订阅组:* \`${subName}\``
+                )
+            );
+
+            if (config.enableAccessLog) {
+                logAccessSuccess({
+                    context,
+                    env,
+                    request,
+                    userAgentHeader,
+                    targetFormat: 'surge (builtin)',
+                    token,
+                    profileIdentifier,
+                    subName,
+                    domain
+                });
             }
+        }
 
-            return new Response(surgeConfig, { headers: responseHeaders });
+        return new Response(surgeConfig, { headers: responseHeaders });
+    };
+
+    if (useBuiltinSurge && targetFormat.startsWith('surge')) {
+        try {
+            return buildBuiltinSurgeResponse();
         } catch (e) {
             console.error('[BuiltinSurge] Generation failed, falling back to subconverter:', e);
             // 回退到 subconverter
@@ -647,6 +654,15 @@ export async function handleMisubRequest(context) {
     } catch (e) {
         lastError = e;
         console.error('[MiSub] Subconverter call failed:', e);
+        // Surge 内置兜底
+        if (targetFormat.startsWith('surge') && !useBuiltinSurge) {
+            try {
+                return buildBuiltinSurgeResponse();
+            } catch (fallbackError) {
+                console.error('[BuiltinSurge] Fallback generation failed:', fallbackError);
+            }
+        }
+        // Loon 内置兜底
         if (targetFormat === 'loon' && !useBuiltinLoon) {
             try {
                 return buildBuiltinLoonResponse();

@@ -702,67 +702,102 @@ return null;
 * @returns {Object|null} Clash 代理对象
 */
 function parseSnellUrl(url) {
-try {
-// snell://psk@server:port?version=5&reuse=true&tfo=true&obfs=http&obfs-host=example.com#name
-const body = url.substring('snell://'.length);
+    try {
+        const body = url.substring('snell://'.length);
+        let psk = '';
+        let serverPart = '';
+        const atIndex = body.indexOf('@');
+        if (atIndex !== -1) {
+            psk = body.substring(0, atIndex);
+            try { psk = decodeURIComponent(psk); } catch { }
+            serverPart = body.substring(atIndex + 1);
+        } else {
+            serverPart = body;
+        }
 
-const atIndex = body.indexOf('@');
-if (atIndex === -1) return null;
+        const queryIndex = serverPart.indexOf('?');
+        const hashIndex = serverPart.indexOf('#');
+        let hostPortStr = serverPart;
+        if (queryIndex !== -1) {
+            hostPortStr = serverPart.substring(0, queryIndex);
+        } else if (hashIndex !== -1) {
+            hostPortStr = serverPart.substring(0, hashIndex);
+        }
 
-let psk = body.substring(0, atIndex);
-try {
-psk = decodeURIComponent(psk);
-} catch { }
+        const { server, port } = parseHostPort(hostPortStr);
+        const params = parseQueryParams(url);
+        const name = extractName(url);
 
-let serverPart = body.substring(atIndex + 1);
-const queryIndex = serverPart.indexOf('?');
-const hashIndex = serverPart.indexOf('#');
+        if (!psk) psk = params.get('psk') || params.get('password') || '';
 
-if (queryIndex !== -1) {
-serverPart = serverPart.substring(0, queryIndex);
-} else if (hashIndex !== -1) {
-serverPart = serverPart.substring(0, hashIndex);
+        const proxy = { name: name || `Snell-${server}`, type: 'snell', server, port, psk };
+        const version = params.get('version');
+        if (version) proxy.version = parseInt(version);
+        const reuse = params.get('reuse');
+        if (reuse !== null) proxy.reuse = reuse === 'true';
+        const tfo = params.get('tfo');
+        if (tfo !== null) proxy.tfo = tfo === 'true';
+        const obfs = params.get('obfs');
+        const obfsHost = params.get('obfs-host');
+        if (obfs || obfsHost) {
+            proxy['obfs-opts'] = {};
+            if (obfs) proxy['obfs-opts'].mode = obfs;
+            if (obfsHost) proxy['obfs-opts'].host = obfsHost;
+        }
+        if (params.get('udp-relay') === 'true') proxy.udp = true;
+        return proxy;
+    } catch (e) {
+        console.error('解析 Snell URL 失败:', e);
+        return null;
+    }
 }
 
-const { server, port } = parseHostPort(serverPart);
-const params = parseQueryParams(url);
-const name = extractName(url);
+/**
+ * 将 AnyTLS URL 转换为 Clash 代理对象
+ * @param {string} url - AnyTLS URL
+ * @returns {Object|null} Clash 代理对象
+ */
+function parseAnytlsUrl(url) {
+    try {
+        const body = url.substring(9);
+        let password = '';
+        let serverPart = '';
+        const atIndex = body.indexOf('@');
+        if (atIndex !== -1) {
+            password = body.substring(0, atIndex);
+            try { password = decodeURIComponent(password); } catch { }
+            serverPart = body.substring(atIndex + 1);
+        } else {
+            serverPart = body;
+        }
 
-const proxy = {
-name: name || `Snell-${server}`,
-type: 'snell',
-server,
-port,
-psk
-};
+        const queryIndex = serverPart.indexOf('?');
+        const hashIndex = serverPart.indexOf('#');
+        let hostPortStr = serverPart;
+        if (queryIndex !== -1) {
+            hostPortStr = serverPart.substring(0, queryIndex);
+        } else if (hashIndex !== -1) {
+            hostPortStr = serverPart.substring(0, hashIndex);
+        }
 
-const version = params.get('version');
-if (version) proxy.version = parseInt(version);
+        const { server, port } = parseHostPort(hostPortStr);
+        const params = parseQueryParams(url);
+        const name = extractName(url);
 
-const reuse = params.get('reuse');
-if (reuse !== null) proxy.reuse = reuse === 'true';
+        const proxy = { name: name || `AnyTLS-${server}`, type: 'anytls', server, port, password };
+        
+        if (params.get('sni')) proxy.sni = params.get('sni');
+        if (params.get('alpn')) proxy.alpn = params.get('alpn').split(',');
+        if (params.get('insecure') === '1') proxy['skip-cert-verify'] = true;
 
-const tfo = params.get('tfo');
-if (tfo !== null) proxy.tfo = tfo === 'true';
-
-const obfs = params.get('obfs');
-const obfsHost = params.get('obfs-host');
-if (obfs || obfsHost) {
-proxy['obfs-opts'] = {};
-if (obfs) proxy['obfs-opts'].mode = obfs;
-if (obfsHost) proxy['obfs-opts'].host = obfsHost;
+        proxy.udp = true;
+        return proxy;
+    } catch (e) {
+        console.error('解析 AnyTLS URL 失败:', e);
+        return null;
+    }
 }
 
-if (params.get('udp-relay') === 'true') {
-proxy.udp = true;
-}
-
-return proxy;
-} catch (e) {
-console.error('解析 Snell URL 失败:', e);
-return null;
-}
-}
 
 /**
 * 将节点 URL 转换为 Clash 代理对象
@@ -790,6 +825,8 @@ return parseTuicUrl(url);
 return parseSnellUrl(url);
 } else if (lowerUrl.startsWith('wireguard://')) {
 return parseWireguardUrl(url);
+} else if (lowerUrl.startsWith('anytls://')) {
+return parseAnytlsUrl(url);
 }
 
 // 不支持的协议

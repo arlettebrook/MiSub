@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, defineAsyncComponent } from 'vue';
 import { useDataStore } from '../stores/useDataStore.js';
 import { useBulkImportLogic } from '../composables/useBulkImportLogic.js'; // Added
@@ -37,7 +37,6 @@ const totalNodesCount = computed(() => {
     return (subscriptions.value || []).reduce((acc, sub) => acc + (sub.nodeCount || 0), 0);
 });
 
-const activeSubscriptionsCount = computed(() => (activeSubscriptions || []).length);
 const subscriptionsCount = computed(() => (subscriptions.value || []).length);
 const activeProfilesCount = computed(() => (activeProfiles || []).length);
 
@@ -68,6 +67,10 @@ const {
   showModal: showBulkImportModal,
   handleBulkImport
 } = useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk });
+
+const openBulkImportModal = () => {
+    showBulkImportModal.value = true;
+};
 
 const BulkImportModal = defineAsyncComponent(() => import('../components/modals/BulkImportModal.vue'));
     
@@ -129,7 +132,7 @@ const handleQRCode = (url, title) => {
                 订阅日志
             </button>
 
-            <button @click="showBulkImportModal = true" class="px-4 py-2 text-sm font-medium bg-gray-100/80 text-gray-800 hover:bg-gray-200/80 dark:bg-gray-800/60 dark:text-gray-200 dark:hover:bg-gray-700/70 misub-radius-lg transition-colors">
+            <button @click="openBulkImportModal" class="px-4 py-2 text-sm font-medium bg-gray-100/80 text-gray-800 hover:bg-gray-200/80 dark:bg-gray-800/60 dark:text-gray-200 dark:hover:bg-gray-700/70 misub-radius-lg transition-colors">
                 批量导入
             </button>
             <button @click="handleAddProfile" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 misub-radius-lg transition-colors shadow-sm shadow-primary-500/20">
@@ -141,7 +144,7 @@ const handleQRCode = (url, title) => {
       <StatCards
         :formatted-total-remaining-traffic="formattedTotalRemainingTraffic"
         :traffic-stats="trafficStats"
-        :active-subscriptions-count="activeSubscriptionsCount"
+        :active-subscriptions-count="enabledSubscriptionsCount"
         :subscriptions-count="subscriptionsCount"
         :total-nodes-count="totalNodesCount"
         :active-profiles-count="activeProfilesCount"

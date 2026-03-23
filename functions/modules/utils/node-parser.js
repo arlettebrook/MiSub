@@ -311,10 +311,13 @@ function parseSurgeOrQxLine(line) {
                     let v = kv.slice(1).join('=').trim();
                     if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
                     
-                    if (k === 'password' || k === 'auth' || k === 'psk') {
+                    if (k === 'password' || k === 'auth' || k === 'psk' || k === 'username' || k === 'uuid') {
                         if (proxy.type === 'vless' || proxy.type === 'vmess') proxy.uuid = v;
                         else if (proxy.type === 'snell') proxy.psk = v;
                         else proxy.password = v;
+                    }
+                    if (k === 'token') {
+                        if (proxy.type === 'tuic') proxy.token = proxy.password = v;
                     }
                     if (k === 'sni') proxy.sni = v;
                     if (k === 'skip-cert-verify' && v === 'true') proxy.skipCertVerify = true;
@@ -352,9 +355,12 @@ function parseSurgeOrQxLine(line) {
                     if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
                     
                     if (k === 'tag') proxy.name = v;
-                    if (k === 'password' || k === 'auth' || k === 'psk') {
+                    if (k === 'password' || k === 'auth' || k === 'psk' || k === 'username' || k === 'uuid') {
                         if (proxy.type === 'vless' || proxy.type === 'vmess') proxy.uuid = v;
                         else proxy.password = v;
+                    }
+                    if (k === 'token') {
+                        if (proxy.type === 'tuic') proxy.token = proxy.password = v;
                     }
                     if (k === 'sni' || k === 'tls-host' || k === 'obfs-host') proxy.sni = v;
                     if (k === 'tls-verification' && v === 'false') proxy.skipCertVerify = true;
