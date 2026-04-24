@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import MigrationModal from '../components/modals/MigrationModal.vue';
 import { useSettingsLogic } from '../composables/useSettingsLogic.js';
 import SettingsLayout from '../components/layout/SettingsLayout.vue';
@@ -12,6 +13,7 @@ import GlobalSettings from '../components/settings/sections/GlobalSettings.vue';
 
 import SystemSettings from '../components/settings/sections/SystemSettings.vue';
 import ClientSettings from '../components/settings/sections/ClientSettings.vue';
+import CustomPageSettings from '../components/settings/sections/CustomPageSettings.vue';
 
 // 使用 composable 获取所有设置相关的状态和函数
 const {
@@ -25,12 +27,14 @@ const {
   loadSettings,
   handleSave,
   handleMigrationSuccess,
+  handleReset,
   exportBackup,
   importBackup,
 } = useSettingsLogic();
 
 // 仅新布局需要的状态
 const activeTab = ref('basic');
+const route = useRoute();
 
 const currentTabLabel = computed(() => {
   switch (activeTab.value) {
@@ -41,6 +45,7 @@ const currentTabLabel = computed(() => {
 
     case 'client': return '客户端管理';
     case 'system': return '系统设置';
+    case 'custom-page': return '自定义公开页';
     default: return '设置';
   }
 });
@@ -54,6 +59,17 @@ const handleOpenMigrationModal = () => {
 
 onMounted(() => {
   loadSettings();
+});
+
+onActivated(() => {
+  loadSettings();
+});
+
+watch(() => route.path, (path) => {
+  if (path === '/settings') {
+    activeTab.value = 'basic';
+    loadSettings();
+  }
 });
 </script>
 
@@ -80,7 +96,7 @@ onMounted(() => {
       </div>
 
       <div v-else class="space-y-6 max-w-6xl w-full mx-auto">
-        <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-white/70 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg shadow-sm">
+        <div class="hidden md:flex flex-wrap items-center justify-between gap-3 p-4 bg-white/70 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg shadow-sm">
           <div>
             <p class="text-xs text-gray-500 dark:text-gray-400">当前模块</p>
             <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentTabLabel }}</p>
@@ -94,8 +110,9 @@ onMounted(() => {
         <GlobalSettings v-show="activeTab === 'global'" :settings="settings" />
         <ServiceSettings v-show="activeTab === 'service'" :settings="settings" />
         <ClientSettings v-show="activeTab === 'client'" />
+        <CustomPageSettings v-show="activeTab === 'custom-page'" :settings="settings" />
         <SystemSettings v-show="activeTab === 'system'" :settings="settings" :exportBackup="exportBackup"
-          :importBackup="importBackup" @migrate="handleOpenMigrationModal" />
+          :importBackup="importBackup" :handleReset="handleReset" @migrate="handleOpenMigrationModal" />
       </div>
 
       <template #footer>

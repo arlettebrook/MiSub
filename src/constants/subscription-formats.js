@@ -6,10 +6,10 @@
 export const SUBSCRIPTION_FORMATS = {
     BASE64: 'base64',
     CLASH: 'clash',
-    SINGBOX: 'singbox',
     SURGE: 'surge',
     LOON: 'loon',
-    QUANX: 'quanx'
+    QUANX: 'quanx',
+    SINGBOX: 'singbox'
 };
 
 export const NODE_PROTOCOLS = {

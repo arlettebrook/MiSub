@@ -2,13 +2,13 @@
 
 <div align="center">
 
-**一个功能强大、界面精美的订阅管理与转换工具**
+**一个聚焦订阅节点管理、多客户端订阅生成与统一模板输出的工具**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages-orange.svg)](https://pages.cloudflare.com/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.x-green.svg)](https://vuejs.org/)
 
-[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-部署指南) • [使用说明](#-使用说明) • [更新日志](#-更新日志)
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-部署指南) • [使用说明](#-使用说明) • [Wiki 文档](docs/OPERATOR_CHAIN_GUIDE.md) • [v2.5.0 升级指南](docs/UPGRADE_V2.5.md) • [更新日志](#-更新日志)
 
 </div>
 
@@ -42,10 +42,15 @@
   - 支持拖拽排序
   - 一键按地区自动排序
 
+- **🧩 统一模板与链式处理**
+  - **操作符链 (Operator Chain)**：支持过滤、重命名、脚本、排序与去重的流式管道
+  - 统一模板模型输出 Clash、Sing-Box、Surge、Loon、QX
+  - 支持按客户端自动适配模板策略
+  - 内置 ACL4SSR 风格完整分流模板预设
+
 - **🎨 精致的 UI/UX**
   - 明亮/暗黑模式自动切换
   - 磨砂玻璃质感现代化设计
-  - 完善的交互提示和加载状态
   - 完善的交互提示和加载状态
   - 响应式布局,支持移动端
 
@@ -72,6 +77,11 @@
   - 完整的参数支持 (reuse/tfo)
   - Surge 配置导入支持
 
+- **📐 模板输出增强**
+  - Clash / Sing-Box / iOS 客户端统一走模板主线
+  - 支持远程规则集、策略组与地区分组映射
+  - 支持内置模板预设与客户端能力兼容表
+
 - **📊 流量与到期时间显示**
   - 订阅卡片显示已用/总流量
   - 到期时间提醒,颜色高亮
@@ -92,7 +102,7 @@
 ### 🔐 安全与定制
 
 - **密码保护**: 管理界面由自定义密码保护
-- **高度可定制**: 自定义输出文件名、Subconverter 地址等
+- **高度可定制**: 自定义输出文件名、模板来源、规则级别等
 - **数据备份**: 支持导出/导入备份
 - **TG 推送**: 支持 Telegram 通知
 
@@ -112,16 +122,26 @@
 
 ### 📡 支持的协议
 
-- Shadowsocks (SS/SS2022) - 包含自动修复功能
-- ShadowsocksR (SSR)
+- Shadowsocks (SS/SS2022)
 - VMess
 - VLESS
 - Trojan
-- Hysteria / Hysteria2
+- Hysteria2 / HY2
 - TUIC
-- **Snell** - 完整支持 v1-v5
-- NaiveProxy
-- SOCKS5 / HTTP
+- Snell
+- WireGuard
+- AnyTLS
+- HTTPS
+- SOCKS5 / SOCKS5-TLS
+
+### 📦 内置格式说明
+
+- `clash`：兼容性最好，适合主力导出
+- `surge`：支持规则模板与地区分组
+- `loon`：支持规则模板与地区分组
+- `quanx`：支持统一模板输出与基础策略组、规则映射
+- `singbox`：JSON 输出，支持统一模板模型与路由规则映射
+- `base64`：兜底格式
 
 ---
 
@@ -177,11 +197,13 @@ wrangler d1 execute misub --file=schema.sql --remote
 
 > 💡 若无法初始化,可在 Cloudflare 控制台手动执行 `schema.sql`
 
+说明 D1 表结构未更新，请在 D1 控制台执行最新 `schema.sql`。
+
 ### 3. 设置环境变量
 
 在 `设置` → `环境变量` 中添加 **生产环境** 变量：
 
-**必填：**
+**可选：**
 
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
@@ -193,8 +215,8 @@ wrangler d1 execute misub --file=schema.sql --remote
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `CORS_ORIGINS` | 允许跨域访问的来源(逗号分隔)，同域可不填 | `https://example.com,http://localhost:5173` |
-| `MISUB_PUBLIC_URL` | 对外访问的公开域名，用于订阅转换回调（Docker/反代必填） | `https://your-domain.com` |
-| `MISUB_CALLBACK_URL` | 订阅转换回调基础地址（优先级高于 MISUB_PUBLIC_URL） | `http://misub:8080` |
+| `MISUB_PUBLIC_URL` | 站点对外访问的公开域名，用于生成订阅转换回调地址 | `https://your-domain.pages.dev` |
+| `MISUB_CALLBACK_URL` | 订阅转换回调基础地址（优先级高于 MISUB_PUBLIC_URL），通常保持默认即可 | `https://your-domain.pages.dev` |
 
 **前端构建变量（可选）：**
 
@@ -209,113 +231,7 @@ wrangler d1 execute misub --file=schema.sql --remote
 完成配置后,在 `部署` 选项卡重新部署项目。
 
 ---
-<s>
-## 🐳 VPS / Docker 部署
-
-适用于自建服务器部署（与 Cloudflare Pages 保持功能兼容）。
-
-### 1. 构建并启动
-
-```bash
-docker compose up -d --build
-```
-
-默认端口为 `8080`，访问 `http://<vps-ip>:8080`。
-
-> ⚠️ 注意：仓库根目录的 `docker-compose.yml` 为 **镜像部署** 配置（默认 `ghcr.io/imzyb/misub:latest`）。如需源码构建，请自行新建包含 `build: .` 的 compose 文件。
-
-### 2. 环境变量
-
-在 `docker-compose.yml` 中配置：
-
-- `ADMIN_PASSWORD` 管理员密码（可选，默认 `admin`）
-- `COOKIE_SECRET` Cookie 加密密钥（可选，推荐留空自动生成）
-- `CORS_ORIGINS` 允许跨域访问的来源（可选）
-- `PORT` 服务端口（默认 8080）
-- `MISUB_DB_PATH` SQLite 数据库路径（默认 `/app/data/misub.db`）
-- `MISUB_PUBLIC_URL` 对外访问的公开域名，用于订阅转换回调（反代/公网环境建议配置）
-- `MISUB_CALLBACK_URL` 订阅转换回调基础地址（优先级高于 MISUB_PUBLIC_URL）
-
-> ⚠️ **关于修改 PORT**：如果将 `PORT` 修改为非 8080 的值（如 `3000`），需要同步修改 `docker-compose.yml` 中的 `ports` 映射，例如 `"3000:3000"`，确保宿主机端口与容器内端口一致。
-
-### 3. 数据持久化
-
-默认通过 `./data` 目录持久化数据库文件。
-
----
-
-## 📦 GHCR 镜像部署（免源码）
-
-最小化 VPS 部署步骤：
-
-1. 新建目录并进入：
-```bash
-mkdir -p /opt/misub && cd /opt/misub
-```
-
-2. 创建 `docker-compose.yml`（使用 GHCR 镜像）：
-```yaml
-services:
-  misub:
-    image: ghcr.io/imzyb/misub:latest
-    ports:
-      - "8080:8080"
-    environment:
-      PORT: 8080
-      MISUB_DB_PATH: /app/data/misub.db
-      ADMIN_PASSWORD: "change_me"
-      COOKIE_SECRET: "change_me_too"
-      # CORS_ORIGINS: "https://example.com,http://localhost:5173"
-      # MISUB_PUBLIC_URL: "https://your-domain.com"
-      # MISUB_CALLBACK_URL: "https://your-domain.com"
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-```
-
-3. 启动并拉取镜像：
-```bash
-docker compose pull
-docker compose up -d
-```
-
-4. 访问：
-```
-http://<vps-ip>:8080
-```
-
----
-
-## ☁️ Zeabur 一键部署
-
-支持通过 [Zeabur](https://zeabur.com) 平台一键部署：
-
-[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/O066B9)
-
-### 手动部署步骤
-
-1. 在 Zeabur 创建新项目，选择 **从 Git 部署**
-2. 连接 GitHub 并选择你 Fork 的 MiSub 仓库
-3. 等待构建完成（使用 Docker 方式构建）
-4. 在服务设置中添加环境变量：
-
-| 变量名 | 说明 | 必填 |
-|--------|------|------|
-| `ADMIN_PASSWORD` | 管理员密码 | ❌ (默认 `admin`) |
-| `COOKIE_SECRET` | Cookie 加密密钥 | ❌ (自动生成) |
-| `MISUB_DB_PATH` | 数据库路径（建议 `/app/data/misub.db`） | ✅ |
-
-5. 绑定域名或使用 Zeabur 提供的 `.zeabur.app` 域名
-
-> ⚠️ **注意**: Zeabur 部署默认使用端口 8080，已在 `zeabur.json` 中配置。
-> ⚠️ **注意**: 请在 Zeabur 中启用持久化存储并挂载到 `/app/data`，否则数据库会在重建后丢失。
-</s>
-
 ## 💡 使用说明
-
-### 登录管理界面
-
-
 
 ### 登录管理界面
 
@@ -331,7 +247,7 @@ http://<vps-ip>:8080
 2. 填写订阅名称和链接
 3. (可选) 设置自定义 UA
 4. (可选) 添加备注信息
-5. (可选) 设置过滤规则
+5. (可选) 设置操作符链（详情请参考 [操作符指南](docs/OPERATOR_CHAIN_GUIDE.md)）
 6. 保存订阅
 
 ### 创建订阅组
@@ -340,6 +256,66 @@ http://<vps-ip>:8080
 2. 选择要包含的订阅和节点
 3. 设置分组名称
 4. 保存并获取订阅链接
+
+### 内置转换说明
+
+MiSub 现在仅使用内置转换器将订阅内容转换为目标格式，不再依赖第三方转换后端。
+
+支持的目标格式：
+
+- `clash`
+- `surge`
+- `loon`
+- `quanx`
+- `singbox`
+- `base64`
+
+说明：
+
+- `surge` 会根据客户端或 URL 参数保留版本感知。
+- `singbox` 会输出 JSON 配置。
+- 不支持的目标格式会回退为 `base64`。
+- 若需要强制跳过内置转换，可使用 `?backend=external`，这会返回 `base64`。
+
+### 远端模板占位符
+
+如果你在 `transformConfig` 中使用远端模板，可以在模板里放入以下占位符：
+
+- `<%proxies%>`: 已渲染的代理块
+- `<%rules%>`: 规则块
+- `<%fileName%>`: 输出文件名
+- `<%interval%>`: 刷新间隔
+- `<%managedConfigUrl%>`: 模板地址
+- `<%targetFormat%>`: 目标格式
+- `<%nodeCount%>`: 节点数量
+- `<%regionGroups%>`: 地区分组 JSON
+- `<%regionGroupNames%>`: 地区分组名称列表
+- `<%regionGroupCounts%>`: 地区分组及数量
+- `<%regionGroupList%>`: 地区分组清单
+
+#### 示例
+
+```yaml
+proxies:
+<%proxies%>
+
+proxy-groups:
+  - name: 节点选择
+    type: select
+    proxies:
+      - 自动选择
+      - <%regionGroupNames%>
+
+  - name: 自动选择
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: <%interval%>
+    proxies:
+      - <%regionGroupNames%>
+
+rules:
+<%rules%>
+```
 
 ### 数据迁移 (KV → D1)
 
@@ -352,10 +328,10 @@ http://<vps-ip>:8080
 
 ### 🛰️ 代理抓取 (Vercel)
 
-如果您的服务器 IP 不太纯净，或者由于网络限制导致抓取订阅内容失败，可以使用高效的 Edge Functions 代理：
+如果由于网络限制导致订阅内容抓取失败，可以额外部署一个用于抓取转发的 Edge Functions 代理：
 - [Vercel Fetch Proxy 部署指南](docs/fetch-proxy-tutorial.md)
 
----
+> 说明：该代理仅作为可选的辅助抓取组件，不属于 MiSub 主站部署方式。MiSub 主站仍然仅支持部署在 Cloudflare Pages。
 
 ## 📊 存储类型对比
 
@@ -380,17 +356,27 @@ http://<vps-ip>:8080
 - **前端**: Vue 3 + Vite + Tailwind CSS
 - **后端**: Cloudflare Pages Functions
 - **存储**: Cloudflare KV + D1 数据库
-- **部署**: Cloudflare Pages
+- **部署平台**: 仅 Cloudflare Pages
 
 ---
 
 ## 📝 更新日志
 
+### v2.5.0 (2026-04-10)
+
+**✨ 重大更新：节点处理引擎大统一与性能优化**
+- **操作符链 (Operator Chain)** - 实现节点处理的流式管道化，彻底替代旧版“净化管道”。
+- **架构剥离** - 移除了 VPS 监控探针等冗余功能，回归订阅管理核心定位。
+- **去中心化转换** - 完善内置转换引擎，减少对外部后端接口的依赖。
+- **兼容性桥接 (Legacy Bridge)** - 无缝兼容旧版规则并提供一键迁移工具。
+- **Wiki 同步** - 全新编写了操作符指南与升级手册。
+
 ### v2.4.0 (2026-01-14)
 
-**✨ 更新内容:**
-- **版本更新** - 项目版本升级至 v2.4.0，为了方便拉取与版本管理
-- **Docker 优化** - Docker 镜像标签默认使用具体版本号
+**✨ 重点更新：统一模板与订阅生成增强**
+- **统一模板主线扩展** - 多客户端逐步接入统一模板模型与内置模板预设
+- **多端渲染能力增强** - iOS 客户端与 Sing-Box 的模板输出持续补强
+- **项目定位收敛** - 聚焦订阅节点管理与多客户端订阅生成
 
 
 ### v2.3.0 (2026-01-03)

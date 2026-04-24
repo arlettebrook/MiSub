@@ -3,13 +3,38 @@
  * 处理各种API请求
  */
 
-import { StorageFactory, SettingsCache } from '../storage-adapter.js';
+import { StorageFactory, SettingsCache, STORAGE_TYPES } from '../storage-adapter.js';
 import { getCookieSecret, getAdminPassword, setAdminPassword, isUsingDefaultPassword, createJsonResponse, createErrorResponse, migrateProfileIds } from './utils.js';
 import { authMiddleware, handleLogin, handleLogout, createUnauthorizedResponse } from './auth-middleware.js';
 import { sendTgNotification, checkAndNotify } from './notifications.js';
 import { clearAllNodeCaches } from '../services/node-cache-service.js';
 
 import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS as defaultSettings } from './config.js';
+
+const PROFILE_DOWNLOAD_COUNT_PREFIX = 'misub_profile_download_count_';
+
+function normalizeProfile(profile = {}) {
+    const normalized = { ...profile };
+    normalized.subscriptions = Array.isArray(profile.subscriptions) ? profile.subscriptions : [];
+    normalized.manualNodes = Array.isArray(profile.manualNodes) ? profile.manualNodes : [];
+    normalized.enabled = profile.enabled !== false;
+    normalized.isPublic = profile.isPublic === true;
+    normalized.downloadCount = Number(profile.downloadCount) || 0;
+    return normalized;
+}
+
+async function attachProfileDownloadCounts(storageAdapter, profiles) {
+    if (!Array.isArray(profiles) || profiles.length === 0) return profiles;
+
+    const counts = await Promise.all(
+        profiles.map(profile => storageAdapter.get(`${PROFILE_DOWNLOAD_COUNT_PREFIX}${profile.customId || profile.id}`))
+    );
+
+    return profiles.map((profile, index) => normalizeProfile({
+        ...profile,
+        downloadCount: Number(counts[index]) || Number(profile.downloadCount) || 0,
+    }));
+}
 
 function isStorageUnavailableError(error) {
     const message = String(error?.message || error || '').toLowerCase();
@@ -28,6 +53,77 @@ async function getStorageAdapter(env) {
     return StorageFactory.createAdapter(env, storageType);
 }
 
+function isSimpleArrayDiff(diff) {
+    if (!diff || typeof diff !== 'object') return false;
+    const allowedKeys = ['added', 'updated', 'removed'];
+    if (!Object.keys(diff).every(key => allowedKeys.includes(key))) return false;
+    return ['added', 'updated', 'removed'].every(key => Array.isArray(diff[key] || []));
+}
+
+async function applyRowLevelDiff(storageAdapter, type, diff) {
+    const isProfile = type === 'profiles';
+    const putItem = isProfile ? storageAdapter.putProfile?.bind(storageAdapter) : storageAdapter.putSubscription?.bind(storageAdapter);
+    const deleteItem = isProfile ? storageAdapter.deleteProfileById?.bind(storageAdapter) : storageAdapter.deleteSubscriptionById?.bind(storageAdapter);
+
+    if (!putItem || !deleteItem || !isSimpleArrayDiff(diff)) {
+        return false;
+    }
+
+    // KV 模式下不支持行级 Diff，必须使用全量覆盖以保证原子性
+    if (storageAdapter.type === STORAGE_TYPES.KV) {
+        return false;
+    }
+
+    const { added = [], updated = [], removed = [] } = diff;
+
+    await Promise.all([
+        ...added.map(item => putItem(item)),
+        ...updated.map(item => putItem(item)),
+        ...removed.map(id => deleteItem(id))
+    ]);
+
+    return true;
+}
+
+async function syncCollectionRowLevel(storageAdapter, type, finalItems) {
+    const isProfile = type === 'profiles';
+    const getAll = isProfile ? storageAdapter.getAllProfiles?.bind(storageAdapter) : storageAdapter.getAllSubscriptions?.bind(storageAdapter);
+    const putItem = isProfile ? storageAdapter.putProfile?.bind(storageAdapter) : storageAdapter.putSubscription?.bind(storageAdapter);
+    const deleteItem = isProfile ? storageAdapter.deleteProfileById?.bind(storageAdapter) : storageAdapter.deleteSubscriptionById?.bind(storageAdapter);
+
+    if (!getAll || !putItem || !deleteItem || !Array.isArray(finalItems)) {
+        return false;
+    }
+
+    // KV 模式下不支持行级同步，必须使用全量覆盖以保证原子性
+    if (storageAdapter.type === STORAGE_TYPES.KV) {
+        return false;
+    }
+
+    const currentItems = await getAll();
+    const currentMap = new Map(currentItems.map(item => [item.id, item]));
+    const finalMap = new Map(finalItems.map(item => [item.id, item]));
+
+    const puts = [];
+    const deletes = [];
+
+    for (const item of finalItems) {
+        const existing = currentMap.get(item.id);
+        if (!existing || JSON.stringify(existing) !== JSON.stringify(item)) {
+            puts.push(putItem(item));
+        }
+    }
+
+    for (const existing of currentItems) {
+        if (!finalMap.has(existing.id)) {
+            deletes.push(deleteItem(existing.id));
+        }
+    }
+
+    await Promise.all([...puts, ...deletes]);
+    return true;
+}
+
 /**
  * 处理数据获取API
  * @param {Object} env - Cloudflare环境对象
@@ -44,11 +140,17 @@ export async function handleDataRequest(env) {
             console.error('[API Error /data] KV binding missing while storageType=kv');
         }
         const storageAdapter = StorageFactory.createAdapter(env, storageType);
-        const [misubs, profiles, settings] = await Promise.all([
-            storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
-            storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
-            storageAdapter.get(KV_KEY_SETTINGS).then(res => res || {})
+        const cachedSettings = await SettingsCache.get(env);
+        const [misubs, rawProfiles, settings] = await Promise.all([
+            typeof storageAdapter.getAllSubscriptions === 'function'
+                ? storageAdapter.getAllSubscriptions()
+                : storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
+            typeof storageAdapter.getAllProfiles === 'function'
+                ? storageAdapter.getAllProfiles()
+                : storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
+            Promise.resolve(cachedSettings || {}).then(res => res || {})
         ]);
+        const profiles = await attachProfileDownloadCounts(storageAdapter, rawProfiles);
 
         // 自动迁移旧版 profile ID（去除 'profile_' 前缀）
         if (migrateProfileIds(profiles)) {
@@ -57,10 +159,8 @@ export async function handleDataRequest(env) {
             );
         }
         const config = {
-            FileName: settings.FileName || 'MISUB',
-            mytoken: settings.mytoken || 'auto',
-
-            profileToken: settings.profileToken || 'profiles',
+            ...defaultSettings,
+            ...settings,
             isDefaultPassword: await isUsingDefaultPassword(env)
         };
         return createJsonResponse({ misubs, profiles, config });
@@ -116,8 +216,12 @@ export async function handleMisubsSave(request, env) {
             console.info('[API] Processing Diff Patch...');
             // 获取当前数据
             const [currentMisubs, currentProfiles] = await Promise.all([
-                storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
-                storageAdapter.get(KV_KEY_PROFILES).then(res => res || [])
+                typeof storageAdapter.getAllSubscriptions === 'function'
+                    ? storageAdapter.getAllSubscriptions()
+                    : storageAdapter.get(KV_KEY_SUBS).then(res => res || []),
+                typeof storageAdapter.getAllProfiles === 'function'
+                    ? storageAdapter.getAllProfiles()
+                    : storageAdapter.get(KV_KEY_PROFILES).then(res => res || [])
             ]);
 
             // 应用补丁
@@ -157,6 +261,34 @@ export async function handleMisubsSave(request, env) {
             }
         }
 
+        if (Array.isArray(finalProfiles)) {
+            finalProfiles = finalProfiles.map((p, index) => ({
+                ...normalizeProfile(p),
+                sortIndex: index
+            }));
+            
+            // [Fix] Sync sortIndex back to diff for correct row-level persistence
+            if (diff?.profiles) {
+                const profileMap = new Map(finalProfiles.map(p => [p.id, p]));
+                if (diff.profiles.added) diff.profiles.added = diff.profiles.added.map(p => ({ ...p, sortIndex: profileMap.get(p.id)?.sortIndex }));
+                if (diff.profiles.updated) diff.profiles.updated = diff.profiles.updated.map(p => ({ ...p, sortIndex: profileMap.get(p.id)?.sortIndex }));
+            }
+        }
+
+        if (Array.isArray(finalMisubs)) {
+            finalMisubs = finalMisubs.map((s, index) => ({
+                ...s,
+                sortIndex: index
+            }));
+
+            // [Fix] Sync sortIndex back to diff for correct row-level persistence
+            if (diff?.subscriptions) {
+                const subMap = new Map(finalMisubs.map(s => [s.id, s]));
+                if (diff.subscriptions.added) diff.subscriptions.added = diff.subscriptions.added.map(s => ({ ...s, sortIndex: subMap.get(s.id)?.sortIndex }));
+                if (diff.subscriptions.updated) diff.subscriptions.updated = diff.subscriptions.updated.map(s => ({ ...s, sortIndex: subMap.get(s.id)?.sortIndex }));
+            }
+        }
+
         // 步骤4: 获取设置（带错误处理）
         let settings;
         try {
@@ -186,10 +318,31 @@ export async function handleMisubsSave(request, env) {
 
         // 步骤6: 保存数据到存储（使用存储适配器）
         try {
-            await Promise.all([
-                storageAdapter.put(KV_KEY_SUBS, finalMisubs),
-                storageAdapter.put(KV_KEY_PROFILES, finalProfiles)
-            ]);
+            if (diff) {
+                const [subsHandled, profilesHandled] = await Promise.all([
+                    diff.subscriptions ? applyRowLevelDiff(storageAdapter, 'subscriptions', diff.subscriptions) : false,
+                    diff.profiles ? applyRowLevelDiff(storageAdapter, 'profiles', diff.profiles) : false
+                ]);
+
+                const saveTasks = [];
+                if (!subsHandled) saveTasks.push(storageAdapter.put(KV_KEY_SUBS, finalMisubs));
+                if (!profilesHandled) saveTasks.push(storageAdapter.put(KV_KEY_PROFILES, finalProfiles));
+                if (saveTasks.length > 0) {
+                    await Promise.all(saveTasks);
+                }
+            } else {
+                const [subsHandled, profilesHandled] = await Promise.all([
+                    syncCollectionRowLevel(storageAdapter, 'subscriptions', finalMisubs),
+                    syncCollectionRowLevel(storageAdapter, 'profiles', finalProfiles)
+                ]);
+
+                const saveTasks = [];
+                if (!subsHandled) saveTasks.push(storageAdapter.put(KV_KEY_SUBS, finalMisubs));
+                if (!profilesHandled) saveTasks.push(storageAdapter.put(KV_KEY_PROFILES, finalProfiles));
+                if (saveTasks.length > 0) {
+                    await Promise.all(saveTasks);
+                }
+            }
         } catch (storageError) {
             console.error('[API Error /misubs] Storage put failed:', storageError);
             return createJsonResponse({
@@ -233,8 +386,7 @@ export async function handleMisubsSave(request, env) {
  */
 export async function handleSettingsGet(env) {
     try {
-        const storageAdapter = await getStorageAdapter(env);
-        const settings = await storageAdapter.get(KV_KEY_SETTINGS) || {};
+        const settings = await SettingsCache.get(env) || {};
         return createJsonResponse({ ...defaultSettings, ...settings });
     } catch (e) {
         if (isStorageUnavailableError(e)) {
@@ -258,19 +410,45 @@ export async function handleSettingsSave(request, env) {
     try {
         const newSettings = await request.json();
 
-        // 校验 customLoginPath 是否为系统保留路径
-        if (newSettings.customLoginPath) {
-        const reservedPaths = [
+        const reservedPathRoots = new Set([
             'settings', 'login', 'groups', 'nodes', 'subscriptions', 'dashboard',
-            'api', 'explore', 'sub', 'cron', 'assets', '@vite', 'public', 'profile', 'offline'
-        ];
-            const pathSegment = newSettings.customLoginPath.replace(/^\/+/, '').split('/')[0].toLowerCase();
-            if (reservedPaths.includes(pathSegment)) {
+            'api', 'explore', 'sub', 'cron', 'assets', '@vite', 'public', 'profile',
+            'logout', 'auth_debug', 'auth_check', 'data', 'kv_test',
+            'clients', 'system', 'github', 'telegram', 'test_notification',
+            'misubs', 'node_count', 'nodes', 'fetch_external_url', 'batch_update_nodes',
+            'subscription_nodes', 'debug_subscription', 'preview'
+        ]);
+
+        const normalizePathRoot = (value) => {
+            if (typeof value !== 'string') return '';
+            return value.trim().replace(/^\/+/, '').split('/')[0].toLowerCase();
+        };
+
+        const rejectReservedValue = (value, fieldLabel) => {
+            const pathRoot = normalizePathRoot(value);
+            if (pathRoot && reservedPathRoots.has(pathRoot)) {
                 return createJsonResponse({
                     success: false,
-                    message: `"/${pathSegment}" 是系统保留路径，不可用作自定义登录路径`
+                    message: `"/${pathRoot}" 是系统保留路径，不可用作${fieldLabel}`
                 }, 400);
             }
+            return null;
+        };
+
+        // 校验 customLoginPath 是否为系统保留路径
+        if (newSettings.customLoginPath) {
+            const rejected = rejectReservedValue(newSettings.customLoginPath, '自定义登录路径');
+            if (rejected) return rejected;
+        }
+
+        // 订阅 Token 也不能使用会和路由冲突的保留路径
+        if (newSettings.mytoken && newSettings.mytoken !== 'auto') {
+            const rejected = rejectReservedValue(newSettings.mytoken, '自定义订阅Token');
+            if (rejected) return rejected;
+        }
+        if (newSettings.profileToken && newSettings.profileToken !== 'profiles') {
+            const rejected = rejectReservedValue(newSettings.profileToken, '订阅组分享Token');
+            if (rejected) return rejected;
         }
 
         const storageAdapter = await getStorageAdapter(env);
@@ -284,10 +462,24 @@ export async function handleSettingsSave(request, env) {
             if (isStorageUnavailableError(storageError)) {
                 return createJsonResponse({
                     success: false,
-                    message: 'KV 存储已暂停，设置当前无法保存。若为 EdgeOne 部署，请先恢复 KV；若为 Cloudflare 部署，可配置 D1 后切换到 D1 存储。'
+                    message: 'KV 存储已暂停，设置当前无法保存。请先恢复 KV 绑定，或配置 D1 后切换到 D1 存储。'
                 }, 503);
             }
             throw storageError;
+        }
+
+        // 双存储同步：尽量保持 KV / D1 一致
+        try {
+            const d1Adapter = StorageFactory.createAdapter(env, STORAGE_TYPES.D1);
+            await d1Adapter.put(KV_KEY_SETTINGS, finalSettings);
+        } catch (syncError) {
+            console.warn('[API] Failed to sync settings to D1:', syncError?.message || syncError);
+        }
+        try {
+            const kvAdapter = StorageFactory.createAdapter(env, STORAGE_TYPES.KV);
+            await kvAdapter.put(KV_KEY_SETTINGS, finalSettings);
+        } catch (syncError) {
+            console.warn('[API] Failed to sync settings to KV:', syncError?.message || syncError);
         }
         SettingsCache.clear();
 
@@ -301,11 +493,51 @@ export async function handleSettingsSave(request, env) {
         const message = `⚙️ *MiSub 设置更新* ⚙️\n\n您的 MiSub 应用设置已成功更新。`;
         await sendTgNotification(finalSettings, message);
 
-        return createJsonResponse({ success: true, message: '设置已保存' });
+        return createJsonResponse({ success: true, message: '设置已保存', data: finalSettings });
     } catch (e) {
         return createErrorResponse('保存设置失败', 500);
     }
 }
+
+/**
+ * 处理设置重置API
+ * @param {Object} env - Cloudflare环境对象
+ * @returns {Promise<Response>} HTTP响应
+ */
+export async function handleSettingsReset(env) {
+    try {
+        const storageAdapter = await getStorageAdapter(env);
+        
+        // 使用存储适配器删除设置（会自动处理 KV 和 D1 映射）
+        await storageAdapter.delete(KV_KEY_SETTINGS);
+
+        // 如果存在双存储配置，尝试同时清理另一端
+        try {
+            if (storageAdapter.type === STORAGE_TYPES.D1) {
+                const kvNs = StorageFactory.resolveKV(env);
+                if (kvNs) await kvNs.delete(KV_KEY_SETTINGS);
+            } else if (env.MISUB_DB) {
+                const d1Adapter = StorageFactory.createAdapter(env, STORAGE_TYPES.D1);
+                await d1Adapter.delete(KV_KEY_SETTINGS);
+            }
+        } catch (syncError) {
+            console.warn('[API Reset] Dual storage sync cleanup failed:', syncError.message);
+        }
+
+        // 清除内存缓存
+        SettingsCache.clear();
+
+        return createJsonResponse({ 
+            success: true, 
+            message: '设置已恢复出厂状态',
+            data: defaultSettings 
+        });
+    } catch (e) {
+        console.error('[API Error /settings/reset]', e);
+        return createErrorResponse('重置设置失败', 500);
+    }
+}
+
 
 /**
  * 处理公开订阅组获取API
@@ -315,9 +547,12 @@ export async function handleSettingsSave(request, env) {
 export async function handlePublicProfilesRequest(env) {
     try {
         const storageAdapter = await getStorageAdapter(env);
+        const cachedSettings = await SettingsCache.get(env);
         const [profiles, settings] = await Promise.all([
-            storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
-            storageAdapter.get(KV_KEY_SETTINGS).then(res => res || {})
+            typeof storageAdapter.getAllProfiles === 'function'
+                ? storageAdapter.getAllProfiles()
+                : storageAdapter.get(KV_KEY_PROFILES).then(res => res || []),
+            Promise.resolve(cachedSettings || {}).then(res => res || {})
         ]);
 
         const profileToken = settings.profileToken || 'profiles';
@@ -339,6 +574,7 @@ export async function handlePublicProfilesRequest(env) {
             description: settings.heroDescription || '浏览并获取由管理员分享的精选订阅组合，一键导入到您的客户端。'
         };
 
+
         // Guestbook Config (Safe subset)
         const guestbook = {
             enabled: settings.guestbook?.enabled,
@@ -348,6 +584,7 @@ export async function handlePublicProfilesRequest(env) {
 
         // 过滤出公开且启用的订阅组
         const publicProfiles = profiles
+            .map(normalizeProfile)
             .filter(p => p.isPublic && p.enabled)
             .map(p => ({
                 id: p.id,
@@ -359,6 +596,20 @@ export async function handlePublicProfilesRequest(env) {
                 manualNodeCount: (p.manualNodes || []).length,
             }));
 
+        // Custom Page Config
+        const customPage = {
+            enabled: settings.customPage?.enabled || false,
+            type: settings.customPage?.type || 'html',
+            content: settings.customPage?.content || '',
+            css: settings.customPage?.css || '',
+            useDefaultLayout: settings.customPage?.useDefaultLayout !== false,
+            allowExternalStylesheets: settings.customPage?.allowExternalStylesheets === true,
+            allowScripts: settings.customPage?.allowScripts === true,
+            hideBranding: settings.customPage?.hideBranding === true,
+            hideHeader: settings.customPage?.hideHeader === true,
+            hideFooter: settings.customPage?.hideFooter === true
+        };
+        
         return createJsonResponse({
             success: true,
             data: publicProfiles,
@@ -366,7 +617,8 @@ export async function handlePublicProfilesRequest(env) {
                 profileToken,
                 announcement,
                 hero,
-                guestbook
+                guestbook,
+                customPage
             }
         });
     } catch (e) {
@@ -390,7 +642,16 @@ export async function handlePublicConfig(env) {
 
         return createJsonResponse({
             enablePublicPage: mergedSettings.enablePublicPage,
-            customLoginPath: mergedSettings.customLoginPath
+            customLoginPath: mergedSettings.customLoginPath,
+            customPage: {
+                enabled: mergedSettings.customPage?.enabled || false,
+                useDefaultLayout: mergedSettings.customPage?.useDefaultLayout !== false,
+                allowExternalStylesheets: mergedSettings.customPage?.allowExternalStylesheets === true,
+                allowScripts: mergedSettings.customPage?.allowScripts === true,
+                hideBranding: mergedSettings.customPage?.hideBranding === true,
+                hideHeader: mergedSettings.customPage?.hideHeader === true,
+                hideFooter: mergedSettings.customPage?.hideFooter === true
+            }
         });
     } catch (e) {
         console.error('[API Error /public/config]', e);

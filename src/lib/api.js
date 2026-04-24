@@ -147,6 +147,19 @@ export async function saveSettings(settings) {
 }
 
 /**
+ * 恢复出厂设置（仅限设置项，不删除节点和订阅组）
+ * @returns {Promise<Object>} - 重置结果
+ */
+export async function resetSettings() {
+    try {
+        return await api.post('/api/settings/reset');
+    } catch (error) {
+        return handleApiError(error, 'resetSettings');
+    }
+}
+
+
+/**
  * 批量更新订阅的节点信息
  * @param {string[]} subscriptionIds - 要更新的订阅ID数组
  * @returns {Promise<Object>} - 更新结果
@@ -182,6 +195,38 @@ export async function migrateToD1() {
             };
         }
         return handleApiError(error, 'migrateToD1');
+    }
+}
+
+export async function detectLegacyD1() {
+    try {
+        return await api.get('/api/detect_legacy_d1');
+    } catch (error) {
+        return handleApiError(error, 'detectLegacyD1');
+    }
+}
+
+export async function migrateLegacyD1() {
+    try {
+        return await api.post('/api/migrate_legacy_d1');
+    } catch (error) {
+        if (error instanceof APIError) {
+            return {
+                success: false,
+                error: error.message,
+                errorType: 'server',
+                details: error.data?.details || error.data?.errors
+            };
+        }
+        return handleApiError(error, 'migrateLegacyD1');
+    }
+}
+
+export async function fetchGithubLatestRelease(repo) {
+    try {
+        return await api.get(`/api/github/release?repo=${encodeURIComponent(repo)}`);
+    } catch (error) {
+        return handleApiError(error, 'fetchGithubLatestRelease');
     }
 }
 

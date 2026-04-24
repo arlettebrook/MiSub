@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSnellUrl, validateSnellNode, extractValidNodes } from '../../functions/modules/utils/node-parser.js';
+import { parseSnellUrl, validateSnellNode, extractValidNodes, parseNodeList } from '../../functions/modules/utils/node-parser.js';
 import { parseSurgeConfig } from '../../src/utils/protocolConverter.js';
 
 describe('Snell 协议支持', () => {
@@ -19,6 +19,15 @@ describe('Snell 协议支持', () => {
 
         it('应正确解析带 reuse 和 tfo 参数的 Snell URL', () => {
             const url = 'snell://password123@example.com:443?version=5&reuse=true&tfo=true#TestNode';
+            const result = parseSnellUrl(url);
+
+            expect(result).toBeTruthy();
+            expect(result.reuse).toBe(true);
+            expect(result.tfo).toBe(true);
+        });
+
+        it('应忽略不支持的参数（如 ecn）', () => {
+            const url = 'snell://password123@example.com:443?version=5&reuse=true&tfo=true&ecn=true#TestNode';
             const result = parseSnellUrl(url);
 
             expect(result).toBeTruthy();
@@ -185,6 +194,36 @@ VMess-Node = vmess, vmess.example.com, 443, username=uuid-1234, alterid=0, netwo
         });
     });
 
+    describe('Shadowsocks cipher=none 回归测试', () => {
+        it('应解析 Clash YAML 中显式声明 cipher: none 的 SS 节点', () => {
+            const config = `proxies:
+  - name: SS-None
+    type: ss
+    server: 1.2.3.4
+    port: 8388
+    cipher: none
+    password: testpass`;
+
+            const nodes = parseNodeList(config);
+
+            expect(nodes).toHaveLength(1);
+            expect(nodes[0].protocol).toBe('ss');
+            expect(nodes[0].server).toBe('1.2.3.4');
+            expect(nodes[0].port).toBe('8388');
+        });
+
+        it('应解析 Quantumult X 中 method=none 的 SS 节点', () => {
+            const config = 'shadowsocks=1.2.3.4:8388, method=none, password=testpass, tag=SS None';
+
+            const nodes = parseNodeList(config);
+
+            expect(nodes).toHaveLength(1);
+            expect(nodes[0].protocol).toBe('ss');
+            expect(nodes[0].server).toBe('1.2.3.4');
+            expect(nodes[0].port).toBe('8388');
+        });
+    });
+
     describe('混合配置解析', () => {
         it('应正确解析包含多种协议的 Surge 配置', () => {
             const config = `[Proxy]
@@ -198,6 +237,18 @@ Trojan-Node = trojan, trojan.example.com, 443, trojanpass`;
             expect(nodes[0].protocol).toBe('ss');
             expect(nodes[1].protocol).toBe('snell');
             expect(nodes[2].protocol).toBe('trojan');
+        });
+
+        it('应在后端节点解析中正确提取 Surge WireGuard 配置', () => {
+            const config = `[Proxy]
+WG-Test = wireguard, 1.2.3.4, 51820, private-key=test-private, peer-public-key=test-peer, client-id=1/2/3, self-ip=172.16.0.2/32`;
+
+            const nodes = extractValidNodes(config);
+
+            expect(nodes).toHaveLength(1);
+            expect(nodes[0]).toContain('wireguard://test-private@1.2.3.4:51820');
+            expect(nodes[0]).toContain('publickey=test-peer');
+            expect(nodes[0]).toContain('reserved=1%2C2%2C3');
         });
     });
 });

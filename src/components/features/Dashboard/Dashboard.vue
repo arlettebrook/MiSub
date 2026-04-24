@@ -35,6 +35,7 @@ const NodePreviewModal = defineAsyncComponent(() => import('../../modals/NodePre
 
 const BatchGroupModal = defineAsyncComponent(() => import('../../modals/BatchGroupModal.vue'));
 const QRCodeModal = defineAsyncComponent(() => import('../../modals/QRCodeModal.vue'));
+const CopyLinkModal = defineAsyncComponent(() => import('../../modals/CopyLinkModal.vue'));
 
 // --- 基礎 Props 和狀態 ---
 const props = defineProps({ data: Object });
@@ -65,6 +66,8 @@ const manualNodeViewMode = ref('card');
 const showQRCodeModal = ref(false);
 const qrCodeUrl = ref('');
 const qrCodeTitle = ref('');
+const showCopyModal = ref(false);
+const showCopyModalProfile = ref(null);
 
 const handleQRCode = (id, type = 'subscription') => {
   if (type === 'subscription') {
@@ -85,10 +88,18 @@ const handleQRCode = (id, type = 'subscription') => {
       const baseUrl = window.location.origin;
       // Using similar logic to useProfiles copy link
       const idToUse = profile.customId || profile.id;
-      qrCodeUrl.value = `${baseUrl}/sub/${token}/${idToUse}`; 
+      qrCodeUrl.value = `${baseUrl}/${token}/${idToUse}`; 
       qrCodeTitle.value = profile.name || '订阅组二维码';
       showQRCodeModal.value = true;
     }
+  }
+};
+
+const handleOpenCopy = (profileId) => {
+  const profile = profiles.value.find(p => p.id === profileId || p.customId === profileId);
+  if (profile) {
+    showCopyModalProfile.value = profile;
+    showCopyModal.value = true;
   }
 };
 
@@ -106,6 +117,10 @@ const {
   reorderManualNodes, activeGroupFilter, setGroupFilter, batchUpdateGroup, batchDeleteNodes, buildDedupPlan, applyDedupPlan,
   manualNodeGroups, renameGroup, deleteGroup // Added group helpers
 } = useManualNodes(markDirty);
+
+const handleSearchTermUpdate = (val) => {
+  searchTerm.value = val;
+};
 
 const {
   profiles, editingProfile, isNewProfile, showProfileModal, showDeleteProfilesModal,
@@ -149,6 +164,7 @@ const showDeleteSubsModal = ref(false);
 const showDeleteNodesModal = ref(false);
 const showSubscriptionImportModal = ref(false);
 const showLogModal = ref(false);
+const logProfileName = ref('');
 const showBatchDeleteModal = ref(false);
 const batchDeleteIds = ref([]);
 const showDedupModal = ref(false);
@@ -331,8 +347,21 @@ const handlePreviewProfile = (profileId) => {
   }
 };
 
-const handleProfileReorder = (fromIndex, toIndex) => {
-  // 使用 splice 方法保持响应性,而不是直接赋值
+const handleViewLogs = (profileId) => {
+  const profile = profiles.value.find(p => p.id === profileId || p.customId === profileId);
+  if (profile) {
+    logProfileName.value = profile.name;
+    showLogModal.value = true;
+  }
+};
+
+const handleProfileReorder = (profileId, direction) => {
+  const fromIndex = profiles.value.findIndex(profile => profile.id === profileId || profile.customId === profileId);
+  if (fromIndex === -1) return;
+
+  const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+  if (toIndex < 0 || toIndex >= profiles.value.length) return;
+
   const [item] = profiles.value.splice(fromIndex, 1);
   profiles.value.splice(toIndex, 0, item);
   markDirty();
@@ -367,8 +396,8 @@ import SavePrompt from '../../ui/SavePrompt.vue';
     />
 
     <!-- Main Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
-      <div class="lg:col-span-2 md:col-span-2 space-y-12">
+    <div class="grid grid-cols-1 gap-6 items-start lg:gap-7 xl:grid-cols-3 xl:gap-8">
+      <div class="space-y-8 lg:space-y-9 xl:col-span-2">
         <!-- Subscription Panel -->
         <SubscriptionPanel :subscriptions="subscriptions" :paginated-subscriptions="paginatedSubscriptions"
           :current-page="subsCurrentPage" :total-pages="subsTotalPages" :is-sorting="isSortingSubs"
@@ -377,16 +406,17 @@ import SavePrompt from '../../ui/SavePrompt.vue';
           @edit="(id) => handleEditSubscription(subscriptions.find(s => s.id === id))"
           @toggle-sort="isSortingSubs = !isSortingSubs" @mark-dirty="markDirty" @delete-all="showDeleteSubsModal = true"
           @preview="handlePreviewSubscription" @reorder="reorderSubscriptions" 
-          @qrcode="(id) => handleQRCode(id, 'subscription')" />
+          @qrcode="(id) => handleQRCode(id, 'subscription')" @import="showBulkImportModal = true" />
 
         <!-- Manual Node Panel -->
         <ManualNodePanel :manual-nodes="manualNodes" :paginated-manual-nodes="paginatedManualNodes"
           :current-page="manualNodesCurrentPage" :total-pages="manualNodesTotalPages" :is-sorting="isSortingNodes"
           :search-term="searchTerm" :view-mode="manualNodeViewMode" :active-group-filter="activeGroupFilter"
           :groups="manualNodeGroups"
+          :compact-grid="true"
           @add="handleAddNode" @delete="handleDeleteNodeWithCleanup"
           @edit="(id) => handleEditNode(manualNodes.find(n => n.id === id))" @change-page="changeManualNodesPage"
-          @update:search-term="newVal => searchTerm.value = newVal" @update:view-mode="setViewMode"
+          @update:search-term="handleSearchTermUpdate" @update:view-mode="setViewMode"
           @toggle-sort="isSortingNodes = !isSortingNodes" @mark-dirty="markDirty" @auto-sort="handleAutoSortNodes"
           @deduplicate="handleDeduplicateNodes" @import="showSubscriptionImportModal = true"
           @delete-all="showDeleteNodesModal = true" @reorder="reorderManualNodes" @set-group-filter="setGroupFilter"
@@ -397,11 +427,11 @@ import SavePrompt from '../../ui/SavePrompt.vue';
       </div>
 
       <!-- Right Column -->
-      <div class="lg:col-span-1 md:col-span-2 space-y-8">
-        <RightPanel :config="config" :profiles="profiles" @qrcode="(url, title) => { qrCodeUrl = url; qrCodeTitle = title; showQRCodeModal = true; }" />
-        <ProfilePanel :profiles="profiles" @add="handleAddProfile" @edit="handleEditProfile"
+      <div class="space-y-6 lg:space-y-7 xl:col-span-1">
+        <RightPanel :config="config" :profiles="profiles" :compact="true" @qrcode="(url, title) => { qrCodeUrl = url; qrCodeTitle = title; showQRCodeModal = true; }" />
+        <ProfilePanel :profiles="profiles" :compact="true" @add="handleAddProfile" @edit="handleEditProfile"
           @delete="handleDeleteProfile" @deleteAll="showDeleteProfilesModal = true" @toggle="handleProfileToggle"
-          @copyLink="copyProfileLink" @copyClashLink="copyClashLink" @preview="handlePreviewProfile" @reorder="handleProfileReorder" 
+          @open-copy="handleOpenCopy" @copyLink="copyProfileLink" @copyClashLink="copyClashLink" @preview="handlePreviewProfile" @viewLogs="handleViewLogs" @reorder="handleProfileReorder" 
           @qrcode="(id) => handleQRCode(id, 'profile')" />
       </div>
     </div>
@@ -461,6 +491,13 @@ import SavePrompt from '../../ui/SavePrompt.vue';
     v-model:show="showQRCodeModal" 
     :url="qrCodeUrl" 
     :title="qrCodeTitle" 
+  />
+
+  <CopyLinkModal 
+    v-if="showCopyModal && showCopyModalProfile" 
+    v-model:show="showCopyModal" 
+    :profile="showCopyModalProfile" 
+    :token="settings?.profileToken" 
   />
 </template>
 

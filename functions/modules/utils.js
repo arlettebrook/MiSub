@@ -32,24 +32,17 @@ export function hasDataChanged(oldData, newData) {
 }
 
 /**
- * 获取 KV namespace
- * EdgeOne Pages: KV 作为全局变量注入（如 MISUB_KV），而非通过 env
- * Cloudflare Pages: KV 通过 env.MISUB_KV 注入
+ * 获取 KV namespace。
+ * 仅从 Cloudflare Pages 的 env 绑定读取。
  * @param {Object} env
  * @returns {Object|null}
  */
 function getKV(env) {
-    // Cloudflare 方式
-    if (env?.MISUB_KV) return env.MISUB_KV;
-    // EdgeOne 方式：全局变量
-    try {
-        if (typeof MISUB_KV !== 'undefined' && MISUB_KV) return MISUB_KV; // eslint-disable-line no-undef
-    } catch (_) {}
-    return null;
+    return env?.MISUB_KV || null;
 }
 
 /**
- * 读取运行时环境变量（兼容 Cloudflare/EdgeOne）
+ * 读取运行时环境变量。
  * @param {Object} env
  * @param {string} key
  * @returns {string|undefined}
@@ -59,13 +52,6 @@ function getRuntimeEnvValue(env, key) {
     if (envValue !== undefined && envValue !== null && String(envValue).trim() !== '') {
         return String(envValue);
     }
-
-    try {
-        const globalValue = globalThis?.[key];
-        if (globalValue !== undefined && globalValue !== null && String(globalValue).trim() !== '') {
-            return String(globalValue);
-        }
-    } catch (_) {}
 
     return undefined;
 }
@@ -137,7 +123,7 @@ export async function conditionalKVPut(env, key, newData, oldData = null) {
 /**
  * 获取或生成 Cookie 加密密钥
  * 优先顺序：KV → 环境变量 COOKIE_SECRET → 随机生成（无 KV 时仅内存有效）
- * @param {Object} env - 运行时环境对象（Cloudflare / EdgeOne）
+ * @param {Object} env - 运行时环境对象
  * @returns {Promise<string>} 密钥
  */
 export async function getCookieSecret(env) {
@@ -169,7 +155,7 @@ export async function getCookieSecret(env) {
 /**
  * 获取管理员密码
  * 优先顺序：环境变量 ADMIN_PASSWORD → KV → 默认值 'admin'
- * @param {Object} env - 运行时环境对象（Cloudflare / EdgeOne）
+ * @param {Object} env - 运行时环境对象
  * @returns {Promise<string>} 密码
  */
 export async function getAdminPassword(env) {
@@ -249,7 +235,7 @@ export async function isUsingDefaultPassword(env) {
 
 /**
  * 设置管理员密码
- * 有 KV 时持久化到 KV；无 KV 时（EdgeOne 纯环境变量模式）抛出提示
+ * 有 KV 时持久化到 KV；无 KV 时抛出提示
  * @param {Object} env - 运行时环境对象
  * @param {string} newPassword - 新密码
  */
@@ -523,11 +509,19 @@ export function migrateConfigSettings(config) {
     if (migratedConfig.hasOwnProperty('enableTrafficNode')) {
         migratedConfig.enableTrafficNode = toBoolean(migratedConfig.enableTrafficNode);
     }
-    if (migratedConfig.hasOwnProperty('subConverterScv')) {
-        migratedConfig.subConverterScv = toBoolean(migratedConfig.subConverterScv);
+    // [Migration] 映射旧名到新名（如果新名不存在且旧名存在）
+    if (!migratedConfig.hasOwnProperty('builtinSkipCertVerify') && migratedConfig.hasOwnProperty('transformBackendScv')) {
+        migratedConfig.builtinSkipCertVerify = toBoolean(migratedConfig.transformBackendScv);
     }
-    if (migratedConfig.hasOwnProperty('subConverterUdp')) {
-        migratedConfig.subConverterUdp = toBoolean(migratedConfig.subConverterUdp);
+    if (!migratedConfig.hasOwnProperty('builtinEnableUdp') && migratedConfig.hasOwnProperty('transformBackendUdp')) {
+        migratedConfig.builtinEnableUdp = toBoolean(migratedConfig.transformBackendUdp);
+    }
+
+    if (migratedConfig.hasOwnProperty('builtinSkipCertVerify')) {
+        migratedConfig.builtinSkipCertVerify = toBoolean(migratedConfig.builtinSkipCertVerify);
+    }
+    if (migratedConfig.hasOwnProperty('builtinEnableUdp')) {
+        migratedConfig.builtinEnableUdp = toBoolean(migratedConfig.builtinEnableUdp);
     }
     if (migratedConfig.hasOwnProperty('builtinLoonSkipCertVerify')) {
         migratedConfig.builtinLoonSkipCertVerify = toBoolean(migratedConfig.builtinLoonSkipCertVerify);
@@ -653,4 +647,34 @@ export function migrateProfileIds(profiles) {
         }
     }
     return migrated;
+}
+
+/**
+ * 安全的 UTF-8 到 Base64 编码 (替代已弃用的 unescape/encodeURIComponent 方案)
+ */
+export function base64EncodeUtf8(str) {
+    if (!str) return '';
+    try {
+        const bytes = new TextEncoder().encode(str);
+        const binString = Array.from(bytes, b => String.fromCharCode(b)).join('');
+        return btoa(binString);
+    } catch (e) {
+        console.error('[Utils] base64EncodeUtf8 failed:', e);
+        return '';
+    }
+}
+
+/**
+ * 安全的 Base64 到 UTF-8 解码
+ */
+export function base64DecodeUtf8(base64) {
+    if (!base64) return '';
+    try {
+        const binString = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+        const bytes = Uint8Array.from(binString, m => m.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+    } catch (e) {
+        console.error('[Utils] base64DecodeUtf8 failed:', e);
+        return '';
+    }
 }

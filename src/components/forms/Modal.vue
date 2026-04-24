@@ -16,6 +16,10 @@ const props = defineProps({
     type: String,
     default: '确认'
   },
+  closeOnConfirm: {
+    type: Boolean,
+    default: true,
+  },
   confirmText: {
     type: String,
     default: '确认'
@@ -30,6 +34,7 @@ const emit = defineEmits(['update:show', 'confirm']);
 
 const confirmInput = ref('');
 const modalPanelRef = ref(null);
+const titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
 
 // 记录打开弹窗前的焦点元素，关闭时还原
 let previouslyFocused = null;
@@ -100,16 +105,18 @@ watch(() => props.show, async (val) => {
 
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
-const handleConfirm = () => {
-  emit('confirm');
-  emit('update:show', false);
+const handleConfirm = async () => {
+  await emit('confirm');
+  if (props.closeOnConfirm) {
+    emit('update:show', false);
+  }
 };
 </script>
 
 <template>
   <Transition name="modal-fade">
     <div v-if="show" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4"
-      @click="emit('update:show', false)" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      @click="emit('update:show', false)" role="dialog" aria-modal="true" :aria-labelledby="titleId">
       <Transition name="modal-inner">
         <div v-if="show"
           ref="modalPanelRef"
@@ -126,9 +133,9 @@ const handleConfirm = () => {
             'max-w-6xl': size === '6xl',
             'max-w-7xl': size === '7xl'
           }" @click.stop>
-          <div class="p-6 pb-4 shrink-0">
+          <div :id="titleId" class="p-6 pb-4 shrink-0">
             <slot name="title">
-              <h3 id="modal-title" class="text-lg font-bold text-gray-900 dark:text-white">确认操作</h3>
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white">确认操作</h3>
             </slot>
           </div>
 

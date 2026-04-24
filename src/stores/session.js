@@ -11,7 +11,18 @@ export const useSessionStore = defineStore('session', () => {
   const sessionState = ref('loading'); // loading, loggedIn, loggedOut
   const initialData = ref(null);
   const subscriptionConfig = ref({}); // [NEW] Added subscriptionConfig
-  const publicConfig = ref({ enablePublicPage: true }); // Default true until fetched
+  const publicConfig = ref({
+    enablePublicPage: true,
+    customPage: {
+      enabled: false,
+      useDefaultLayout: true,
+      allowExternalStylesheets: false,
+      allowScripts: false,
+      hideBranding: false,
+      hideHeader: false,
+      hideFooter: false
+    }
+  }); // Default true until fetched
 
   async function checkSession() {
     // Parallel fetch of initial data (auth check) and public config
@@ -25,7 +36,17 @@ export const useSessionStore = defineStore('session', () => {
       publicConfig.value = pConfigResult.data;
     } else {
       // Fallback to default if fetch fails
-      publicConfig.value = { enablePublicPage: false };
+      publicConfig.value = {
+        enablePublicPage: false,
+        customPage: {
+          enabled: false,
+          allowExternalStylesheets: false,
+          allowScripts: false,
+          hideBranding: false,
+          hideHeader: false,
+          hideFooter: false
+        }
+      };
     }
 
     if (dataResult.success) {
@@ -58,8 +79,8 @@ export const useSessionStore = defineStore('session', () => {
     const result = await apiLogin(password);
     if (result.success) {
       handleLoginSuccess();
-      // 登录成功后跳转到首页 (HomeView will show Dashboard)
-      router.push({ path: '/' });
+      // 登录成功后跳转到仪表盘
+      router.push({ path: '/dashboard' });
     } else {
       throw new Error(result.error || '登录失败');
     }
@@ -83,7 +104,7 @@ export const useSessionStore = defineStore('session', () => {
     const dataStore = useDataStore();
     dataStore.clearCachedData();
 
-    // 跳转到首页（由于状态已变更为loggedOut，HomeView会自动渲染PublicProfilesView）
+    // 跳转到首页（公开页）
     router.push({ path: '/' });
   }
 

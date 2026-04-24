@@ -14,6 +14,7 @@ const uiStore = useUIStore();
 const sessionStore = useSessionStore();
 const { publicConfig } = storeToRefs(sessionStore);
 const isPublicEnabled = computed(() => publicConfig.value?.enablePublicPage === true);
+const hideBranding = computed(() => publicConfig.value?.customPage?.enabled === true && publicConfig.value?.customPage?.hideBranding === true);
 
 const props = defineProps({
   isLoggedIn: Boolean
@@ -26,6 +27,7 @@ const navItems = MAIN_NAV_ITEMS;
 // 路由激活判断：/ 精确匹配，其他路径前缀匹配（支持子路由）
 function isActive(path) {
   if (path === '/') return route.path === '/';
+  if (path === '/dashboard') return route.path === '/dashboard';
   return route.path.startsWith(path);
 }
 </script>
@@ -41,6 +43,7 @@ function isActive(path) {
     <NavActionGroup
       :is-logged-in="isLoggedIn"
       :show-explore="isPublicEnabled"
+      :hide-external-repo="hideBranding"
       :with-focus-ring="true"
       rounded-class="rounded-full"
       @toggle-layout="uiStore.toggleLayout()"
@@ -84,6 +87,7 @@ function isActive(path) {
         <NavActionGroup
           :is-logged-in="isLoggedIn"
           :show-explore="isPublicEnabled"
+          :hide-external-repo="hideBranding"
           :with-focus-ring="true"
           :show-divider="true"
           rounded-class="rounded-full"
@@ -98,9 +102,9 @@ function isActive(path) {
   <nav
     v-if="isLoggedIn"
     aria-label="底部主导航"
-    class="md:hidden mobile-nav-glass fixed bottom-0 inset-x-0 safe-bottom-inset z-[60]"
+    class="md:hidden mobile-nav-glass z-[60]"
   >
-    <div class="flex justify-around items-center h-16 max-w-lg mx-auto px-2">
+    <div class="mobile-nav-inner">
       <router-link
         v-for="item in navItems"
         :key="item.path"
