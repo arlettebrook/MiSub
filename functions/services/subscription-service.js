@@ -260,7 +260,8 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
      */
     const fetchSingleSubscription = async (sub) => {
         try {
-            const processedUserAgent = getProcessedUserAgent(userAgent, sub.url);
+            const customUserAgent = typeof sub.customUserAgent === 'string' ? sub.customUserAgent.trim() : '';
+            const processedUserAgent = customUserAgent || getProcessedUserAgent(userAgent, sub.url);
             const requestHeaders = { 'User-Agent': processedUserAgent };
 
             // [Fetch Proxy] 获取单点订阅专属拉取代理前缀

@@ -38,7 +38,12 @@ const testProxyConnectivity = async () => {
   }
   isTestingProxy.value = true;
   try {
-    const res = await fetchNodeCount(props.editingSubscription.url, props.editingSubscription.fetchProxy);
+    const res = await fetchNodeCount(
+      props.editingSubscription.url,
+      props.editingSubscription.fetchProxy,
+      props.editingSubscription.plusAsSpace,
+      props.editingSubscription.customUserAgent
+    );
     if (res.success) {
       showToast(`代理连通测试成功！获取到 ${res.data.count} 个节点`, 'success');
     } else {

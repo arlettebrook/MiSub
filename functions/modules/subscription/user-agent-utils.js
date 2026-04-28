@@ -15,7 +15,7 @@ export function isBrowserAgent(userAgent) {
     const isBrowser = /Mozilla/i.test(userAgent) && /Chrome|Safari|Edge|Opera|Firefox|Via|UCBrowser|Quark|MQQBrowser|Konqueror/i.test(userAgent);
     
     // Common proxy client and bot keywords to exclude
-    const isProxyOrBot = /clash|flclash|v2ray|surge|loon|shadowrocket|quantumult|stash|shadowsocks|mihomo|meta|nekobox|nekoray|sfi|sfa|sfra|sing-box|surfboard|hiddify|egern|dio|dart|flutter|http-client|okhttp|axios|postman|curl|wget|go-http-client|python|java/i.test(userAgent);
+    const isProxyOrBot = /clash|flclash|v2ray|surge|loon|shadowrocket|quantumult|stash|shadowsocks|mihomo|meta|nekobox|nekoray|sfi|sfa|sfra|sing-box|surfboard|hiddify|egern|yuetu|月兔|dio|dart|flutter|http-client|okhttp|axios|postman|curl|wget|go-http-client|python|java/i.test(userAgent);
 
     return isBrowser && !isProxyOrBot;
 }
@@ -93,6 +93,8 @@ export function determineTargetFormat(userAgent, searchParams) {
         ['cfw', 'clash'],
         ['clashforwindows', 'clash'],
         ['egern', 'egern'],
+        ['yuetu', 'clash'],
+        ['月兔', 'clash'],
         ['sing-box', 'singbox'],
         ['singbox', 'singbox'],
         ['hiddify', 'singbox'],
