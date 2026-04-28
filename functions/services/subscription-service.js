@@ -6,6 +6,7 @@
 import { parseNodeList } from '../modules/utils/node-parser.js';
 import { parseNodeInfo } from '../modules/utils/geo-utils.js';
 import { getProcessedUserAgent } from '../utils/format-utils.js';
+import { buildFetchProxyUrl } from '../utils/fetch-proxy-utils.js';
 import { prependNodeName, addFlagEmoji, removeFlagEmoji, fixNodeUrlEncoding, sanitizeNodeForYaml } from '../utils/node-utils.js';
 import { runOperatorChain } from '../utils/operator-runner.js';
 import { createTimeoutFetch } from '../modules/utils.js';
@@ -267,9 +268,7 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
             // [Fetch Proxy] 获取单点订阅专属拉取代理前缀
             let requestUrl = sub.url;
             if (sub.fetchProxy && typeof sub.fetchProxy === 'string' && sub.fetchProxy.trim()) {
-                const proxyPrefix = sub.fetchProxy.trim();
-                // 将被代理的 URL 进行编码，拼接到代理前缀之后
-                requestUrl = `${proxyPrefix}${encodeURIComponent(sub.url)}`;
+                requestUrl = buildFetchProxyUrl(sub.fetchProxy, sub.url, processedUserAgent);
             }
 
             const response = await fetchWithRetry(requestUrl, {

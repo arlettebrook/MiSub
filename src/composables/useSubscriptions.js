@@ -78,7 +78,12 @@ export function useSubscriptions(markDirty) {
     }, TIMING.REQUEST_TIMEOUT_MS);
 
     try {
-      const result = await fetchNodeCount(subToUpdate.url, subToUpdate.fetchProxy, Boolean(subToUpdate.plusAsSpace));
+      const result = await fetchNodeCount(
+        subToUpdate.url,
+        subToUpdate.fetchProxy,
+        Boolean(subToUpdate.plusAsSpace),
+        subToUpdate.customUserAgent
+      );
 
       // 清除超时保护
       clearTimeout(timeoutId);

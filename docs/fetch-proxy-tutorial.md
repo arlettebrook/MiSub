@@ -109,10 +109,25 @@ function createCorsHeaders() {
   return {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET,HEAD,OPTIONS',
-    'access-control-allow-headers': 'content-type,user-agent',
+    'access-control-allow-headers': 'content-type,user-agent,x-user-agent',
     // 让浏览器调试时也能看到这些自定义响应头
     'access-control-expose-headers': PASS_THROUGH_RESPONSE_HEADERS.join(', '),
   };
+}
+
+function sanitizeHeaderValue(value) {
+  return String(value || '').replace(/[\r\n]/g, '').trim();
+}
+
+function getUpstreamUserAgent(req, requestUrl) {
+  // 优先使用 MiSub 自动拼接到代理前缀里的 ua 参数：
+  //   /api?ua=clash-verge%2Fv2.4.3&url=<encoded-subscription-url>
+  // 其次兼容手动传入的 x-user-agent 请求头，最后使用默认 Clash Verge UA。
+  return sanitizeHeaderValue(
+    requestUrl.searchParams.get('ua') ||
+    req.headers.get('x-user-agent') ||
+    DEFAULT_USER_AGENT
+  );
 }
 
 export default async function handler(req) {
@@ -154,8 +169,10 @@ export default async function handler(req) {
     method: req.method === 'HEAD' ? 'HEAD' : 'GET',
     redirect: 'follow',
     headers: {
-      // 很多机场会根据 UA 返回不同格式；Clash 类 UA 通常会返回 YAML 和 subscription-userinfo
-      'user-agent': requestUrl.searchParams.get('ua') || DEFAULT_USER_AGENT,
+      // 很多机场会根据 UA 返回不同格式；Clash 类 UA 通常会返回 YAML 和 subscription-userinfo。
+      // 注意：MiSub 发给代理的 User-Agent 不一定会自动成为代理访问机场时的 UA，
+      // 所以这里必须显式使用 ua 参数 / x-user-agent 覆盖上游请求 UA。
+      'user-agent': getUpstreamUserAgent(req, requestUrl),
       'accept': '*/*',
     },
   });
@@ -243,12 +260,21 @@ https://misub-proxy.vercel.app/api?url=
 - 必须包含 `/api?url=`
 - 最后的 `=` 不能省略
 - MiSub 会自动把原始订阅链接拼接到后面
+- 如果订阅源配置了“自定义 User-Agent”，新版 MiSub 会自动把 UA 拼到代理地址上，例如 `?ua=clash-verge%2Fv2.4.3&url=`，确保 Fetch Proxy 访问机场源站时也使用相同 UA
 
 例如 MiSub 实际请求会变成：
 
 ```text
 https://misub-proxy.vercel.app/api?url=https%3A%2F%2Fexample.com%2Fsub%2Fxxxx
 ```
+
+如果该订阅设置了 `Clash Verge` UA，实际请求会变成：
+
+```text
+https://misub-proxy.vercel.app/api?ua=clash-verge%2Fv2.4.3&url=https%3A%2F%2Fexample.com%2Fsub%2Fxxxx
+```
+
+这是为了避免“MiSub 请求代理时用了正确 UA，但代理请求机场源站时又换成默认 UA”的问题。
 
 ---
 
@@ -341,6 +367,8 @@ https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.23&url=
 
 注意最后仍然要以 `url=` 结尾。
 
+新版 MiSub 会在你为订阅源选择“自定义 User-Agent”后自动拼接 `ua` 参数；如果你手动在 Fetch Proxy 前缀中写了 `ua=...`，MiSub 不会重复添加。
+
 ### 4. 使用 curl 能看到头，但 MiSub 仍然没显示
 
 请检查：
@@ -348,8 +376,9 @@ https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.23&url=
 1. MiSub 订阅源里是否确实配置了 Fetch Proxy。
 2. Fetch Proxy 是否以 `/api?url=` 结尾。
 3. 订阅源是否已经点击刷新/更新节点数量。
-4. 浏览器或后端是否仍有旧缓存，可以保存订阅源后重新刷新。
-5. `curl -I` 检查代理地址时是否能看到 `subscription-userinfo`。
+4. 如果机场依赖特定 UA，实际代理请求里是否出现了 `ua=...&url=`。
+5. 浏览器或后端是否仍有旧缓存，可以保存订阅源后重新刷新。
+6. `curl -I` 检查代理地址时是否能看到 `subscription-userinfo`。
 
 ---
 
@@ -382,6 +411,7 @@ if (!ALLOWED_HOSTS.has(parsedTarget.hostname)) {
 
 - [ ] Vercel 项目已部署成功
 - [ ] MiSub 订阅源已填写 `https://你的域名.vercel.app/api?url=`
+- [ ] 需要特定 UA 的订阅源已在 MiSub 中选择对应“自定义 User-Agent”
 - [ ] `curl -I` 代理地址能看到 `subscription-userinfo`
 - [ ] MiSub 中点击刷新后能显示节点数量
 - [ ] MiSub 中能显示已用流量、总流量、到期时间
