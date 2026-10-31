@@ -13,9 +13,14 @@ export function parseSurgeConfig(content) {
         const line = lines[i].trim();
         const lowerLine = line.toLowerCase();
         const equalIndex = line.indexOf('=');
-        const valuePrefix = equalIndex !== -1
-            ? line.slice(equalIndex + 1).split(',')[0].trim().toLowerCase()
-            : '';
+        const valuePrefix =
+            equalIndex !== -1
+                ? line
+                      .slice(equalIndex + 1)
+                      .split(',')[0]
+                      .trim()
+                      .toLowerCase()
+                : '';
 
         // 匹配代理规则
         if (lowerLine.startsWith('[proxy]') || lowerLine.startsWith('[proxies]')) {
@@ -44,7 +49,12 @@ export function parseSurgeConfig(content) {
         } else if (lowerLine.startsWith('snell') || valuePrefix === 'snell') {
             const node = parseSurgeSnell(line);
             if (node) nodes.push(node);
-        } else if (lowerLine.startsWith('hysteria2') || lowerLine.startsWith('hy2') || valuePrefix === 'hysteria2' || valuePrefix === 'hy2') {
+        } else if (
+            lowerLine.startsWith('hysteria2') ||
+            lowerLine.startsWith('hy2') ||
+            valuePrefix === 'hysteria2' ||
+            valuePrefix === 'hy2'
+        ) {
             const node = parseSurgeHysteria2(line);
             if (node) nodes.push(node);
         } else if (lowerLine.startsWith('tuic') || valuePrefix === 'tuic') {
@@ -74,15 +84,15 @@ function parseSurgeAnytls(line) {
         if (!parts) return null;
 
         const name = parts[1].trim();
-        const params = parts[2].split(',').map(p => p.trim());
+        const params = parts[2].split(',').map((p) => p.trim());
         const [protocol, server, port, ...options] = params;
 
         if (!server || !port) return null;
-        
+
         let password = '';
         const urlParams = [];
 
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -105,7 +115,7 @@ function parseSurgeAnytls(line) {
             url: `anytls://${encodeURIComponent(password)}@${server}:${port}${query}#${encodeURIComponent(name.trim().replace(/"/g, ''))}`,
             enabled: true,
             protocol: 'anytls',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         return null;
@@ -123,7 +133,7 @@ function parseSurgeVmess(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = config.split(',').map((p) => p.trim());
 
         if (params.length < 4) return null;
 
@@ -133,7 +143,7 @@ function parseSurgeVmess(line) {
 
         // 解析 VMess 参数
         const vmessConfig = {
-            v: "2",
+            v: '2',
             ps: name,
             add: server,
             port: parseInt(port),
@@ -143,11 +153,11 @@ function parseSurgeVmess(line) {
             type: 'none',
             host: '',
             path: '',
-            tls: ''
+            tls: '',
         };
 
         // 解析选项参数
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^(\w+(?:-\w+)*)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -192,7 +202,7 @@ function parseSurgeVmess(line) {
             url: url,
             enabled: true,
             protocol: 'vmess',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge VMess 解析失败:', e);
@@ -208,7 +218,7 @@ function parseSurgeSS(line) {
         const parts = line.match(/^([^=]+?)\s*=\s*(.+)$/);
         if (!parts) return null;
 
-        const params = parts[2].split(',').map(p => p.trim());
+        const params = parts[2].split(',').map((p) => p.trim());
         const [protocol, server, port, method, password] = params;
 
         if (!server || !port || !method || !password) return null;
@@ -220,7 +230,7 @@ function parseSurgeSS(line) {
             url: `ss://${userinfo}@${server}:${port}#${encodeURIComponent(name.trim().replace(/"/g, ''))}`,
             enabled: true,
             protocol: 'ss',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         return null;
@@ -235,13 +245,13 @@ function parseSurgeTrojan(line) {
         const parts = line.match(/^([^=]+?)\s*=\s*(.+)$/);
         if (!parts) return null;
 
-        const params = parts[2].split(',').map(p => p.trim());
+        const params = parts[2].split(',').map((p) => p.trim());
         const [protocol, server, port, ...options] = params;
 
         if (!server || !port) return null;
         let password = '';
-        
-        options.forEach(opt => {
+
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -250,7 +260,7 @@ function parseSurgeTrojan(line) {
                 }
             }
         });
-        
+
         if (!password) {
             // as fallback
             password = options[0];
@@ -262,7 +272,7 @@ function parseSurgeTrojan(line) {
             url: `trojan://${encodeURIComponent(password)}@${server}:${port}#${encodeURIComponent(name.trim().replace(/"/g, ''))}`,
             enabled: true,
             protocol: 'trojan',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         return null;
@@ -277,12 +287,13 @@ function parseSurgeHTTP(line) {
         const parts = line.match(/^([^=]+?)\s*=\s*(.+)$/);
         if (!parts) return null;
 
-        const params = parts[2].split(',').map(p => p.trim());
+        const params = parts[2].split(',').map((p) => p.trim());
         const [protocol, server, port] = params;
 
         if (!server || !port) return null;
 
-        const isHTTPS = line.toLowerCase().startsWith('https-proxy') || protocol.toLowerCase() === 'https';
+        const isHTTPS =
+            line.toLowerCase().startsWith('https-proxy') || protocol.toLowerCase() === 'https';
         const urlProtocol = isHTTPS ? 'https' : 'http';
 
         return {
@@ -291,7 +302,7 @@ function parseSurgeHTTP(line) {
             url: `${urlProtocol}://${server}:${port}#${encodeURIComponent(name.trim().replace(/"/g, ''))}`,
             enabled: true,
             protocol: protocol,
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         return null;
@@ -309,7 +320,7 @@ function parseSurgeSnell(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = config.split(',').map((p) => p.trim());
 
         if (params.length < 4) return null;
 
@@ -322,13 +333,13 @@ function parseSurgeSnell(line) {
             server: server,
             port: parseInt(port),
             psk: '',
-            version: 4,  // 默认版本
+            version: 4, // 默认版本
             reuse: true,
-            tfo: false
+            tfo: false,
         };
 
         // 解析键值对参数
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^(\w+(?:-\w+)*)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -369,7 +380,8 @@ function parseSurgeSnell(line) {
 
         if (proxy['obfs-opts']) {
             if (proxy['obfs-opts'].mode) urlParams.push(`obfs=${proxy['obfs-opts'].mode}`);
-            if (proxy['obfs-opts'].host) urlParams.push(`obfs-host=${encodeURIComponent(proxy['obfs-opts'].host)}`);
+            if (proxy['obfs-opts'].host)
+                urlParams.push(`obfs-host=${encodeURIComponent(proxy['obfs-opts'].host)}`);
         }
 
         const query = urlParams.length > 0 ? `?${urlParams.join('&')}` : '';
@@ -381,7 +393,7 @@ function parseSurgeSnell(line) {
             url: url,
             enabled: true,
             protocol: 'snell',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge Snell 解析失败:', e);
@@ -412,21 +424,22 @@ function parseSurgeHysteria2(line) {
         let password = '';
         const urlParams = [];
 
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
                 const v = unquoteIniValue(value);
                 const k = key.toLowerCase();
                 if (k === 'password') password = v;
-                else if (k === 'obfs' || k === 'obfs-password') urlParams.push(`${k}=${encodeURIComponent(v)}`);
+                else if (k === 'obfs' || k === 'obfs-password')
+                    urlParams.push(`${k}=${encodeURIComponent(v)}`);
                 else if (k === 'salamander-password' || k === 'gecko-password') {
                     urlParams.push(`obfs=${k === 'salamander-password' ? 'salamander' : 'gecko'}`);
                     urlParams.push(`obfs-password=${encodeURIComponent(v)}`);
-                }
-                else if (k === 'sni') urlParams.push(`sni=${encodeURIComponent(v)}`);
+                } else if (k === 'sni') urlParams.push(`sni=${encodeURIComponent(v)}`);
                 else if (k === 'skip-cert-verify' && v === 'true') urlParams.push('insecure=1');
-                else if (k === 'download-bandwidth') urlParams.push(`down=${encodeURIComponent(v)}`);
+                else if (k === 'download-bandwidth')
+                    urlParams.push(`down=${encodeURIComponent(v)}`);
             }
         });
 
@@ -441,7 +454,7 @@ function parseSurgeHysteria2(line) {
             url,
             enabled: true,
             protocol: 'hysteria2',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge Hysteria2 解析失败:', e);
@@ -460,7 +473,7 @@ function parseSurgeTUIC(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = config.split(',').map((p) => p.trim());
 
         if (params.length < 3) return null;
 
@@ -470,7 +483,7 @@ function parseSurgeTUIC(line) {
         let token = '';
         const urlParams = [];
 
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -494,7 +507,7 @@ function parseSurgeTUIC(line) {
             url,
             enabled: true,
             protocol: 'tuic',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge TUIC 解析失败:', e);
@@ -514,7 +527,7 @@ function parseSurgeVless(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = config.split(',').map((p) => p.trim());
 
         if (params.length < 4) return null;
 
@@ -524,7 +537,7 @@ function parseSurgeVless(line) {
         let uuid = '';
         const urlParams = ['encryption=none'];
 
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
@@ -536,10 +549,11 @@ function parseSurgeVless(line) {
                 else if (k === 'ws-path') urlParams.push(`path=${encodeURIComponent(v)}`);
                 else if (k === 'ws-headers') {
                     const hostMatch = v.match(/Host:(.+)/i);
-                    if (hostMatch) urlParams.push(`host=${encodeURIComponent(hostMatch[1].trim())}`);
-                }
-                else if (k === 'tls' && v === 'true') urlParams.push('security=tls');
-                else if (k === 'skip-cert-verify' && v === 'true') urlParams.push('allowInsecure=1');
+                    if (hostMatch)
+                        urlParams.push(`host=${encodeURIComponent(hostMatch[1].trim())}`);
+                } else if (k === 'tls' && v === 'true') urlParams.push('security=tls');
+                else if (k === 'skip-cert-verify' && v === 'true')
+                    urlParams.push('allowInsecure=1');
             }
         });
 
@@ -553,7 +567,7 @@ function parseSurgeVless(line) {
             url,
             enabled: true,
             protocol: 'vless',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge VLESS 解析失败:', e);
@@ -573,7 +587,7 @@ function parseSurgeWireGuard(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = config.split(',').map((p) => p.trim());
 
         const [protocol, server, port, ...options] = params;
         if (protocol.toLowerCase() !== 'wireguard') return null;
@@ -582,15 +596,17 @@ function parseSurgeWireGuard(line) {
 
         const urlParams = [];
         let privateKey = '';
-        options.forEach(opt => {
+        options.forEach((opt) => {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (!match) return;
             const [, key, value] = match;
             const k = key.toLowerCase();
             const v = value.replace(/^['"]|['"]$/g, '');
             if (k === 'private-key') privateKey = v;
-            else if (k === 'peer-public-key' || k === 'public-key') urlParams.push(`publickey=${encodeURIComponent(v)}`);
-            else if (k === 'client-id') urlParams.push(`reserved=${encodeURIComponent(v.replace(/\//g, ','))}`);
+            else if (k === 'peer-public-key' || k === 'public-key')
+                urlParams.push(`publickey=${encodeURIComponent(v)}`);
+            else if (k === 'client-id')
+                urlParams.push(`reserved=${encodeURIComponent(v.replace(/\//g, ','))}`);
             else if (k === 'self-ip') urlParams.push(`address=${encodeURIComponent(v)}`);
             else if (k === 'mtu') urlParams.push(`mtu=${encodeURIComponent(v)}`);
             else if (k === 'preshared-key') urlParams.push(`presharedkey=${encodeURIComponent(v)}`);
@@ -604,7 +620,7 @@ function parseSurgeWireGuard(line) {
             url: `wireguard://${encodeURIComponent(privateKey)}@${server}:${port}${query}#${encodeURIComponent(name)}`,
             enabled: true,
             protocol: 'wireguard',
-            source: 'surge'
+            source: 'surge',
         };
     } catch (e) {
         console.error('Surge WireGuard 解析失败:', e);

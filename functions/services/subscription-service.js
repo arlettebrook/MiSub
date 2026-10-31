@@ -7,7 +7,14 @@ import { parseNodeList } from '../modules/utils/node-parser.js';
 import { parseNodeInfo } from '../modules/utils/geo-utils.js';
 import { getProcessedUserAgent } from '../utils/format-utils.js';
 import { buildFetchProxyUrl } from '../utils/fetch-proxy-utils.js';
-import { prependNodeName, addFlagEmoji, removeFlagEmoji, fixNodeUrlEncoding, sanitizeNodeForYaml, isLocalProxyEndpoint } from '../utils/node-utils.js';
+import {
+    prependNodeName,
+    addFlagEmoji,
+    removeFlagEmoji,
+    fixNodeUrlEncoding,
+    sanitizeNodeForYaml,
+    isLocalProxyEndpoint,
+} from '../utils/node-utils.js';
 import { runOperatorChain } from '../utils/operator-runner.js';
 import { createTimeoutFetch } from '../modules/utils.js';
 import { assertPublicNetworkUrl } from '../modules/security-utils.js';
@@ -17,11 +24,11 @@ import { isSuspiciousNodeCountDrop } from './node-cache-service.js';
  * 订阅获取配置常量
  */
 const FETCH_CONFIG = {
-    TIMEOUT: 18000,        // 单次请求超时 18 秒
-    MAX_RETRIES: 2,        // 最多重试 2 次
-    BASE_DELAY: 1000,      // 重试基础延迟 1 秒
-    CONCURRENCY: 4,        // 最大并发数
-    RETRYABLE_STATUS: [500, 502, 503, 504, 429] // 可重试的 HTTP 状态码
+    TIMEOUT: 18000, // 单次请求超时 18 秒
+    MAX_RETRIES: 2, // 最多重试 2 次
+    BASE_DELAY: 1000, // 重试基础延迟 1 秒
+    CONCURRENCY: 4, // 最大并发数
+    RETRYABLE_STATUS: [500, 502, 503, 504, 429], // 可重试的 HTTP 状态码
 };
 
 const REAL_PROXY_PROTOCOLS = [
@@ -37,7 +44,7 @@ const REAL_PROXY_PROTOCOLS = [
     'anytls://',
     'socks5://',
     'socks://',
-    'wireguard://'
+    'wireguard://',
 ];
 
 /**
@@ -48,14 +55,14 @@ export function isRealProxyNode(node) {
     const trimmed = node.trim().toLowerCase();
     if (!trimmed) return false;
     if (isLocalProxyEndpoint(trimmed)) return false;
-    return REAL_PROXY_PROTOCOLS.some(protocol => trimmed.startsWith(protocol));
+    return REAL_PROXY_PROTOCOLS.some((protocol) => trimmed.startsWith(protocol));
 }
 
 export function parseSubscriptionUserInfoHeader(header) {
     if (typeof header !== 'string' || !header.trim()) return null;
 
     const info = {};
-    header.split(';').forEach(part => {
+    header.split(';').forEach((part) => {
         const [rawKey, rawValue] = part.trim().split('=');
         const key = rawKey?.trim();
         const value = rawValue?.trim();
@@ -106,7 +113,7 @@ async function writeSubscriptionNodeCache(storage, sub, nodes) {
             updatedAt: new Date().toISOString(),
             sourceId: sub?.id || null,
             sourceName: sub?.name || '',
-            sourceUrl: sub?.url || ''
+            sourceUrl: sub?.url || '',
         });
         return true;
     } catch (error) {
@@ -119,20 +126,25 @@ async function writeSubscriptionRuntimeInfo(storage, sub, runtimeInfo = {}) {
     if (!storage || !sub?.id) return false;
     const { nodeCount, userInfo, lastGoodNodeCount } = runtimeInfo;
     const hasUserInfo = Object.prototype.hasOwnProperty.call(runtimeInfo, 'userInfo');
-    const hasLastGoodNodeCount = Object.prototype.hasOwnProperty.call(runtimeInfo, 'lastGoodNodeCount');
+    const hasLastGoodNodeCount = Object.prototype.hasOwnProperty.call(
+        runtimeInfo,
+        'lastGoodNodeCount'
+    );
 
     try {
-        const applyUpdate = current => {
+        const applyUpdate = (current) => {
             if (!current) return current;
             return {
                 ...current,
                 nodeCount: Number.isFinite(nodeCount) ? nodeCount : current.nodeCount,
-                ...(hasLastGoodNodeCount && Number.isFinite(lastGoodNodeCount) && lastGoodNodeCount > 0
+                ...(hasLastGoodNodeCount &&
+                Number.isFinite(lastGoodNodeCount) &&
+                lastGoodNodeCount > 0
                     ? { lastGoodNodeCount }
                     : {}),
                 ...(hasUserInfo ? { userInfo } : {}),
                 lastError: null,
-                lastUpdate: new Date().toISOString()
+                lastUpdate: new Date().toISOString(),
             };
         };
 
@@ -143,7 +155,7 @@ async function writeSubscriptionRuntimeInfo(storage, sub, runtimeInfo = {}) {
         if (typeof storage.get === 'function' && typeof storage.put === 'function') {
             const all = await storage.get('misub_subscriptions_v1');
             if (!Array.isArray(all)) return false;
-            const index = all.findIndex(item => item?.id === sub.id);
+            const index = all.findIndex((item) => item?.id === sub.id);
             if (index === -1) return false;
             all[index] = applyUpdate(all[index]);
             await storage.put('misub_subscriptions_v1', all);
@@ -160,13 +172,15 @@ function scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInf
     const promise = writeSubscriptionRuntimeInfo(storage, sub, runtimeInfo);
 
     if (context && typeof context.waitUntil === 'function') {
-        context.waitUntil(promise.catch(error => {
-            console.warn('[SubscriptionRuntimeInfo] Async update failed:', error);
-        }));
+        context.waitUntil(
+            promise.catch((error) => {
+                console.warn('[SubscriptionRuntimeInfo] Async update failed:', error);
+            })
+        );
         return;
     }
 
-    promise.catch(error => {
+    promise.catch((error) => {
         console.warn('[SubscriptionRuntimeInfo] Async update failed:', error);
     });
 }
@@ -191,7 +205,7 @@ async function fetchWithRetry(url, init = {}, options = {}) {
         timeout = FETCH_CONFIG.TIMEOUT,
         maxRetries = FETCH_CONFIG.MAX_RETRIES,
         baseDelay = FETCH_CONFIG.BASE_DELAY,
-        retryableStatus = FETCH_CONFIG.RETRYABLE_STATUS
+        retryableStatus = FETCH_CONFIG.RETRYABLE_STATUS,
     } = options;
 
     let lastError;
@@ -214,7 +228,9 @@ async function fetchWithRetry(url, init = {}, options = {}) {
                         }
                     }
 
-                    console.warn(`[Retry] HTTP ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`);
+                    console.warn(
+                        `[Retry] HTTP ${response.status} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`
+                    );
 
                     // 释放响应体，避免连接占用
                     try {
@@ -223,7 +239,7 @@ async function fetchWithRetry(url, init = {}, options = {}) {
                         console.debug('[Retry] Failed to cancel response body:', cancelError);
                     }
 
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    await new Promise((resolve) => setTimeout(resolve, delay));
                     continue;
                 }
                 // 最后一次重试仍失败，保存响应供上层处理
@@ -239,8 +255,10 @@ async function fetchWithRetry(url, init = {}, options = {}) {
             }
 
             const delay = baseDelay * Math.pow(2, attempt);
-            console.warn(`[Retry] ${error.message} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            console.warn(
+                `[Retry] ${error.message} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
         }
     }
 
@@ -294,10 +312,11 @@ function createConcurrencyLimiter(limit) {
             });
     };
 
-    return (task) => new Promise((resolve, reject) => {
-        queue.push({ task, resolve, reject });
-        runNext();
-    });
+    return (task) =>
+        new Promise((resolve, reject) => {
+            queue.push({ task, resolve, reject });
+            runNext();
+        });
 }
 
 /**
@@ -311,16 +330,26 @@ function createConcurrencyLimiter(limit) {
  * @param {boolean} debug - 是否启用调试日志
  * @returns {Promise<string>} - 组合后的节点列表
  */
-export async function generateCombinedNodeList(context, config, userAgent, misubs, prependedContent = '', profilePrefixSettings = null, debug = false, skipCertVerify = false) {
-// 判断是否启用手动节点前缀
-const shouldPrependManualNodes = profilePrefixSettings?.enableManualNodes ?? true;
+export async function generateCombinedNodeList(
+    context,
+    config,
+    userAgent,
+    misubs,
+    prependedContent = '',
+    profilePrefixSettings = null,
+    debug = false,
+    skipCertVerify = false
+) {
+    // 判断是否启用手动节点前缀
+    const shouldPrependManualNodes = profilePrefixSettings?.enableManualNodes ?? true;
 
-// 判断是否在节点名称前添加分组名称
-const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
+    // 判断是否在节点名称前添加分组名称
+    const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
 
     // [修复] 多级 Emoji 开关控制逻辑
     const nodeTransformConfig = profilePrefixSettings?.nodeTransform;
-    const templateEnabled = nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
+    const templateEnabled =
+        nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
     const defaultTemplate = '{emoji}{region}-{protocol}-{index}';
     const effectiveTemplate = nodeTransformConfig?.rename?.template?.template || defaultTemplate;
     const templateContainsEmoji = templateEnabled && effectiveTemplate.includes('{emoji}');
@@ -345,19 +374,24 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
 
     // [重要] 当智能重命名模板启用时，跳过前缀添加，因为智能重命名会完全覆盖节点名称
     // 用户可以在模板中使用 {name} 变量来保留原始信息
-    const skipPrefixDueToRenaming = nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
+    const skipPrefixDueToRenaming =
+        nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
 
     // --- 阶段 1: 数据准备与手动节点处理 ---
-    
+
     // [增强修复] 定义统一的订阅源级转换中枢
     const applySubscriptionTransforms = async (nodes, subSource) => {
         if (!nodes || nodes.length === 0) return [];
-        
+
         let currentNodes = [...nodes];
-        
+
         // 1. [配置水合] 执行 Workflow 算子 (操作符)
         let subOperators = ensureArray(subSource?.operators);
-        if (!subOperators.length && subSource?.nodeTransform?.enabled && subSource.nodeTransform.operators) {
+        if (
+            !subOperators.length &&
+            subSource?.nodeTransform?.enabled &&
+            subSource.nodeTransform.operators
+        ) {
             subOperators = ensureArray(subSource.nodeTransform.operators);
         }
 
@@ -365,18 +399,18 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
             currentNodes = await runOperatorChain(currentNodes, subOperators, {
                 subName: subSource?.name,
                 userAgent,
-                config
+                config,
             });
         }
 
         // 2. 应用传统的文本过滤规则 (exclude/include)
         currentNodes = applyFilterRules(currentNodes, subSource);
-        
+
         return currentNodes;
     };
 
     // 重构后的手动节点处理逻辑
-    const manualSubSourceGroups = misubs.filter(sub => {
+    const manualSubSourceGroups = misubs.filter((sub) => {
         const url = typeof sub?.url === 'string' ? sub.url.trim() : '';
         return Boolean(url) && !url.toLowerCase().startsWith('http');
     });
@@ -386,16 +420,21 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
         try {
             const rawUrl = typeof sub?.url === 'string' ? sub.url.trim() : '';
             if (!rawUrl) continue;
-            
-            let processedUrl = fixNodeUrlEncoding(rawUrl, { plusAsSpace: Boolean(sub?.plusAsSpace) });
+
+            let processedUrl = fixNodeUrlEncoding(rawUrl, {
+                plusAsSpace: Boolean(sub?.plusAsSpace),
+            });
             const customNodeName = typeof sub.name === 'string' ? sub.name.trim() : '';
             if (customNodeName) processedUrl = applyManualNodeName(processedUrl, customNodeName);
-            
+
             const nodeGroup = typeof sub.group === 'string' ? sub.group.trim() : '';
-            if (prependGroupName && nodeGroup && !skipPrefixDueToRenaming) processedUrl = prependNodeName(processedUrl, nodeGroup);
-            
+            if (prependGroupName && nodeGroup && !skipPrefixDueToRenaming)
+                processedUrl = prependNodeName(processedUrl, nodeGroup);
+
             const shouldAddPrefix = shouldPrependManualNodes && !skipPrefixDueToRenaming;
-            const finalRawUrl = shouldAddPrefix ? prependNodeName(processedUrl, manualNodePrefix) : processedUrl;
+            const finalRawUrl = shouldAddPrefix
+                ? prependNodeName(processedUrl, manualNodePrefix)
+                : processedUrl;
 
             // [核心对齐] 对手动节点应用订阅源级转换（算子+过滤 + 组级诊断）
             const transformed = await applySubscriptionTransforms([finalRawUrl], sub);
@@ -408,7 +447,9 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
     }
     const processedManualNodes = manualProcessedLines.join('\n');
 
-    const httpSubs = misubs.filter(sub => sub && sub.url && sub.url.toLowerCase().startsWith('http'));
+    const httpSubs = misubs.filter(
+        (sub) => sub && sub.url && sub.url.toLowerCase().startsWith('http')
+    );
     const limiter = createConcurrencyLimiter(FETCH_CONFIG.CONCURRENCY);
     let upstreamSuccessCount = 0; // 追踪真正从远程拉取成功的订阅数（不含 per-sub 缓存回退）
 
@@ -424,7 +465,7 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
             if (cacheEnabled) return;
             const runtimeInfo = {
                 nodeCount: 0,
-                userInfo: null
+                userInfo: null,
             };
             recordCurrentRequestRuntimeInfo(context, sub, runtimeInfo);
             scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInfo);
@@ -436,14 +477,15 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
         };
 
         try {
-            const customUserAgent = typeof sub.customUserAgent === 'string' ? sub.customUserAgent.trim() : '';
+            const customUserAgent =
+                typeof sub.customUserAgent === 'string' ? sub.customUserAgent.trim() : '';
             const processedUserAgent = customUserAgent || getProcessedUserAgent(userAgent, sub.url);
             const requestHeaders = { 'User-Agent': processedUserAgent };
 
             // [Fetch Proxy] 获取单点订阅专属拉取代理前缀
             assertPublicNetworkUrl(sub.url);
             let requestUrl = sub.url;
-            
+
             // 只有开启保护性缓存节点时才加时间戳绕过强缓存 (如 Cloudflare Edge Cache)
             if (cacheEnabled) {
                 try {
@@ -462,14 +504,16 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
 
             const response = await fetchWithRetry(requestUrl, {
                 headers: requestHeaders,
-                redirect: "follow",
-                ...(skipCertVerify ? {
-                    cf: {
-                        insecureSkipVerify: true,
-                        allowUntrusted: true,
-                        validateCertificate: false
-                    }
-                } : {})
+                redirect: 'follow',
+                ...(skipCertVerify
+                    ? {
+                          cf: {
+                              insecureSkipVerify: true,
+                              allowUntrusted: true,
+                              validateCertificate: false,
+                          },
+                      }
+                    : {}),
             });
 
             if (!response.ok) {
@@ -493,7 +537,7 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
                 }
             }
 
-            let validNodes = fallbackParsedObjects.map(node => node.url);
+            let validNodes = fallbackParsedObjects.map((node) => node.url);
 
             // --- 统一转换治理 (算子 + 过滤 + 组级诊断) ---
             validNodes = await applySubscriptionTransforms(validNodes, sub);
@@ -503,9 +547,14 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
                 Number(sub?.lastGoodNodeCount) || 0,
                 Number(sub?.nodeCount) || 0
             );
-            if (Number.isFinite(knownNodeCount) && isSuspiciousNodeCountDrop(knownNodeCount, realNodes.length)) {
+            if (
+                Number.isFinite(knownNodeCount) &&
+                isSuspiciousNodeCountDrop(knownNodeCount, realNodes.length)
+            ) {
                 const cachedNodes = await readCachedNodes();
-                console.warn(`[Subscription] Rejecting suspicious node-count drop for ${sub.id || sub.url} (${knownNodeCount} known -> ${realNodes.length} fetched)`);
+                console.warn(
+                    `[Subscription] Rejecting suspicious node-count drop for ${sub.id || sub.url} (${knownNodeCount} known -> ${realNodes.length} fetched)`
+                );
                 if (cachedNodes.length > 0) return cachedNodes.join('\n');
                 // Do not write nodeCount=0 here: this response is suspicious,
                 // not evidence that the subscription has no usable nodes.
@@ -517,7 +566,9 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
             if (cacheEnabled) {
                 const cachedNodes = await readCachedNodes();
                 if (isSuspiciousNodeCountDrop(cachedNodes.length, realNodes.length)) {
-                    console.warn(`[SubscriptionCache] Refusing suspicious node-count drop for ${sub.id || sub.url} (${cachedNodes.length} -> ${realNodes.length})`);
+                    console.warn(
+                        `[SubscriptionCache] Refusing suspicious node-count drop for ${sub.id || sub.url} (${cachedNodes.length} -> ${realNodes.length})`
+                    );
                     return cachedNodes.join('\n');
                 }
             }
@@ -531,11 +582,13 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
 
             if (realNodes.length > 0) {
                 upstreamSuccessCount++;
-                const userInfo = parseSubscriptionUserInfoHeader(response.headers.get('subscription-userinfo'));
+                const userInfo = parseSubscriptionUserInfoHeader(
+                    response.headers.get('subscription-userinfo')
+                );
                 const runtimeInfo = {
                     nodeCount: realNodes.length,
                     userInfo,
-                    ...(realNodes.length >= 10 ? { lastGoodNodeCount: realNodes.length } : {})
+                    ...(realNodes.length >= 10 ? { lastGoodNodeCount: realNodes.length } : {}),
                 };
                 recordCurrentRequestRuntimeInfo(context, sub, runtimeInfo);
                 scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInfo);
@@ -545,8 +598,8 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
             const shouldPrependSubscriptions = profilePrefixSettings?.enableSubscriptions ?? true;
             const shouldAddSubPrefix = shouldPrependSubscriptions && !skipPrefixDueToRenaming;
 
-            return (shouldAddSubPrefix && sub.name)
-                ? validNodes.map(node => prependNodeName(node, sub.name)).join('\n')
+            return shouldAddSubPrefix && sub.name
+                ? validNodes.map((node) => prependNodeName(node, sub.name)).join('\n')
                 : validNodes.join('\n');
         } catch (e) {
             recordEmptyRuntimeInfo();
@@ -555,38 +608,40 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
     };
 
     // 使用并发控制器限制同时请求数量，避免网络拥塞
-    const subPromises = httpSubs.map(sub => limiter(() => fetchSingleSubscription(sub)));
+    const subPromises = httpSubs.map((sub) => limiter(() => fetchSingleSubscription(sub)));
     const processedSubContents = await Promise.all(subPromises);
-    
+
     // --- 阶段 1: 原始数据汇聚 (Raw Data Aggregation) ---
     const rawCombinedLines = (processedManualNodes + '\n' + processedSubContents.join('\n'))
         .split('\n')
-        .map(line => line.trim())
+        .map((line) => line.trim())
         .filter(Boolean);
 
     // 去重，保留原始顺序中的第一次出现
     let currentLines = [...new Set(rawCombinedLines)];
-    
+
     if (!shouldKeepEmoji) {
-        currentLines = currentLines.map(line => removeFlagEmoji(line));
+        currentLines = currentLines.map((line) => removeFlagEmoji(line));
     }
 
     // --- 阶段 2: 核心转换引擎 (Logic Transformation Engine) ---
     // 优先级: 订阅组 Operator Chain > 全局默认 Operator Chain > 旧版 Node Pipeline (桥接模式)
-    
+
     let activeOperators = [];
-    
+
     // 获取工作流配置（支持字符串自动解析）
     if (profilePrefixSettings?.operators) {
         activeOperators = ensureArray(profilePrefixSettings.operators);
-    } 
-    
+    }
+
     if (!activeOperators.length && config.defaultOperators) {
         activeOperators = ensureArray(config.defaultOperators);
-    } 
-    
+    }
+
     if (!activeOperators.length) {
-        const legacyConfig = nodeTransformConfig?.enabled ? nodeTransformConfig : config.defaultNodeTransform;
+        const legacyConfig = nodeTransformConfig?.enabled
+            ? nodeTransformConfig
+            : config.defaultNodeTransform;
         activeOperators = adaptLegacyTransform(legacyConfig);
     }
 
@@ -595,7 +650,7 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
         currentLines = await runOperatorChain(currentLines, activeOperators, {
             subName: profilePrefixSettings?.name,
             userAgent,
-            config
+            config,
         });
     }
 
@@ -603,25 +658,30 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
     if (profilePrefixSettings && (profilePrefixSettings.exclude || profilePrefixSettings.include)) {
         currentLines = applyFilterRules(currentLines, profilePrefixSettings);
     }
-    
+
     // 2.3 [兜底] 应用 Worker 级别的全局过滤逻辑 (Global-level)
     if (config && (config.exclude || config.include)) {
         currentLines = applyFilterRules(currentLines, config);
     }
 
     // --- 阶段 3: 后置格式化与增强 (Post-Formatting & Enhancement) ---
-    
+
     // 3.1 YAML 兼容性净化
-    currentLines = currentLines.map(line => sanitizeNodeForYaml(line));
+    currentLines = currentLines.map((line) => sanitizeNodeForYaml(line));
 
     // 3.2 最终智能化补齐 (Flag Emoji)
-    const finalLines = shouldKeepEmoji 
-        ? currentLines.map(line => addFlagEmoji(line))
+    const finalLines = shouldKeepEmoji
+        ? currentLines.map((line) => addFlagEmoji(line))
         : currentLines;
 
     // --- 阶段 4: 结果拼装与返回 ---
     const finalNodeList = finalLines.join('\n');
-    let result = finalNodeList.length > 0 ? (finalNodeList.endsWith('\n') ? finalNodeList : finalNodeList + '\n') : '';
+    let result =
+        finalNodeList.length > 0
+            ? finalNodeList.endsWith('\n')
+                ? finalNodeList
+                : finalNodeList + '\n'
+            : '';
 
     // 将虚假节点（如果存在）插入到列表最前面
     if (prependedContent) {
@@ -632,7 +692,7 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
     try {
         const endTime = Date.now();
         const totalNodes = finalLines.length;
-        const successCount = processedSubContents.filter(c => c.length > 0).length;
+        const successCount = processedSubContents.filter((c) => c.length > 0).length;
         const failCount = httpSubs.length - successCount;
 
         // [Stats Export] Populate generation stats to context for use by handler (deferred logging)
@@ -643,12 +703,14 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
                 successCount,
                 failCount,
                 upstreamSuccessCount,
-                duration: endTime - (context.startTime || Date.now())
+                duration: endTime - (context.startTime || Date.now()),
             };
         }
 
-        const isInternalRequest = userAgent.includes('MiSub-Backend') || userAgent.includes('TelegramBot');
-        if (!debug && config.enableAccessLog && !isInternalRequest) { // 避免递归调试日志，并遵循全局日志设置
+        const isInternalRequest =
+            userAgent.includes('MiSub-Backend') || userAgent.includes('TelegramBot');
+        if (!debug && config.enableAccessLog && !isInternalRequest) {
+            // 避免递归调试日志，并遵循全局日志设置
             const { LogService } = await import('./log-service.js');
 
             // 提取客户信息
@@ -660,16 +722,17 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
                 geoInfo = context.logMetadata.geoInfo || geoInfo;
             } else if (context && context.request) {
                 const cf = context.request.cf;
-                clientIp = context.request.headers.get('CF-Connecting-IP')
-                    || context.request.headers.get('X-Real-IP')
-                    || context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim()
-                    || 'Unknown';
+                clientIp =
+                    context.request.headers.get('CF-Connecting-IP') ||
+                    context.request.headers.get('X-Real-IP') ||
+                    context.request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+                    'Unknown';
                 if (cf) {
                     geoInfo = {
                         country: cf.country,
                         city: cf.city,
                         isp: cf.asOrganization,
-                        asn: cf.asn
+                        asn: cf.asn,
                     };
                 }
             }
@@ -679,22 +742,24 @@ const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
                 clientIp,
                 geoInfo,
                 userAgent: userAgent || 'Unknown',
-                status: failCount === 0 ? 'success' : (successCount > 0 ? 'partial' : 'error'),
+                status: failCount === 0 ? 'success' : successCount > 0 ? 'partial' : 'error',
                 // Include metadata from handler (format, token, type, etc.)
-                ...((context && context.logMetadata) ? {
-                    format: context.logMetadata.format,
-                    token: context.logMetadata.token,
-                    type: context.logMetadata.type,
-                    domain: context.logMetadata.domain
-                } : {}),
+                ...(context && context.logMetadata
+                    ? {
+                          format: context.logMetadata.format,
+                          token: context.logMetadata.token,
+                          type: context.logMetadata.type,
+                          domain: context.logMetadata.domain,
+                      }
+                    : {}),
                 details: {
                     totalNodes,
                     sourceCount: httpSubs.length,
                     successCount,
                     failCount,
-                    duration: endTime - (context.startTime || Date.now()) // 需要在上层记录 startTime
+                    duration: endTime - (context.startTime || Date.now()), // 需要在上层记录 startTime
                 },
-                summary: `生成 ${totalNodes} 个节点 (成功: ${successCount}, 失败: ${failCount})`
+                summary: `生成 ${totalNodes} 个节点 (成功: ${successCount}, 失败: ${failCount})`,
             });
         }
     } catch (e) {
@@ -721,7 +786,9 @@ async function decodeBase64Content(text) {
             }
             const binaryString = atob(normalized);
             const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) { bytes[i] = binaryString.charCodeAt(i); }
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
             return new TextDecoder('utf-8').decode(bytes);
         }
     } catch (e) {
@@ -743,9 +810,10 @@ function applyManualNodeName(nodeUrl, customName) {
     if (nodeUrl.startsWith('vmess://')) {
         try {
             const hashIndex = nodeUrl.indexOf('#');
-            let base64Part = hashIndex !== -1
-                ? nodeUrl.substring('vmess://'.length, hashIndex)
-                : nodeUrl.substring('vmess://'.length);
+            let base64Part =
+                hashIndex !== -1
+                    ? nodeUrl.substring('vmess://'.length, hashIndex)
+                    : nodeUrl.substring('vmess://'.length);
 
             // 处理 URL 编码和 URL-safe base64
             if (base64Part.includes('%')) {
@@ -774,7 +842,10 @@ function applyManualNodeName(nodeUrl, customName) {
                 return 'vmess://' + newBase64Part;
             }
         } catch (e) {
-            console.debug('[Subscription] VMess decode failed, falling back to fragment update:', e);
+            console.debug(
+                '[Subscription] VMess decode failed, falling back to fragment update:',
+                e
+            );
         }
     }
 
@@ -788,8 +859,6 @@ function applyManualNodeName(nodeUrl, customName) {
     }
 }
 
-
-
 /**
  * 应用过滤规则
  * @param {Array} validNodes - 有效节点列表
@@ -802,22 +871,22 @@ function applyFilterRules(validNodes, sub) {
 
     const lines = ruleText
         .split('\n')
-        .map(r => r.trim())
+        .map((r) => r.trim())
         .filter(Boolean);
 
     if (lines.length === 0) return validNodes;
 
     // 规则分割：--- 为分隔，keep: 为白名单
-    const dividerIndex = lines.findIndex(line => line === '---');
+    const dividerIndex = lines.findIndex((line) => line === '---');
     const hasDivider = dividerIndex !== -1;
 
     const excludeLines = hasDivider
         ? lines.slice(0, dividerIndex)
-        : lines.filter(line => !line.toLowerCase().startsWith('keep:'));
+        : lines.filter((line) => !line.toLowerCase().startsWith('keep:'));
 
     const keepLines = hasDivider
         ? lines.slice(dividerIndex + 1)
-        : lines.filter(line => line.toLowerCase().startsWith('keep:'));
+        : lines.filter((line) => line.toLowerCase().startsWith('keep:'));
 
     const excludeRules = buildRuleSet(excludeLines, false);
     const keepRules = buildRuleSet(keepLines, true);
@@ -829,30 +898,28 @@ function applyFilterRules(validNodes, sub) {
         ? [...validNodes]
         : filterNodes(validNodes, excludeRules, 'exclude');
 
-    return shouldApplyWhitelist
-        ? filterNodes(afterExclude, keepRules, 'include')
-        : afterExclude;
+    return shouldApplyWhitelist ? filterNodes(afterExclude, keepRules, 'include') : afterExclude;
 }
 
 /**
  * 应用订阅治理转换：算子链 + 基于文本的过滤
- * @param {string[]} nodeUrls 
- * @param {Object} sub 
+ * @param {string[]} nodeUrls
+ * @param {Object} sub
  * @returns {Promise<string[]>}
  */
 async function applySubscriptionTransforms(nodeUrls, sub) {
     if (!nodeUrls || nodeUrls.length === 0) return [];
-    
+
     let processed = [...nodeUrls];
-    
+
     // 1. 应用算子链 (如果有算子定义)
     if (Array.isArray(sub.operators) && sub.operators.length > 0) {
         processed = await runOperatorChain(processed, sub.operators);
     }
-    
+
     // 2. 应用传统的过滤规则 (exclude/include)
     processed = applyFilterRules(processed, sub);
-    
+
     return processed;
 }
 
@@ -870,11 +937,12 @@ function buildRuleSet(lines, stripKeepPrefix = false) {
         if (!line) continue;
 
         if (line.toLowerCase().startsWith('proto:')) {
-            const parts = line.substring('proto:'.length)
+            const parts = line
+                .substring('proto:'.length)
                 .split(',')
-                .map(p => p.trim().toLowerCase())
+                .map((p) => p.trim().toLowerCase())
                 .filter(Boolean);
-            parts.forEach(p => protocols.add(p));
+            parts.forEach((p) => protocols.add(p));
             continue;
         }
 
@@ -885,7 +953,7 @@ function buildRuleSet(lines, stripKeepPrefix = false) {
     return {
         protocols,
         nameRegex,
-        hasRules: protocols.size > 0 || Boolean(nameRegex)
+        hasRules: protocols.size > 0 || Boolean(nameRegex),
     };
 }
 
@@ -903,27 +971,26 @@ function filterNodes(nodes, rules, mode = 'exclude') {
     if (!rules || !rules.hasRules) return nodes;
     const isInclude = mode === 'include';
 
-    return nodes.filter(nodeLink => {
+    return nodes.filter((nodeLink) => {
         // [升级] 传统过滤引擎现在也支持元数据/ISO感知
         const nodeInfo = parseNodeInfo(nodeLink);
         const protocol = nodeInfo.protocol || '';
         const nodeName = nodeInfo.name || '';
-        const regionZh = nodeInfo.region || ''; 
-        
+        const regionZh = nodeInfo.region || '';
+
         // --- [ISO感知核心逻辑] ---
         // 我们利用 geo-utils 中的 extractNodeRegion 来反查 ISO 代码
         // 虽然 info 里没显式带 regionCode，但在 rules 匹配时增加深度检测
         const protocolHit = protocol && rules.protocols.has(protocol);
-        
+
         let nameHit = false;
         if (rules.nameRegex) {
             // [双重匹配] 匹配原始名称、中文名，以及尝试匹配 ISO 关键词
-            nameHit = rules.nameRegex.test(nodeName) || 
-                      rules.nameRegex.test(regionZh);
-            
+            nameHit = rules.nameRegex.test(nodeName) || rules.nameRegex.test(regionZh);
+
             // 如果上述没中，但规则包含大写 ISO 代码，尝试深度匹配
             if (!nameHit && /^[A-Z]{2}$/.test(rules.nameRegex.source)) {
-                 // 这里可以进一步扩展，但为了性能目前保持双重匹配
+                // 这里可以进一步扩展，但为了性能目前保持双重匹配
             }
         }
 
@@ -934,7 +1001,6 @@ function filterNodes(nodes, rules, mode = 'exclude') {
     });
 }
 
-
 /**
  * 桥接模式：将旧版 NodeTransform 配置转换为新的 Operator 列表
  * @param {Object} config - 旧版配置对象
@@ -942,46 +1008,54 @@ function filterNodes(nodes, rules, mode = 'exclude') {
  */
 function adaptLegacyTransform(config) {
     if (!config || !config.enabled) return [];
-    
+
     const ops = [];
 
     // 1. 过滤器 (Filter)
     const filter = config.filter;
-    if (filter && (filter.include?.enabled || filter.exclude?.enabled || filter.protocols?.enabled || filter.regions?.enabled || filter.script?.enabled || filter.useless?.enabled)) {
-        ops.push({ 
+    if (
+        filter &&
+        (filter.include?.enabled ||
+            filter.exclude?.enabled ||
+            filter.protocols?.enabled ||
+            filter.regions?.enabled ||
+            filter.script?.enabled ||
+            filter.useless?.enabled)
+    ) {
+        ops.push({
             id: 'legacy-filter',
-            type: 'filter', 
-            enabled: true, 
-            params: { ...filter } 
+            type: 'filter',
+            enabled: true,
+            params: { ...filter },
         });
     }
 
     // 2. 正则重命名 (Regex Rename)
     const regex = config.rename?.regex;
     if (regex?.enabled && regex.rules?.length > 0) {
-        ops.push({ 
+        ops.push({
             id: 'legacy-rename-regex',
-            type: 'rename', 
-            enabled: true, 
-            params: { regex: { ...regex } } 
+            type: 'rename',
+            enabled: true,
+            params: { regex: { ...regex } },
         });
     }
 
     // 3. 模板重命名 (Template Rename)
     const template = config.rename?.template;
     if (template?.enabled) {
-        ops.push({ 
+        ops.push({
             id: 'legacy-rename-template',
-            type: 'rename', 
-            enabled: true, 
-            params: { 
-                template: { 
-                    enabled: true, 
-                    template: template.template || '{emoji}{region}-{protocol}-{index}', 
+            type: 'rename',
+            enabled: true,
+            params: {
+                template: {
+                    enabled: true,
+                    template: template.template || '{emoji}{region}-{protocol}-{index}',
                     offset: template.indexStart || 1,
-                    indexScope: template.indexScope || 'region'
-                } 
-            } 
+                    indexScope: template.indexScope || 'region',
+                },
+            },
         });
     }
 
@@ -992,29 +1066,31 @@ function adaptLegacyTransform(config) {
             id: 'legacy-rename-script',
             type: 'script',
             enabled: true,
-            params: { code: `return ($nodes) => { return $nodes.map(n => { n.name = (${renameScript.expression})(n.name, n); return n; }); }` }
+            params: {
+                code: `return ($nodes) => { return $nodes.map(n => { n.name = (${renameScript.expression})(n.name, n); return n; }); }`,
+            },
         });
     }
 
     // 5. 去重 (Dedup)
     const dedup = config.dedup;
     if (dedup?.enabled) {
-        ops.push({ 
+        ops.push({
             id: 'legacy-dedup',
-            type: 'dedup', 
-            enabled: true, 
-            params: { ...dedup } 
+            type: 'dedup',
+            enabled: true,
+            params: { ...dedup },
         });
     }
 
     // 6. 排序 (Sort)
     const sort = config.sort;
     if (sort?.enabled && sort.keys?.length > 0) {
-        ops.push({ 
+        ops.push({
             id: 'legacy-sort',
-            type: 'sort', 
-            enabled: true, 
-            params: { ...sort } 
+            type: 'sort',
+            enabled: true,
+            params: { ...sort },
         });
     }
 

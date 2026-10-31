@@ -26,7 +26,9 @@ export function unquoteIniValue(value) {
     const text = value.trim();
     const quote = text[0];
     if ((quote !== '"' && quote !== "'") || text.at(-1) !== quote) return text;
-    return text.slice(1, -1).replace(/\\([\\"'])/g, (match, char) => char === quote || char === '\\' ? char : match);
+    return text
+        .slice(1, -1)
+        .replace(/\\([\\"'])/g, (match, char) => (char === quote || char === '\\' ? char : match));
 }
 
 export function quoteIniValue(value) {

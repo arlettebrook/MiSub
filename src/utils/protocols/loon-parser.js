@@ -47,7 +47,7 @@ export function parseLoonConfig(content) {
     return nodes;
 }
 
-function parseNameAndParams(line, splitFields = text => text.split(',').map(p => p.trim())) {
+function parseNameAndParams(line, splitFields = (text) => text.split(',').map((p) => p.trim())) {
     const equalIndex = line.indexOf('=');
     if (equalIndex === -1) return null;
     const name = line.slice(0, equalIndex).trim();
@@ -58,8 +58,8 @@ function parseNameAndParams(line, splitFields = text => text.split(',').map(p =>
 
 function parseExtraParams(extra) {
     const map = new Map();
-    extra.forEach(param => {
-        const [key, value] = param.split('=').map(p => p.trim());
+    extra.forEach((param) => {
+        const [key, value] = param.split('=').map((p) => p.trim());
         if (key && value !== undefined) map.set(key.toLowerCase(), value.replace(/^"|"$/g, ''));
     });
     return map;
@@ -83,7 +83,7 @@ function parseLoonVmess(line) {
         type: 'none',
         host: options.get('host') || '',
         path: options.get('path') || '',
-        tls: options.get('tls') === 'true' ? 'tls' : ''
+        tls: options.get('tls') === 'true' ? 'tls' : '',
     };
 
     if (options.get('sni')) config.sni = options.get('sni');
@@ -96,7 +96,7 @@ function parseLoonVmess(line) {
         url: `vmess://${base64Encode(JSON.stringify(config))}`,
         enabled: true,
         protocol: 'vmess',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -104,14 +104,15 @@ function parseLoonSS(line) {
     const parsed = parseNameAndParams(line);
     if (!parsed) return null;
     const [protocol, server, port, method, password] = parsed.params;
-    if (protocol.toLowerCase() !== 'shadowsocks' || !server || !port || !method || !password) return null;
+    if (protocol.toLowerCase() !== 'shadowsocks' || !server || !port || !method || !password)
+        return null;
     return {
         id: generateNodeId(),
         name: parsed.name,
         url: `ss://${base64Encode(`${method}:${password}`)}@${server}:${port}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'ss',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -134,7 +135,7 @@ function parseLoonTrojan(line) {
         url: `trojan://${encodeURIComponent(password)}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'trojan',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -145,19 +146,25 @@ function parseLoonVless(line) {
     if (protocol.toLowerCase() !== 'vless' || !server || !port || !uuid) return null;
     const options = parseExtraParams(extra);
     const urlParams = [];
-    if (options.get('transport')) urlParams.push(`type=${encodeURIComponent(options.get('transport'))}`);
+    if (options.get('transport'))
+        urlParams.push(`type=${encodeURIComponent(options.get('transport'))}`);
     if (options.get('path')) urlParams.push(`path=${encodeURIComponent(options.get('path'))}`);
     if (options.get('host')) urlParams.push(`host=${encodeURIComponent(options.get('host'))}`);
     if (options.get('sni')) urlParams.push(`sni=${encodeURIComponent(options.get('sni'))}`);
     if (options.get('tls') === 'true') urlParams.push('security=tls');
     if (options.get('flow')) urlParams.push(`flow=${encodeURIComponent(options.get('flow'))}`);
-    if (options.get('grpc-service-name')) urlParams.push(`serviceName=${encodeURIComponent(options.get('grpc-service-name'))}`);
+    if (options.get('grpc-service-name'))
+        urlParams.push(`serviceName=${encodeURIComponent(options.get('grpc-service-name'))}`);
     if (options.get('mode')) urlParams.push(`mode=${encodeURIComponent(options.get('mode'))}`);
-    if (options.get('transport') === 'xhttp' && options.get('host')) urlParams.push(`xhttp-host=${encodeURIComponent(options.get('host'))}`);
-    if (options.get('transport') === 'xhttp' && options.get('path')) urlParams.push(`xhttp-path=${encodeURIComponent(options.get('path'))}`);
+    if (options.get('transport') === 'xhttp' && options.get('host'))
+        urlParams.push(`xhttp-host=${encodeURIComponent(options.get('host'))}`);
+    if (options.get('transport') === 'xhttp' && options.get('path'))
+        urlParams.push(`xhttp-path=${encodeURIComponent(options.get('path'))}`);
     if (options.get('reality') === 'true') urlParams.push('security=reality');
-    if (options.get('public-key')) urlParams.push(`pbk=${encodeURIComponent(options.get('public-key'))}`);
-    if (options.get('short-id')) urlParams.push(`sid=${encodeURIComponent(options.get('short-id'))}`);
+    if (options.get('public-key'))
+        urlParams.push(`pbk=${encodeURIComponent(options.get('public-key'))}`);
+    if (options.get('short-id'))
+        urlParams.push(`sid=${encodeURIComponent(options.get('short-id'))}`);
     if (options.get('alpn')) urlParams.push(`alpn=${encodeURIComponent(options.get('alpn'))}`);
     if (options.get('fp')) urlParams.push(`fp=${encodeURIComponent(options.get('fp'))}`);
     if (options.get('skip-cert-verify') === 'true') urlParams.push('allowInsecure=1');
@@ -168,7 +175,7 @@ function parseLoonVless(line) {
         url: `vless://${uuid}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'vless',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -177,14 +184,17 @@ function parseLoonHttp(line) {
     if (!parsed) return null;
     const [protocol, server, port, username, password] = parsed.params;
     if (protocol.toLowerCase() !== 'http' || !server || !port) return null;
-    const auth = username && password ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
+    const auth =
+        username && password
+            ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`
+            : '';
     return {
         id: generateNodeId(),
         name: parsed.name,
         url: `http://${auth}${server}:${port}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'http',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -194,13 +204,23 @@ function parseLoonHysteria2(line) {
     const [protocol, server, port, rawPassword, ...extra] = parsed.params;
     const password = unquoteIniValue(rawPassword || '');
     if (protocol.toLowerCase() !== 'hysteria2' || !server || !port || !password) return null;
-    const options = new Map(extra.map(param => {
-        const equalIndex = param.indexOf('=');
-        return equalIndex < 0 ? [] : [param.slice(0, equalIndex).trim().toLowerCase(), unquoteIniValue(param.slice(equalIndex + 1))];
-    }).filter(entry => entry.length));
+    const options = new Map(
+        extra
+            .map((param) => {
+                const equalIndex = param.indexOf('=');
+                return equalIndex < 0
+                    ? []
+                    : [
+                          param.slice(0, equalIndex).trim().toLowerCase(),
+                          unquoteIniValue(param.slice(equalIndex + 1)),
+                      ];
+            })
+            .filter((entry) => entry.length)
+    );
     const urlParams = [];
     if (options.get('obfs')) urlParams.push(`obfs=${encodeURIComponent(options.get('obfs'))}`);
-    if (options.get('obfs-password')) urlParams.push(`obfs-password=${encodeURIComponent(options.get('obfs-password'))}`);
+    if (options.get('obfs-password'))
+        urlParams.push(`obfs-password=${encodeURIComponent(options.get('obfs-password'))}`);
     if (options.get('salamander-password')) {
         urlParams.push('obfs=salamander');
         urlParams.push(`obfs-password=${encodeURIComponent(options.get('salamander-password'))}`);
@@ -214,7 +234,7 @@ function parseLoonHysteria2(line) {
         url: `hysteria2://${encodeURIComponent(password)}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'hysteria2',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -224,7 +244,9 @@ function parseLoonTuic(line) {
     const [protocol, server, port, tokenOrUuid, ...extra] = parsed.params;
     if (protocol.toLowerCase() !== 'tuic' || !server || !port || !tokenOrUuid) return null;
     const options = parseExtraParams(extra);
-    const auth = options.get('password') ? `${encodeURIComponent(tokenOrUuid)}:${encodeURIComponent(options.get('password'))}` : encodeURIComponent(tokenOrUuid);
+    const auth = options.get('password')
+        ? `${encodeURIComponent(tokenOrUuid)}:${encodeURIComponent(options.get('password'))}`
+        : encodeURIComponent(tokenOrUuid);
     const urlParams = [];
     if (options.get('sni')) urlParams.push(`sni=${encodeURIComponent(options.get('sni'))}`);
     const query = urlParams.length ? `?${urlParams.join('&')}` : '';
@@ -234,7 +256,7 @@ function parseLoonTuic(line) {
         url: `tuic://${auth}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'tuic',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -245,9 +267,14 @@ function parseLoonWireGuard(line) {
     if (protocol.toLowerCase() !== 'wireguard' || !server || !port || !privateKey) return null;
     const options = parseExtraParams(extra);
     const urlParams = [];
-    if (options.get('public-key')) urlParams.push(`publickey=${encodeURIComponent(options.get('public-key'))}`);
-    if (options.get('self-ip')) urlParams.push(`address=${encodeURIComponent(options.get('self-ip'))}`);
-    if (options.get('client-id')) urlParams.push(`reserved=${encodeURIComponent(options.get('client-id').replace(/\//g, ','))}`);
+    if (options.get('public-key'))
+        urlParams.push(`publickey=${encodeURIComponent(options.get('public-key'))}`);
+    if (options.get('self-ip'))
+        urlParams.push(`address=${encodeURIComponent(options.get('self-ip'))}`);
+    if (options.get('client-id'))
+        urlParams.push(
+            `reserved=${encodeURIComponent(options.get('client-id').replace(/\//g, ','))}`
+        );
     const query = urlParams.length ? `?${urlParams.join('&')}` : '';
     return {
         id: generateNodeId(),
@@ -255,7 +282,7 @@ function parseLoonWireGuard(line) {
         url: `wireguard://${encodeURIComponent(privateKey)}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'wireguard',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -270,7 +297,7 @@ function parseLoonSnell(line) {
         url: `snell://${encodeURIComponent(psk)}@${server}:${port}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'snell',
-        source: 'loon'
+        source: 'loon',
     };
 }
 
@@ -291,6 +318,6 @@ function parseLoonAnyTLS(line) {
         url: `anytls://${encodeURIComponent(password)}@${server}:${port}${query}#${encodeURIComponent(parsed.name)}`,
         enabled: true,
         protocol: 'anytls',
-        source: 'loon'
+        source: 'loon',
     };
 }
