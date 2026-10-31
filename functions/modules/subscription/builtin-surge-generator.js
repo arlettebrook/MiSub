@@ -9,6 +9,7 @@
 
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
+import { quoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import { POLICY_GROUPS, getBuiltinRules, getRemoteProviderDefinitions, DEFAULT_SELECT_GROUP, DEFAULT_RELAY_GROUP, pruneProxyGroups } from './builtin-rules-provider.js';
 
 /**
@@ -152,7 +153,10 @@ function clashProxyToSurgeResult(proxy) {
         parts.push(`${name} = hysteria2`);
         parts.push(server);
         parts.push(String(port));
-        parts.push(`password=${surgeQuote(proxy.password || '')}`);
+        parts.push(`password=${quoteIniValue(proxy.password || '')}`);
+        if ((proxy.obfs === 'salamander' || proxy.obfs === 'gecko') && proxy['obfs-password']) {
+            parts.push(`${proxy.obfs}-password=${quoteIniValue(proxy['obfs-password'])}`);
+        }
         // 带宽限制（可选，单位 Mbps）
         if (proxy['down'] || proxy['download-bandwidth']) {
             parts.push(`download-bandwidth=${proxy['down'] || proxy['download-bandwidth']}`);

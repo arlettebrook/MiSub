@@ -11,6 +11,7 @@ import { fixNodeUrlEncoding } from '../../utils/node-utils.js';
 import { convertClashProxyToUrl } from '../../utils/clash-to-url.js';
 import { validateSS2022Node, fixSS2022Node } from './ss2022-validator.js';
 import { extractNodeMetadata } from './metadata-extractor.js';
+import { splitIniFields, unquoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 
 /**
  * 支持的节点协议正则表达式
@@ -35,15 +36,14 @@ function parseSurgeOrQxLine(line) {
         };
         const extraParams = match[5];
         if (extraParams) {
-            const parts = extraParams.split(',').map(p => p.trim());
+            const parts = splitIniFields(extraParams);
             let positionalIndex = 0;
             for (const p of parts) {
                 if (!p) continue;
-                const kv = p.split('=');
+                const kv = /^["']/.test(p) ? [p] : p.split('=');
                 if (kv.length >= 2) {
                     const k = kv[0].trim().toLowerCase();
-                    let v = kv.slice(1).join('=').trim();
-                    if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+                    const v = unquoteIniValue(kv.slice(1).join('='));
                     
                     if (k === 'password' || k === 'auth' || k === 'psk' || k === 'username' || k === 'uuid') {
                         if (proxy.type === 'vless' || proxy.type === 'vmess') proxy.uuid = v;
@@ -60,7 +60,17 @@ function parseSurgeOrQxLine(line) {
                     if (k === 'sni') proxy.sni = v;
                     if (k === 'skip-cert-verify' && v === 'true') proxy.skipCertVerify = true;
                     if (k === 'encrypt-method' || k === 'cipher' || k === 'method') proxy.cipher = v;
-                    if (k === 'obfs') { proxy.pluginOpts = proxy.pluginOpts || {}; proxy.pluginOpts.mode = v; }
+                    if (k === 'obfs') {
+                        if (proxy.type === 'hysteria2' || proxy.type === 'hy2') proxy.obfs = v;
+                        else { proxy.pluginOpts = proxy.pluginOpts || {}; proxy.pluginOpts.mode = v; }
+                    }
+                    if (proxy.type === 'hysteria2' || proxy.type === 'hy2') {
+                        if (k === 'obfs-password') proxy['obfs-password'] = v;
+                        if (k === 'salamander-password' || k === 'gecko-password') {
+                            proxy.obfs = k === 'salamander-password' ? 'salamander' : 'gecko';
+                            proxy['obfs-password'] = v;
+                        }
+                    }
                     if (k === 'obfs-host') { proxy.pluginOpts = proxy.pluginOpts || {}; proxy.pluginOpts.host = v; }
                     if (k === 'version') proxy.version = parseInt(v);
                     if (k === 'reuse' && v === 'true') proxy.reuse = true;
@@ -68,7 +78,7 @@ function parseSurgeOrQxLine(line) {
                     if (k === 'udp-relay' && v === 'true') proxy.udp = true;
                 } else {
                     // 处理位置参数 (针对 Surge)
-                    const val = p.trim();
+                    const val = unquoteIniValue(p);
                     if (!val) continue;
 
                     if (proxy.type === 'shadowsocks' || proxy.type === 'ss') {
@@ -99,14 +109,13 @@ function parseSurgeOrQxLine(line) {
         };
         const extraParams = match[4];
         if (extraParams) {
-            const parts = extraParams.split(',').map(p => p.trim());
+            const parts = splitIniFields(extraParams);
             for (const p of parts) {
                 if (!p) continue;
                 const kv = p.split('=');
                 if (kv.length >= 2) {
                     const k = kv[0].trim().toLowerCase();
-                    let v = kv.slice(1).join('=').trim();
-                    if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+                    const v = unquoteIniValue(kv.slice(1).join('='));
                     
                     if (k === 'tag') proxy.name = v;
                     if (k === 'password' || k === 'auth' || k === 'psk' || k === 'username' || k === 'uuid') {
@@ -123,9 +132,11 @@ function parseSurgeOrQxLine(line) {
                         proxy.cipher = v;
                     }
                     if (k === 'obfs') {
-                        if (v === 'over-tls') proxy.tls = true;
+                        if (proxy.type === 'hysteria2' || proxy.type === 'hy2') proxy.obfs = v;
+                        else if (v === 'over-tls') proxy.tls = true;
                         else { proxy.pluginOpts = proxy.pluginOpts || {}; proxy.pluginOpts.mode = v; }
                     }
+                    if ((proxy.type === 'hysteria2' || proxy.type === 'hy2') && k === 'obfs-password') proxy['obfs-password'] = v;
                     if (k === 'vless-flow') proxy.flow = v;
                     if (k === 'reality-base64-pubkey' || k === 'reality-pubkey') {
                         proxy['reality-opts'] = proxy['reality-opts'] || {};

@@ -171,7 +171,7 @@ function buildOutbound(proxy) {
     }
 
     if (type === 'hysteria2' || type === 'hy2') {
-        return {
+        const outbound = {
             tag,
             type: 'hysteria2',
             server,
@@ -183,6 +183,10 @@ function buildOutbound(proxy) {
                 insecure: proxy['skip-cert-verify'] === true || proxy.skipCertVerify === true
             }
         };
+        if (proxy.obfs) {
+            outbound.obfs = { type: proxy.obfs, password: proxy['obfs-password'] || '' };
+        }
+        return outbound;
     }
 
     if (type === 'tuic') {

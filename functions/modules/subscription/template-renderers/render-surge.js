@@ -1,5 +1,6 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
+import { quoteIniValue } from '../../../../src/utils/protocols/common/ini.js';
 
 function buildProxyLine(proxy) {
     const type = String(proxy.type || '').toLowerCase();
@@ -73,7 +74,10 @@ function buildProxyLine(proxy) {
     }
     if (type === 'vless') return null;
     if (type === 'hysteria2' || type === 'hy2') {
-        const extras = [`password=${proxy.password || ''}`];
+        const extras = [`password=${quoteIniValue(proxy.password || '')}`];
+        if ((proxy.obfs === 'salamander' || proxy.obfs === 'gecko') && proxy['obfs-password']) {
+            extras.push(`${proxy.obfs}-password=${quoteIniValue(proxy['obfs-password'])}`);
+        }
         const sni = proxy.servername ?? proxy.sni;
         if (sni !== undefined) extras.push(`sni=${sni}`);
         return `${name} = hysteria2, ${server}, ${port}, ${extras.join(', ')}`;

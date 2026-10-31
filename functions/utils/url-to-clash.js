@@ -777,9 +777,9 @@ function parseHysteria2Url(url) {
         // Obfs
         if (params.get('obfs')) {
             proxy.obfs = params.get('obfs');
-            if (params.get('obfs-password')) {
-                proxy['obfs-password'] = params.get('obfs-password');
-            }
+        }
+        if (params.get('obfs-password')) {
+            proxy['obfs-password'] = params.get('obfs-password');
         }
 
         if (params.get('ports') || params.get('mport')) {

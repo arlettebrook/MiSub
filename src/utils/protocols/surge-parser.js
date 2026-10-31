@@ -1,4 +1,5 @@
 import { generateNodeId } from '../id.js';
+import { splitIniFields, unquoteIniValue } from './common/ini.js';
 import { base64Encode } from './common/base64.js';
 
 /**
@@ -399,7 +400,7 @@ function parseSurgeHysteria2(line) {
 
         const name = parts[1].trim();
         const config = parts[2];
-        const params = config.split(',').map(p => p.trim());
+        const params = splitIniFields(config);
 
         if (params.length < 3) return null;
 
@@ -415,9 +416,14 @@ function parseSurgeHysteria2(line) {
             const match = opt.match(/^([\w-]+)\s*=\s*(.+)$/);
             if (match) {
                 const [, key, value] = match;
-                const v = value.replace(/^["']|["']$/g, '');
+                const v = unquoteIniValue(value);
                 const k = key.toLowerCase();
                 if (k === 'password') password = v;
+                else if (k === 'obfs' || k === 'obfs-password') urlParams.push(`${k}=${encodeURIComponent(v)}`);
+                else if (k === 'salamander-password' || k === 'gecko-password') {
+                    urlParams.push(`obfs=${k === 'salamander-password' ? 'salamander' : 'gecko'}`);
+                    urlParams.push(`obfs-password=${encodeURIComponent(v)}`);
+                }
                 else if (k === 'sni') urlParams.push(`sni=${encodeURIComponent(v)}`);
                 else if (k === 'skip-cert-verify' && v === 'true') urlParams.push('insecure=1');
                 else if (k === 'download-bandwidth') urlParams.push(`down=${encodeURIComponent(v)}`);

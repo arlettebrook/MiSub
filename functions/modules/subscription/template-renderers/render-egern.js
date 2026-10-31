@@ -173,6 +173,8 @@ function mapProxy(proxy) {
         };
         const sni = s(proxy.servername ?? proxy.sni ?? proxy.server);
         if (sni) mapped.hysteria2.sni = sni;
+        if (proxy.obfs) mapped.hysteria2.obfs = proxy.obfs;
+        if (proxy['obfs-password']) mapped.hysteria2.obfs_password = proxy['obfs-password'];
         return mapped;
     }
 

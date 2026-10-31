@@ -139,6 +139,9 @@ function buildOutbound(proxy) {
         outbound.server = server;
         outbound.server_port = port;
         outbound.password = proxy.password || '';
+        if (proxy.obfs) {
+            outbound.obfs = { type: proxy.obfs, password: proxy['obfs-password'] || '' };
+        }
         outbound.tls = {
             enabled: true,
             server_name: proxy.sni || proxy.servername || server

@@ -1,5 +1,6 @@
 import { generateNodeId } from '../id.js';
 import { base64Encode } from './common/base64.js';
+import { splitIniFields, unquoteIniValue } from './common/ini.js';
 
 export function parseLoonConfig(content) {
     const nodes = [];
@@ -46,12 +47,12 @@ export function parseLoonConfig(content) {
     return nodes;
 }
 
-function parseNameAndParams(line) {
+function parseNameAndParams(line, splitFields = text => text.split(',').map(p => p.trim())) {
     const equalIndex = line.indexOf('=');
     if (equalIndex === -1) return null;
     const name = line.slice(0, equalIndex).trim();
     const config = line.slice(equalIndex + 1).trim();
-    const params = config.split(',').map(p => p.trim());
+    const params = splitFields(config);
     return { name, params };
 }
 
@@ -188,12 +189,22 @@ function parseLoonHttp(line) {
 }
 
 function parseLoonHysteria2(line) {
-    const parsed = parseNameAndParams(line);
+    const parsed = parseNameAndParams(line, splitIniFields);
     if (!parsed) return null;
-    const [protocol, server, port, password, ...extra] = parsed.params;
+    const [protocol, server, port, rawPassword, ...extra] = parsed.params;
+    const password = unquoteIniValue(rawPassword || '');
     if (protocol.toLowerCase() !== 'hysteria2' || !server || !port || !password) return null;
-    const options = parseExtraParams(extra);
+    const options = new Map(extra.map(param => {
+        const equalIndex = param.indexOf('=');
+        return equalIndex < 0 ? [] : [param.slice(0, equalIndex).trim().toLowerCase(), unquoteIniValue(param.slice(equalIndex + 1))];
+    }).filter(entry => entry.length));
     const urlParams = [];
+    if (options.get('obfs')) urlParams.push(`obfs=${encodeURIComponent(options.get('obfs'))}`);
+    if (options.get('obfs-password')) urlParams.push(`obfs-password=${encodeURIComponent(options.get('obfs-password'))}`);
+    if (options.get('salamander-password')) {
+        urlParams.push('obfs=salamander');
+        urlParams.push(`obfs-password=${encodeURIComponent(options.get('salamander-password'))}`);
+    }
     if (options.get('sni')) urlParams.push(`sni=${encodeURIComponent(options.get('sni'))}`);
     if (options.get('skip-cert-verify') === 'true') urlParams.push('insecure=1');
     const query = urlParams.length ? `?${urlParams.join('&')}` : '';

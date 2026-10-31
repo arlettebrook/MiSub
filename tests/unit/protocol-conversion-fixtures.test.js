@@ -603,6 +603,8 @@ proxies:
         expect(fullConfig.proxies[0]).toMatchObject({
             name: 'HY2 full',
             type: 'hysteria2',
+            obfs: 'salamander',
+            'obfs-password': 'obfs-secret',
             ports: '20000-30000',
             up: '100 Mbps',
             down: '200 Mbps',

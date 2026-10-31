@@ -12,6 +12,7 @@
 
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
+import { quoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import { POLICY_GROUPS, getBuiltinRules, getRemoteProviderDefinitions, DEFAULT_SELECT_GROUP, DEFAULT_RELAY_GROUP, pruneProxyGroups } from './builtin-rules-provider.js';
 
 /**
@@ -184,7 +185,10 @@ function clashProxyToLoonResult(proxy) {
         parts.push(`${name} = hysteria2`);
         parts.push(server);
         parts.push(String(port));
-        parts.push(loonQuote(proxy.password || ''));
+        parts.push(quoteIniValue(proxy.password || ''));
+        if (proxy.obfs === 'salamander' && proxy['obfs-password']) {
+            parts.push(`salamander-password=${quoteIniValue(proxy['obfs-password'])}`);
+        }
         appendTlsParams(parts, proxy);
     } else if (type === 'tuic') {
         parts.push(`${name} = tuic`);
