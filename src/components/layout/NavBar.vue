@@ -40,7 +40,7 @@
 <template>
     <header
         :aria-label="t('nav.top')"
-        class="app-nav-bar md:hidden sticky top-0 z-50 flex items-center justify-between px-4 py-2.5 w-full bg-white/90 dark:bg-slate-950/88 backdrop-blur-xl border-b border-gray-200/60 dark:border-white/10 shadow-sm transition-all duration-300"
+        class="app-nav-bar mobile-nav-header md:hidden sticky top-0 z-50 flex items-center justify-between px-4 py-2.5 w-full border-b transition-colors duration-300"
     >
         <BrandLogo text-size-class="text-lg" :icon-size="32" />
 
