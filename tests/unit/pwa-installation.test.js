@@ -2,6 +2,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAIN_NAV_ITEMS } from '../../src/constants/navigation.js';
 import { onRequest } from '../../functions/[[path]].js';
@@ -77,6 +78,55 @@ describe('desktop installation metadata', () => {
         expect(sizes).toEqual(new Set(['192x192', '512x512']));
         expect(hasMaskable).toBe(true);
     });
+
+    it('uses the dark app background for the native splash and its system bars', async () => {
+        const manifest = await readManifest();
+        const css = await readFile('src/assets/main.css', 'utf8');
+        const darkBackground = css.match(/--bg-page-dark:\s*([^;]+);/)[1].trim();
+        expect(manifest.background_color).toBe(darkBackground);
+        expect(manifest.theme_color).toBe(darkBackground);
+    });
+
+    it.each([
+        { saved: 'dark', systemDark: false, dark: true },
+        { saved: 'light', systemDark: true, dark: false },
+        { saved: 'system', systemDark: true, dark: true },
+        { saved: 'system', systemDark: false, dark: false },
+        { saved: null, systemDark: true, dark: true },
+        { saved: null, systemDark: false, dark: false },
+        { saved: null, systemDark: true, dark: true, blockedStorage: true },
+    ])(
+        'applies the initial theme before Vue loads: %j',
+        async ({ saved, systemDark, dark, blockedStorage }) => {
+            const source = await readFile('index.html', 'utf8');
+            const script = source.match(
+                /<script\b[^>]*id="misub-theme-bootstrap"[^>]*>([\s\S]*?)<\/script>/
+            )?.[1];
+            expect(script).toBeDefined();
+            const toggle = vi.fn();
+            const metas = [{ setAttribute: vi.fn() }, { setAttribute: vi.fn() }];
+            runInNewContext(script, {
+                localStorage: {
+                    getItem() {
+                        if (blockedStorage) throw new Error('Storage unavailable');
+                        return saved;
+                    },
+                },
+                window: { matchMedia: () => ({ matches: systemDark }) },
+                document: {
+                    documentElement: { classList: { toggle } },
+                    querySelectorAll: () => metas,
+                },
+            });
+            expect(toggle).toHaveBeenCalledWith('dark', dark);
+            for (const meta of metas) {
+                expect(meta.setAttribute).toHaveBeenCalledWith(
+                    'content',
+                    dark ? '#08090a' : '#f7f8f8'
+                );
+            }
+        }
+    );
 });
 
 describe('installation asset access', () => {

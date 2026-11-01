@@ -18,6 +18,32 @@
   <meta name="description" content="基于 Cloudflare 的订阅转换和管理工具" />
   <meta name="theme-color" content="#f7f8f8" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#08090a" />
+  <style>
+    html {
+      background: var(--bg-page-light, #f7f8f8);
+      color-scheme: light;
+    }
+    html.dark {
+      background: var(--bg-page-dark, #08090a);
+      color-scheme: dark;
+    }
+  </style>
+  <script id="misub-theme-bootstrap" data-cfasync="false">
+    (function () {
+      let savedTheme = null;
+      try {
+        savedTheme = localStorage.getItem('theme');
+      } catch (_) {}
+      const isDark = savedTheme === 'light' || savedTheme === 'dark'
+        ? savedTheme === 'dark'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.toggle('dark', isDark);
+      const color = isDark ? '#08090a' : '#f7f8f8';
+      document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+        meta.setAttribute('content', color);
+      });
+    })();
+  </script>
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
