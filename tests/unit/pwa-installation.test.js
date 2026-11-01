@@ -170,6 +170,36 @@ describe('installation asset access', () => {
         }
     );
 
+    it.each([
+        { pageType: 'page', referrer: undefined, status: 404 },
+        { pageType: 'redirect', referrer: undefined, status: 302 },
+        { pageType: 'redirect', referrer: 'https://misub.example/login', status: 302 },
+        { pageType: 'redirect', referrer: 'https://misub.example/secret-admin', status: 302 },
+    ])(
+        'keeps logo requests protected with disguise: %j',
+        async ({ pageType, referrer, status }) => {
+            settings.customLoginPath = 'secret-admin';
+            settings.disguise = {
+                enabled: true,
+                pageType,
+                redirectUrl: 'https://example.com/',
+            };
+            const next = vi.fn(fetchAsset);
+            const response = await onRequest({
+                request: new Request('https://misub.example/logo.png', {
+                    headers: referrer ? { Referer: referrer } : {},
+                }),
+                env,
+                next,
+            });
+            expect(response.status).toBe(status);
+            if (status === 302) {
+                expect(response.headers.get('Location')).toBe('https://example.com/');
+            }
+            expect(next).not.toHaveBeenCalled();
+        }
+    );
+
     it.each(installationPaths)(
         'serves %s with a valid session, without redirecting to login',
         async (path) => {

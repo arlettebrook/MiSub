@@ -1,6 +1,8 @@
 <script setup>
     import { ref } from 'vue';
     import Button from '../ui/Button.vue';
+    // Inline the logo so disguise redirects and referrer policies cannot block it.
+    import brandLogo from '../../assets/brand-logo.png?inline';
 
     const emit = defineEmits(['success']);
     const password = ref('');
@@ -42,7 +44,7 @@
                         <img
                             width="96"
                             height="96"
-                            src="/logo.png"
+                            :src="brandLogo"
                             alt="MiSub"
                             class="drop-shadow-2xl"
                         />
