@@ -1,59 +1,29 @@
 import { defineStore } from 'pinia';
-import { onScopeDispose, ref } from 'vue';
+import { ref } from 'vue';
 
 export const useThemeStore = defineStore('theme', () => {
     const theme = ref('light');
-    const themeMode = ref('system');
-    let systemMediaQuery = null;
-
-    function handleSystemThemeChange(event) {
-        if (themeMode.value !== 'system') return;
-        theme.value = event.matches ? 'dark' : 'light';
-        updateThemeClass();
-    }
-
-    function getSystemMediaQuery() {
-        if (
-            !systemMediaQuery &&
-            typeof window !== 'undefined' &&
-            typeof window.matchMedia === 'function'
-        ) {
-            systemMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            if (typeof systemMediaQuery.addEventListener === 'function') {
-                systemMediaQuery.addEventListener('change', handleSystemThemeChange);
-            } else if (typeof systemMediaQuery.addListener === 'function') {
-                systemMediaQuery.addListener(handleSystemThemeChange);
-            }
-        }
-        return systemMediaQuery;
-    }
-
-    function applyThemeMode() {
-        const media = getSystemMediaQuery();
-        theme.value =
-            themeMode.value === 'system' ? (media?.matches ? 'dark' : 'light') : themeMode.value;
-        updateThemeClass();
-    }
 
     function initTheme() {
         let savedTheme = null;
         try {
             savedTheme = localStorage.getItem('theme');
         } catch (_) {}
-        themeMode.value = ['light', 'dark'].includes(savedTheme) ? savedTheme : 'system';
-        applyThemeMode();
-    }
-
-    function setThemeMode(mode) {
-        themeMode.value = ['system', 'light', 'dark'].includes(mode) ? mode : 'system';
-        try {
-            localStorage.setItem('theme', themeMode.value);
-        } catch (_) {}
-        applyThemeMode();
+        theme.value = savedTheme === 'dark' ? 'dark' : 'light';
+        if (savedTheme === 'system') {
+            try {
+                localStorage.setItem('theme', theme.value);
+            } catch (_) {}
+        }
+        updateThemeClass();
     }
 
     function toggleTheme() {
-        setThemeMode(theme.value === 'dark' ? 'light' : 'dark');
+        theme.value = theme.value === 'dark' ? 'light' : 'dark';
+        try {
+            localStorage.setItem('theme', theme.value);
+        } catch (_) {}
+        updateThemeClass();
     }
 
     function updateThemeClass() {
@@ -84,14 +54,5 @@ export const useThemeStore = defineStore('theme', () => {
         }
     }
 
-    onScopeDispose(() => {
-        if (typeof systemMediaQuery?.removeEventListener === 'function') {
-            systemMediaQuery.removeEventListener('change', handleSystemThemeChange);
-        } else if (typeof systemMediaQuery?.removeListener === 'function') {
-            systemMediaQuery.removeListener(handleSystemThemeChange);
-        }
-        systemMediaQuery = null;
-    });
-
-    return { theme, themeMode, initTheme, setThemeMode, toggleTheme };
+    return { theme, initTheme, toggleTheme };
 });

@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
-  <link rel="apple-touch-icon" href="/icons/pwa/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/pwa/icon-192.png?v=2" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,7 +17,6 @@
   <meta property="og:image" content="https://sub.dmorz.com/logo.png" />
   <meta name="description" content="基于 Cloudflare 的订阅转换和管理工具" />
   <meta name="theme-color" content="#f7f8f8" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#08090a" />
   <style>
     html {
       background: var(--bg-page-light, #f7f8f8);
@@ -34,9 +33,7 @@
       try {
         savedTheme = localStorage.getItem('theme');
       } catch (_) {}
-      const isDark = savedTheme === 'light' || savedTheme === 'dark'
-        ? savedTheme === 'dark'
-        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = savedTheme === 'dark';
       document.documentElement.classList.toggle('dark', isDark);
       const color = isDark ? '#08090a' : '#f7f8f8';
       document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {

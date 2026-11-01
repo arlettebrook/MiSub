@@ -5,7 +5,7 @@ import { useThemeStore } from '../../src/stores/theme.js';
 import ThemeToggle from '../../src/components/features/ThemeToggle.vue';
 import { createI18n } from '../../src/i18n/index.js';
 
-describe('system theme preference', () => {
+describe('manual theme preference', () => {
     let media;
     let store;
     let pinia;
@@ -30,12 +30,6 @@ describe('system theme preference', () => {
         document.head.innerHTML = '';
     });
 
-    function changeSystemTheme(dark) {
-        media.matches = dark;
-        const listener = media.addEventListener.mock.calls.find(([event]) => event === 'change')[1];
-        listener({ matches: dark });
-    }
-
     function expectTheme(dark) {
         expect(store.theme).toBe(dark ? 'dark' : 'light');
         expect(document.documentElement.classList.contains('dark')).toBe(dark);
@@ -44,58 +38,54 @@ describe('system theme preference', () => {
         }
     }
 
-    it('defaults to the system and updates the page and system bars without a reload', () => {
+    it('uses a fixed light default without consulting the system appearance', () => {
+        media.matches = true;
         store.initTheme();
-        expect(store.themeMode).toBe('system');
         expectTheme(false);
-        changeSystemTheme(true);
-        expectTheme(true);
-        changeSystemTheme(false);
+        media.matches = false;
         expectTheme(false);
+        expect(window.matchMedia).not.toHaveBeenCalled();
     });
 
-    it('restores explicit system mode using the current system appearance', () => {
+    it('migrates the retired system preference to the fixed light default', () => {
         localStorage.setItem('theme', 'system');
         media.matches = true;
         store.initTheme();
-        expect(store.themeMode).toBe('system');
-        expectTheme(true);
+        expectTheme(false);
+        expect(localStorage.getItem('theme')).toBe('light');
     });
 
     it.each(['light', 'dark'])(
-        'keeps a saved %s preference until system mode is selected',
+        'restores a saved %s preference independently of the system appearance',
         (saved) => {
             localStorage.setItem('theme', saved);
             media.matches = saved !== 'dark';
             store.initTheme();
-            expect(store.themeMode).toBe(saved);
             expectTheme(saved === 'dark');
-            changeSystemTheme(!media.matches);
+            media.matches = !media.matches;
             expectTheme(saved === 'dark');
-            store.setThemeMode('system');
-            expect(localStorage.getItem('theme')).toBe('system');
-            expectTheme(media.matches);
-            changeSystemTheme(!media.matches);
-            expectTheme(media.matches);
+            expect(window.matchMedia).not.toHaveBeenCalled();
         }
     );
 
-    it('preserves the existing manual toggle API for custom pages', () => {
+    it('toggles between light and dark and saves the manual selection', () => {
         media.matches = true;
         store.initTheme();
         store.toggleTheme();
-        expect(store.themeMode).toBe('light');
+        expect(localStorage.getItem('theme')).toBe('dark');
+        expectTheme(true);
+        store.toggleTheme();
         expect(localStorage.getItem('theme')).toBe('light');
         expectTheme(false);
     });
 
-    it('registers one system listener and removes it when the store is disposed', () => {
+    it('does not register system appearance listeners', () => {
         store.initTheme();
         store.initTheme();
-        expect(media.addEventListener).toHaveBeenCalledOnce();
-        const listener = media.addEventListener.mock.calls[0][1];
+        expect(window.matchMedia).not.toHaveBeenCalled();
+        expect(media.addEventListener).not.toHaveBeenCalled();
         store.$dispose();
-        expect(media.removeEventListener).toHaveBeenCalledWith('change', listener);
+        expect(media.removeEventListener).not.toHaveBeenCalled();
     });
 
     it('still applies themes when local storage is unavailable', () => {
@@ -107,26 +97,27 @@ describe('system theme preference', () => {
         });
         media.matches = true;
         expect(() => store.initTheme()).not.toThrow();
-        expectTheme(true);
-        expect(() => store.setThemeMode('light')).not.toThrow();
         expectTheme(false);
+        expect(() => store.toggleTheme()).not.toThrow();
+        expectTheme(true);
     });
 
-    it('lets the theme button cycle through system, light and dark modes', async () => {
+    it('offers only light and dark through the theme button', async () => {
         store.initTheme();
         const wrapper = mount(ThemeToggle, {
             global: { plugins: [pinia, createI18n({ initialLocale: 'zh-CN' })] },
         });
         try {
             const button = wrapper.get('button');
-            expect(button.attributes('aria-label')).toContain('跟随系统');
+            expect(button.attributes('aria-label')).toBe('切换到暗色模式');
+            expect(button.attributes('aria-pressed')).toBe('false');
             await button.trigger('click');
-            expect(store.themeMode).toBe('light');
+            expectTheme(true);
+            expect(button.attributes('aria-label')).toBe('切换到亮色模式');
+            expect(button.attributes('aria-pressed')).toBe('true');
             await button.trigger('click');
-            expect(store.themeMode).toBe('dark');
-            await button.trigger('click');
-            expect(store.themeMode).toBe('system');
-            expect(localStorage.getItem('theme')).toBe('system');
+            expectTheme(false);
+            expect(localStorage.getItem('theme')).toBe('light');
         } finally {
             wrapper.unmount();
         }
