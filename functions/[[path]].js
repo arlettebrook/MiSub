@@ -238,13 +238,15 @@ export async function onRequest(context) {
                 const isStaticAsset =
                     /^\/(assets|@vite|src)\/./.test(url.pathname) || /\.\w+$/.test(url.pathname);
 
-                // [伪装加固] 品牌资源（logo / favicon）在未登录时不应对外提供：
+                // [伪装加固] 品牌资源（logo / favicon / PWA 安装配置与图标）在未登录时不应对外提供：
                 // 否则伪装成的第三方页面会挂着 MiSub 的品牌图标，形成明显指纹。
                 // 仅在伪装开启时生效，且已登录用户仍可正常获取。
                 const isBrandAsset =
                     url.pathname === '/logo.png' ||
                     url.pathname === '/favicon.ico' ||
-                    url.pathname === '/favicon.png';
+                    url.pathname === '/favicon.png' ||
+                    url.pathname === '/manifest.webmanifest' ||
+                    url.pathname.startsWith('/icons/pwa/');
                 if (isBrandAsset && settings?.disguise?.enabled) {
                     const isAuthenticated = await authMiddleware(request, env);
                     if (!isAuthenticated) {
