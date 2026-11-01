@@ -63,6 +63,10 @@
   --misub-radius-xl: 1rem;
   --misub-radius-pill: 9999px;
 
+  --mobile-nav-row-height: 3.5rem;
+  --mobile-nav-safe-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  --mobile-nav-height: calc(var(--mobile-nav-row-height) + var(--mobile-nav-safe-bottom) + 1px);
+
   /* Semantic status glows (announcement cards, decorative accents). */
   --glow-info: rgba(99, 102, 241, 0.15);
   --glow-success: rgba(16, 185, 129, 0.15);
@@ -387,7 +391,7 @@ textarea {
   position: fixed;
   z-index: var(--z-nav);
   bottom: 0;
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  padding-bottom: var(--mobile-nav-safe-bottom);
   border-top: 1px solid;
   border-top-color: var(--border-subtle-light);
   box-shadow: 0 -4px 16px rgba(17, 24, 39, 0.04);
@@ -396,7 +400,8 @@ textarea {
 }
 
 .mobile-nav-inner {
-  @apply flex justify-around items-center h-14 max-w-lg mx-auto px-2;
+  @apply flex justify-around items-center max-w-lg mx-auto px-2;
+  height: var(--mobile-nav-row-height);
 }
 
 .dark .mobile-nav-glass {

@@ -220,7 +220,7 @@
 
 <template>
     <div
-        :class="theme"
+        :class="[theme, { 'app-shell-mobile-nav': showModernNavBar }]"
         class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
     >
         <!-- Navigation -->
@@ -385,7 +385,7 @@
             @suppress="handleVersionModalSuppress"
         />
         <Footer v-if="shouldShowFooter" :hide-branding="shouldHidePublicBranding" />
-        <ScrollToTop v-if="isLoggedIn || isPublicRoute" />
+        <ScrollToTop v-if="isLoggedIn || isPublicRoute" :above-mobile-nav="showModernNavBar" />
     </div>
 </template>
 
@@ -393,6 +393,27 @@
     .app-shell {
         min-height: 100vh;
         min-height: 100dvh;
+    }
+
+    @media (width < 48rem) {
+        /* Reserve space once, after the footer, for the fixed bottom navigation. */
+        .app-shell-mobile-nav {
+            padding-bottom: var(--mobile-nav-height);
+        }
+
+        .app-shell-mobile-nav > main {
+            flex-grow: 0;
+            padding-bottom: 1rem;
+        }
+
+        .app-shell-mobile-nav > footer {
+            margin-top: 0;
+            padding: 1rem;
+        }
+
+        .app-shell-mobile-nav .settings-page-layout .settings-layout-footer {
+            bottom: var(--mobile-nav-height);
+        }
     }
 
     .app-main-centered {

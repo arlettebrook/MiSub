@@ -89,7 +89,7 @@
 </script>
 
 <template>
-    <div class="pt-0 pb-6 min-h-[calc(100vh-80px)]">
+    <div class="pt-0 md:pb-6 md:min-h-[calc(100vh-80px)]">
         <div
             class="mb-4 bg-white/80 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg p-4"
         >
@@ -98,7 +98,7 @@
             </h1>
         </div>
 
-        <SettingsLayout class="h-full">
+        <SettingsLayout class="settings-page-layout h-full">
             <template #sidebar>
                 <SettingsSidebar v-model:activeTab="activeTab" />
             </template>

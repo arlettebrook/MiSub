@@ -1,6 +1,10 @@
 <script setup>
     import { ref, onMounted, onUnmounted } from 'vue';
 
+    defineProps({
+        aboveMobileNav: Boolean,
+    });
+
     const isVisible = ref(false);
     const scrollThreshold = 300;
 
@@ -29,7 +33,8 @@
         <button
             v-if="isVisible"
             @click="scrollToTop"
-            class="fixed z-50 bottom-24 md:bottom-8 right-4 md:right-8 p-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white misub-radius-lg shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all duration-300 hover:scale-110 active:scale-95 backdrop-blur-sm border border-white/20"
+            class="fixed z-50 bottom-8 right-4 md:right-8 p-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white misub-radius-lg shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all duration-300 hover:scale-110 active:scale-95 backdrop-blur-sm border border-white/20"
+            :class="{ 'scroll-top-above-nav': aboveMobileNav }"
             aria-label="滚动到顶部"
         >
             <svg
@@ -47,6 +52,12 @@
 </template>
 
 <style scoped>
+    @media (width < 48rem) {
+        .scroll-top-above-nav {
+            bottom: calc(var(--mobile-nav-height) + 1rem);
+        }
+    }
+
     .scroll-top-enter-active,
     .scroll-top-leave-active {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
