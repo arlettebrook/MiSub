@@ -100,9 +100,8 @@
 
     const shouldCenterMain = computed(
         () =>
-            sessionState.value !== 'loggedIn' &&
-            sessionState.value !== 'loading' &&
-            !isPublicRoute.value
+            isSessionLoading.value ||
+            (!isLoggedIn.value && (!isPublicRoute.value || route.name === 'Entrance'))
     );
 
     const showSavePrompt = computed(
@@ -222,7 +221,7 @@
 <template>
     <div
         :class="theme"
-        class="min-h-screen flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
+        class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
     >
         <!-- Navigation -->
         <NavBar v-if="showModernNavBar" :is-logged-in="true" @logout="logout" />
@@ -235,18 +234,20 @@
 
         <main
             :class="[
-                isCustomPageFullWidth
-                    ? 'grow w-full min-h-[100dvh]'
-                    : 'grow w-full py-6 pb-24 md:pb-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
+                shouldCenterMain
+                    ? 'grow w-full py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
+                    : isCustomPageFullWidth
+                      ? 'grow w-full min-h-[100dvh]'
+                      : 'grow w-full py-6 pb-24 md:pb-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
                 {
-                    'flex items-center justify-center': shouldCenterMain,
+                    'app-main-centered': shouldCenterMain,
                     'ios-header-padding': showLegacyHeader,
                 },
             ]"
         >
             <div
                 v-if="sessionState === 'loading'"
-                class="flex flex-col items-center justify-center p-8 min-h-[60vh]"
+                class="flex flex-col items-center justify-center p-8"
                 role="status"
                 aria-live="polite"
             >
@@ -389,6 +390,23 @@
 </template>
 
 <style>
+    .app-shell {
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    .app-main-centered {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* Auto margins center short content and keep tall content fully scrollable. */
+    .app-main-centered > * {
+        margin-block: auto;
+        flex-shrink: 0;
+    }
+
     :root {
         --safe-top: env(safe-area-inset-top, 0px);
         --safe-bottom: env(safe-area-inset-bottom, 0px);

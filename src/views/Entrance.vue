@@ -85,7 +85,6 @@
 <style scoped>
     .entrance-container {
         width: 100%;
-        min-height: 80vh;
         display: flex;
         justify-content: center;
         align-items: center;
