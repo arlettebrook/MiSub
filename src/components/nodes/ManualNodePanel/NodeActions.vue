@@ -79,7 +79,7 @@
                 <!-- Mobile Group Filter -->
                 <div
                     data-testid="manual-node-mobile-groups"
-                    class="flex w-full min-w-0 items-center gap-2 overflow-x-auto py-1 no-scrollbar md:hidden"
+                    class="node-group-scrollbar flex w-full min-w-0 items-center gap-2 overflow-x-auto py-1 md:hidden"
                 >
                     <button
                         @click="emit('set-group-filter', null)"
@@ -306,7 +306,7 @@
 
         <!-- Group Filter Chips (New Line) -->
         <div
-            class="hidden md:flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/80 dark:border-white/10 overflow-x-auto no-scrollbar mask-gradient-r pb-1"
+            class="node-group-scrollbar hidden md:flex items-center gap-2 mt-3 pt-3 border-t border-gray-100/80 dark:border-white/10 overflow-x-auto mask-gradient-r pb-1"
         >
             <button
                 @click="emit('set-group-filter', null)"
@@ -346,3 +346,9 @@
         </div>
     </div>
 </template>
+
+<style scoped>
+    .node-group-scrollbar::-webkit-scrollbar {
+        height: 3px;
+    }
+</style>

@@ -253,7 +253,7 @@
 
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -261,11 +261,22 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-gray-300 dark:bg-white/10;
+  @apply rounded-full bg-gray-400/50 dark:bg-white/20;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   @apply rounded-full bg-primary-500;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-gray-400) transparent;
+  }
+
+  .dark * {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
 }
 
 .nav-brand-wrap {

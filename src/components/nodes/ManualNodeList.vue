@@ -99,7 +99,7 @@
 
 <template>
     <div
-        class="group flex w-full items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/5 dark:border-white/10 dark:bg-gray-900/70"
+        class="group flex w-full min-w-0 items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/5 dark:border-white/10 dark:bg-gray-900/70"
         :class="{
             'opacity-50': !node.enabled && !isSelectionMode,
             'ring-2 ring-indigo-500': isSelectionMode && isSelected,
@@ -108,7 +108,7 @@
         @click="isSelectionMode ? emit('toggle-select') : null"
     >
         <!-- Mobile Layout -->
-        <div class="w-full sm:hidden">
+        <div class="w-full min-w-0 lg:hidden">
             <div class="flex items-start gap-3">
                 <div v-if="isSelectionMode" class="shrink-0 mt-0.5">
                     <div
@@ -250,7 +250,7 @@
 
                     <div class="flex flex-row items-center gap-2 mt-1">
                         <p
-                            class="flex-1 break-words text-sm font-semibold leading-snug text-gray-900 dark:text-white"
+                            class="min-w-0 flex-1 wrap-anywhere text-sm font-semibold leading-snug text-gray-900 dark:text-white"
                             :title="node.name"
                         >
                             {{ node.name || t('manualNodes.unnamed') }}
@@ -300,7 +300,10 @@
                         </div>
                     </div>
 
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 font-mono">
+                    <p
+                        class="mt-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400"
+                        :title="`${hostAndPort.host || 'N/A'}:${hostAndPort.port || 'N/A'}`"
+                    >
                         {{ hostAndPort.host || 'N/A' }}:{{ hostAndPort.port || 'N/A' }}
                     </p>
                 </div>
@@ -309,11 +312,11 @@
 
         <!-- Desktop Layout -->
         <div
-            class="hidden w-full items-center gap-4 sm:grid"
+            class="hidden w-full min-w-0 items-center gap-4 lg:grid"
             :class="[
                 isSelectionMode
-                    ? 'grid-cols-[auto_auto_auto_auto_1fr_1fr_auto_auto]'
-                    : 'grid-cols-[auto_auto_auto_1fr_1fr_auto_auto]',
+                    ? 'grid-cols-[auto_auto_auto_auto_minmax(0,1fr)_minmax(0,1fr)_auto_auto]'
+                    : 'grid-cols-[auto_auto_auto_minmax(0,1fr)_minmax(0,1fr)_auto_auto]',
             ]"
         >
             <div v-if="isSelectionMode" class="shrink-0">
