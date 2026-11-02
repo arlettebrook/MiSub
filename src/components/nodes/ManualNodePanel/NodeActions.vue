@@ -64,17 +64,19 @@
 
 <template>
     <div
-        class="mb-4 min-w-0 rounded-xl border border-gray-100/80 bg-white/85 p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/70"
+        class="relative mb-4 min-w-0 rounded-xl border border-gray-100/80 bg-white/85 p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/70"
     >
-        <div class="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div class="flex min-w-0 flex-wrap items-center gap-3">
-                <h2 class="text-xl font-bold text-gray-900 dark:text-white">
-                    {{ t('manualNodes.title') }}
-                </h2>
-                <span
-                    class="rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200"
-                    >{{ manualNodesCount }}</span
-                >
+                <div class="flex w-full min-w-0 items-center gap-3 pr-12 sm:w-auto sm:pr-0">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                        {{ t('manualNodes.title') }}
+                    </h2>
+                    <span
+                        class="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200"
+                        >{{ manualNodesCount }}</span
+                    >
+                </div>
 
                 <!-- Mobile Group Filter -->
                 <div
@@ -122,7 +124,7 @@
 
                 <span
                     v-if="searchTerm"
-                    class="mt-2 w-full rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 sm:mt-0 sm:w-auto"
+                    class="mt-2 w-full min-w-0 wrap-anywhere rounded-full bg-blue-100 px-2.5 py-0.5 text-sm font-semibold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 sm:mt-0 sm:w-auto"
                 >
                     {{
                         t('manualNodes.searchResult', {
@@ -135,7 +137,7 @@
             </div>
             <div
                 data-testid="manual-node-toolbar-actions"
-                class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap"
+                class="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end"
             >
                 <div
                     data-testid="manual-node-search"
@@ -145,7 +147,7 @@
                         type="text"
                         v-model="searchModel"
                         :placeholder="t('manualNodes.searchPlaceholder')"
-                        class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm shadow-xs focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-white/10 dark:bg-white/5"
+                        class="h-11 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm shadow-xs focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-white/10 dark:bg-white/5 sm:h-auto"
                     />
                     <svg
                         class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
@@ -167,7 +169,7 @@
                 >
                     <button
                         @click="emit('update:viewMode', 'card')"
-                        class="view-mode-toggle p-1.5 misub-radius-sm transition-colors flex items-center justify-center"
+                        class="view-mode-toggle flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
                         :class="
                             viewMode === 'card'
                                 ? 'bg-white dark:bg-gray-900 text-indigo-600'
@@ -187,7 +189,7 @@
                     </button>
                     <button
                         @click="emit('update:viewMode', 'list')"
-                        class="view-mode-toggle p-1.5 misub-radius-sm transition-colors flex items-center justify-center"
+                        class="view-mode-toggle flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
                         :class="
                             viewMode === 'list'
                                 ? 'bg-white dark:bg-gray-900 text-indigo-600'
@@ -210,97 +212,102 @@
                 </div>
                 <button
                     @click="emit('ping-all')"
-                    class="shrink-0 rounded-lg bg-green-500/10 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                    class="min-h-11 min-w-0 flex-1 whitespace-nowrap rounded-lg bg-green-500/10 px-2.5 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400 sm:min-h-0 sm:flex-none sm:px-4"
                 >
                     {{ t('actions.pingAll') }}
                 </button>
                 <button
                     @click="emit('add')"
-                    class="shrink-0 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                    class="min-h-11 shrink-0 whitespace-nowrap rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 sm:min-h-0 sm:px-4"
                 >
                     {{ t('actions.add') }}
                 </button>
-                <MoreActionsMenu menu-width-class="w-36">
-                    <template #menu="{ close }">
-                        <button
-                            @click="
-                                emit('toggle-selection-mode');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
-                            :class="isSelectionMode ? 'text-indigo-600 dark:text-indigo-400' : ''"
-                        >
-                            {{
-                                isSelectionMode ? t('actions.exitBatch') : t('actions.bulkActions')
-                            }}
-                        </button>
-                        <div class="border-t border-gray-100 dark:border-gray-700/50 my-1"></div>
-                        <button
-                            @click="
-                                emit('import');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ t('actions.importSubscription') }}
-                        </button>
-                        <button
-                            @click="
-                                emit('manage-groups');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ t('actions.manageGroups') }}
-                        </button>
-                        <button
-                            @click="
-                                emit('auto-sort');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ t('actions.autoSort') }}
-                        </button>
-                        <button
-                            @click="
-                                emit('sort-by-latency');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ t('actions.sortByLatency') }}
-                        </button>
-                        <button
-                            @click="
-                                emit('deduplicate');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ t('actions.deduplicate') }}
-                        </button>
-                        <button
-                            @click="
-                                emit('toggle-sort');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm transition-colors text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                            {{ isSorting ? t('actions.finishSort') : t('actions.manualSort') }}
-                        </button>
-                        <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                        <button
-                            @click="
-                                emit('delete-all');
-                                close();
-                            "
-                            class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
-                        >
-                            {{ t('actions.clearAll') }}
-                        </button>
-                    </template>
-                </MoreActionsMenu>
+                <div
+                    data-testid="manual-node-more-actions"
+                    class="absolute right-3 top-2.5 sm:static"
+                >
+                    <MoreActionsMenu menu-width-class="w-36">
+                        <template #menu="{ close }">
+                            <button
+                                @click="
+                                    emit('toggle-selection-mode');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
+                                :class="isSelectionMode ? 'text-indigo-600 dark:text-indigo-400' : ''"
+                            >
+                                {{
+                                    isSelectionMode ? t('actions.exitBatch') : t('actions.bulkActions')
+                                }}
+                            </button>
+                            <div class="border-t border-gray-100 dark:border-gray-700/50 my-1"></div>
+                            <button
+                                @click="
+                                    emit('import');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ t('actions.importSubscription') }}
+                            </button>
+                            <button
+                                @click="
+                                    emit('manage-groups');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ t('actions.manageGroups') }}
+                            </button>
+                            <button
+                                @click="
+                                    emit('auto-sort');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ t('actions.autoSort') }}
+                            </button>
+                            <button
+                                @click="
+                                    emit('sort-by-latency');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ t('actions.sortByLatency') }}
+                            </button>
+                            <button
+                                @click="
+                                    emit('deduplicate');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ t('actions.deduplicate') }}
+                            </button>
+                            <button
+                                @click="
+                                    emit('toggle-sort');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm transition-colors text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                                {{ isSorting ? t('actions.finishSort') : t('actions.manualSort') }}
+                            </button>
+                            <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                            <button
+                                @click="
+                                    emit('delete-all');
+                                    close();
+                                "
+                                class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                            >
+                                {{ t('actions.clearAll') }}
+                            </button>
+                        </template>
+                    </MoreActionsMenu>
+                </div>
             </div>
         </div>
 
