@@ -96,8 +96,7 @@
 </script>
 
 <template>
-    <!-- Leave room below the form for the shared floating page controls. -->
-    <div class="pt-0 pb-16 md:min-h-[calc(100vh-80px)]">
+    <div class="pt-0 md:min-h-[calc(100vh-80px)]">
         <div
             class="mb-4 bg-white/80 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg p-4"
         >

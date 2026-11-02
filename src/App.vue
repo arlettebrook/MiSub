@@ -135,6 +135,7 @@
         return !shouldHidePublicFooter.value;
     });
     const revealedFooterHeight = ref(0);
+    const savePromptHeight = ref(0);
     const shouldShowFooter = computed(
         () =>
             !isPageLoading.value &&
@@ -276,6 +277,7 @@
 <template>
     <div
         :class="[theme, { 'app-shell-mobile-nav': showModernNavBar }]"
+        :style="{ '--save-prompt-height': `${savePromptHeight}px` }"
         class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
     >
         <!-- Navigation -->
@@ -392,8 +394,10 @@
                 <SavePrompt
                     :is-dirty="showSavePrompt"
                     :save-state="saveState"
+                    :footer-offset="revealedFooterHeight"
                     @save="handleSave"
                     @discard="handleDiscard"
+                    @visible-height="savePromptHeight = $event"
                 />
 
                 <router-view v-if="layoutMode === 'modern'" v-slot="{ Component }">
@@ -462,15 +466,27 @@
         min-height: 100dvh;
     }
 
+    /* Reserve one shared area for bottom controls on every modern navigation page. */
+    .app-shell-mobile-nav {
+        --floating-controls-space: calc(
+            max(var(--floating-controls-button-size), var(--save-prompt-height, 0px)) + 2 *
+                var(--floating-controls-gap)
+        );
+    }
+
+    .app-shell-mobile-nav > main {
+        padding-bottom: var(--floating-controls-space);
+    }
+
     @media (width < 48rem) {
         /* Reserve space once, after the footer, for the fixed bottom navigation. */
         .app-shell-mobile-nav {
+            --floating-controls-base-bottom: var(--mobile-nav-height);
             padding-bottom: var(--mobile-nav-height);
         }
 
         .app-shell-mobile-nav > main {
             flex-grow: 0;
-            padding-bottom: 1rem;
         }
 
         .app-shell-mobile-nav > footer {

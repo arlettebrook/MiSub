@@ -1,21 +1,46 @@
 <script setup>
     import StatusIndicator from './StatusIndicator.vue';
     import { useI18n } from '@/i18n/index.js';
+    import { ref, watch, onBeforeUnmount } from 'vue';
 
     defineProps({
         isDirty: Boolean,
         saveState: String,
+        footerOffset: { type: Number, default: 0 },
     });
 
-    defineEmits(['save', 'discard']);
+    const emit = defineEmits(['save', 'discard', 'visible-height']);
     const { t } = useI18n();
+    const prompt = ref(null);
+    let resizeObserver;
+    const publishHeight = () => {
+        emit('visible-height', prompt.value?.getBoundingClientRect().height || 0);
+    };
+    watch(
+        prompt,
+        (element) => {
+            resizeObserver?.disconnect();
+            if (element && typeof ResizeObserver !== 'undefined') {
+                resizeObserver = new ResizeObserver(publishHeight);
+                resizeObserver.observe(element);
+            }
+            publishHeight();
+        },
+        { flush: 'post' }
+    );
+    onBeforeUnmount(() => {
+        resizeObserver?.disconnect();
+        emit('visible-height', 0);
+    });
 </script>
 
 <template>
     <Transition name="slide-fade">
         <div
+            ref="prompt"
             v-if="isDirty || saveState === 'success'"
-            class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] w-[95%] max-w-2xl px-4 py-3 rounded-2xl flex flex-row items-center justify-between transition-all duration-300 gap-4 shadow-2xl backdrop-blur-xl border border-white/20 dark:border-white/10"
+            class="save-prompt fixed -translate-x-1/2 z-[70] max-w-2xl px-4 py-3 rounded-2xl flex flex-col sm:flex-row items-center justify-between transition-all duration-300 gap-3 shadow-2xl backdrop-blur-xl border border-white/20 dark:border-white/10"
+            :style="{ '--footer-offset': `${footerOffset}px` }"
             :class="
                 saveState === 'success'
                     ? 'bg-teal-50 dark:bg-teal-900/30 ring-1 ring-teal-500/20'
@@ -95,6 +120,20 @@
 </template>
 
 <style scoped>
+    .save-prompt {
+        left: calc(
+            (100% - var(--floating-controls-button-size) - var(--floating-controls-gap)) / 2
+        );
+        width: calc(
+            100% - 2 * var(--floating-controls-side-gap) - var(--floating-controls-button-size) -
+                var(--floating-controls-gap)
+        );
+        bottom: calc(
+            var(--floating-controls-base-bottom) + var(--floating-controls-gap) +
+                var(--footer-offset, 0px)
+        );
+    }
+
     .slide-fade-enter-active,
     .slide-fade-leave-active {
         transition: all 0.3s ease-out;

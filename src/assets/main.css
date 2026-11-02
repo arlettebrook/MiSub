@@ -67,6 +67,11 @@
   --mobile-nav-safe-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   --mobile-nav-height: calc(var(--mobile-nav-row-height) + var(--mobile-nav-safe-bottom) + 1px);
 
+  --floating-controls-gap: 0.5rem;
+  --floating-controls-side-gap: 1rem;
+  --floating-controls-button-size: 2.875rem;
+  --floating-controls-base-bottom: 0px;
+
   /* Semantic status glows (announcement cards, decorative accents). */
   --glow-info: rgba(99, 102, 241, 0.15);
   --glow-success: rgba(16, 185, 129, 0.15);
@@ -79,6 +84,12 @@
   --z-toast: 900;
   --z-modal: 1000000;
   --z-modal-popover: 1100000;
+}
+
+@media (width >= 48rem) {
+  :root {
+    --floating-controls-side-gap: 2rem;
+  }
 }
 
 @layer base {
