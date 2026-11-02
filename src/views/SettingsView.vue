@@ -45,7 +45,7 @@
     const settingsRoutePath = route.path;
     const bottomSaveAction = ref(null);
     const isBottomSaveVisible = ref(true);
-    const floatingSaveTop = ref(0);
+    const floatingSaveHeaderBottom = ref(0);
     const isSaveDisabled = computed(
         () => isLoading.value || isSaving.value || hasWhitespace.value || !isStorageTypeValid.value
     );
@@ -67,7 +67,7 @@
         );
         const mobileNavHeight =
             document.querySelector('.mobile-nav-glass')?.getBoundingClientRect().height || 0;
-        floatingSaveTop.value = headerBottom + 12;
+        floatingSaveHeaderBottom.value = headerBottom;
         const rect = button.getBoundingClientRect();
         isBottomSaveVisible.value =
             rect.width > 0 &&
@@ -240,7 +240,7 @@
             <SettingsSaveButton
                 v-if="showFloatingSave"
                 class="settings-floating-save"
-                :style="{ top: `${floatingSaveTop}px` }"
+                :style="{ '--settings-header-bottom': `${floatingSaveHeaderBottom}px` }"
                 :is-saving="isSaving"
                 :disabled="isSaveDisabled"
                 @save="handleSave"
@@ -255,6 +255,7 @@
 <style scoped>
     .settings-floating-save {
         position: fixed;
+        top: calc(var(--settings-header-bottom, 0px) + 1.5rem);
         right: max(1rem, env(safe-area-inset-right, 0px));
         z-index: 30;
         box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
@@ -262,6 +263,7 @@
 
     @media (width >= 48rem) {
         .settings-floating-save {
+            top: calc(var(--settings-header-bottom, 0px) + 2rem);
             right: max(1.5rem, calc((100vw - 80rem) / 2 + 2rem));
         }
     }
