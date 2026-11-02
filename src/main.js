@@ -4,6 +4,7 @@ import './assets/main.css';
 import App from './App.vue';
 import router from './router';
 import { handleError, setToastHandler, configureErrorMonitoring } from './utils/errorHandler.js';
+import { isAppScriptError, isForeignRejection } from './utils/error-source.js';
 import { i18n } from './i18n/index.js';
 import { useToastStore } from './stores/toast.js';
 
@@ -12,6 +13,11 @@ if (typeof window !== 'undefined') {
     console.debug('[MiSub] Error Handler Loaded (v2026-01-11-fix-link-error)');
     // 处理未捕获的Promise拒绝
     window.addEventListener('unhandledrejection', (event) => {
+        // 先过滤扩展和第三方脚本，避免它们触发提示或应用资源恢复。
+        if (isForeignRejection(event.reason)) {
+            event.preventDefault();
+            return;
+        }
         const message = event.reason?.message || '';
         if (
             message.includes('Failed to fetch dynamically imported module') ||
@@ -32,6 +38,10 @@ if (typeof window !== 'undefined') {
     // 处理全局JavaScript错误
     window.addEventListener('error', (event) => {
         if (event.target && event.target !== window) {
+            return;
+        }
+        if (!isAppScriptError({ filename: event.filename, message: event.message })) {
+            event.preventDefault();
             return;
         }
         handleError(event.error || new Error(event.message), 'Global JavaScript Error', {

@@ -248,7 +248,7 @@
         }
         try {
             // fetchData 内部会检查数据是否已加载，避免重复请求
-            await dataStore.fetchData();
+            if (!(await dataStore.fetchData())) return;
             if (isDev) {
                 console.debug('Dashboard: fetchData completed', {
                     subs: subscriptions.value?.length,
@@ -303,7 +303,7 @@
     // --- 其他 JS 逻辑 (省略) ---
     const handleDiscard = async () => {
         // 强制刷新数据，忽略缓存
-        await dataStore.fetchData(true);
+        if (!(await dataStore.fetchData(true))) return;
         showToast(t('notices.discardedChanges'));
     };
 
@@ -311,7 +311,10 @@
         saveState.value = 'saving';
 
         try {
-            await dataStore.saveData();
+            if (!(await dataStore.saveData())) {
+                saveState.value = 'idle';
+                return;
+            }
 
             saveState.value = 'success';
 

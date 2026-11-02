@@ -7,6 +7,9 @@ import App from '../../src/App.vue';
 import HomeView from '../../src/views/HomeView.vue';
 import { createI18n } from '../../src/i18n/index.js';
 import { useUIStore } from '../../src/stores/ui.js';
+import { useDataStore } from '../../src/stores/useDataStore.js';
+import { useToastStore } from '../../src/stores/toast.js';
+import SavePrompt from '../../src/components/ui/SavePrompt.vue';
 import { loadLegacyDashboard } from '../../src/router/component-loaders.js';
 
 const legacyGate = vi.hoisted(() => {
@@ -53,7 +56,7 @@ vi.mock('../../src/stores/useDataStore.js', async () => {
         useDataStore: defineStore('data', () => ({
             isDirty: ref(false),
             saveState: ref('idle'),
-            fetchData: vi.fn(async () => {}),
+            fetchData: vi.fn(async () => true),
         })),
     };
 });
@@ -89,6 +92,32 @@ const mountApp = (router, layoutMode = 'modern') => {
 afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
 
 describe('authenticated dashboard first render', () => {
+    it.each([false, true])(
+        'announces discarded changes only after a successful reload (%s)',
+        async (success) => {
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [{ path: '/dashboard', name: 'Dashboard', component: panel }],
+            });
+            await router.push('/dashboard');
+            const wrapper = mountApp(router);
+            await flushPromises();
+            const store = useDataStore(wrapper.vm.$pinia);
+            store.isDirty = true;
+            const fetchData = vi.spyOn(store, 'fetchData').mockResolvedValue(success);
+            const toast = vi.spyOn(useToastStore(wrapper.vm.$pinia), 'showToast');
+            await flushPromises();
+
+            wrapper.findComponent(SavePrompt).vm.$emit('discard');
+            await flushPromises();
+
+            expect(fetchData).toHaveBeenLastCalledWith(true);
+            expect(toast).toHaveBeenCalledTimes(success ? 1 : 0);
+            fetchData.mockRestore();
+            toast.mockRestore();
+        }
+    );
+
     it('keeps the loading screen and hides the footer while the initial route chunk is pending', async () => {
         let finishRoute;
         const routeChunk = new Promise((resolve) => {

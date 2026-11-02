@@ -263,7 +263,7 @@
         await dataStore.saveData();
     };
     const handleDiscard = async () => {
-        await dataStore.fetchData(true);
+        if (!(await dataStore.fetchData(true))) return;
         toastStore.showToast(t('notices.discardedChanges'));
     };
 

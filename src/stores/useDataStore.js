@@ -69,16 +69,15 @@ export const useDataStore = defineStore('data', () => {
     }
 
     async function fetchData(forceRefresh = false) {
-        if (isLoading.value) return;
+        if (isLoading.value) return false;
 
         // Effective Cache Check
-        if (hasDataLoaded.value && !forceRefresh) return;
+        if (hasDataLoaded.value && !forceRefresh) return true;
 
         if (!forceRefresh) {
             const cachedData = dataCache.get();
-            if (cachedData) {
-                hydrateFromData(cachedData);
-                return;
+            if (cachedData && hydrateFromData(cachedData)) {
+                return true;
             }
         }
 
@@ -90,14 +89,21 @@ export const useDataStore = defineStore('data', () => {
                 throw new Error(data.error);
             }
 
-            hydrateFromData(data); // Re-use hydration logic
+            if (!hydrateFromData(data)) {
+                throw new Error('Invalid data response');
+            }
             pruneInvalidReferences(); // 数据拉取后执行自愈
             clearDirty();
+            return true;
         } catch (error) {
-            if (error?.cancelled) return;
+            if (error?.cancelled) return false;
             console.error('Failed to fetch data:', error);
-            showToast(t('store.fetchDataFailed', { message: error.message }), 'error');
-            throw error;
+            showToast(
+                t('store.fetchDataFailed', { message: error?.message || String(error) }),
+                'error'
+            );
+            // 错误已在这里提示，返回失败结果以免调用方触发第二次全局提示。
+            return false;
         } finally {
             isLoading.value = false;
         }
@@ -106,16 +112,16 @@ export const useDataStore = defineStore('data', () => {
     async function saveData() {
         if (isLoading.value) {
             showToast(t('store.tooFrequent'), 'warning');
-            return;
+            return false;
         }
 
         isLoading.value = true;
         saveState.value = 'saving';
 
-        // 保存前执行数据自愈，确保发往后端的数据是干净的
-        pruneInvalidReferences();
-
         try {
+            // 保存前执行数据自愈，确保发往后端的数据是干净的
+            pruneInvalidReferences();
+
             const sanitizedSubs = subscriptions.value.map((sub) => {
                 const { isUpdating, ...rest } = sub;
                 return rest;
@@ -168,11 +174,16 @@ export const useDataStore = defineStore('data', () => {
                 ruleTemplates: ruleTemplates.value,
                 config: settingsStore.config,
             });
+            return true;
         } catch (error) {
-            console.error('[Store] Failed to save data:', error);
-            showToast(t('store.saveDataFailed', { message: error.message }), 'error');
             saveState.value = 'idle';
-            throw error;
+            if (error?.cancelled) return false;
+            console.error('[Store] Failed to save data:', error);
+            showToast(
+                t('store.saveDataFailed', { message: error?.message || String(error) }),
+                'error'
+            );
+            return false;
         } finally {
             isLoading.value = false;
         }
