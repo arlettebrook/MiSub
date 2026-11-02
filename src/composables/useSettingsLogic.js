@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useToastStore } from '../stores/toast.js';
 import { DEFAULT_SETTINGS } from '../constants/default-settings.js';
 import { fetchSettings, saveSettings, resetSettings } from '../lib/api.js';
@@ -25,7 +25,7 @@ function normalizeExternalApiConfig(value) {
 }
 
 function normalizeSettingsObject(source = {}) {
-    const merged = { ...DEFAULT_SETTINGS, ...source };
+    const merged = JSON.parse(JSON.stringify({ ...DEFAULT_SETTINGS, ...source }));
     merged.externalApi = normalizeExternalApiConfig(source.externalApi ?? merged.externalApi);
     return merged;
 }
@@ -53,6 +53,14 @@ export function useSettingsLogic() {
         redirectUrl: '',
     });
 
+    const settingsSnapshot = computed(() =>
+        JSON.stringify({ ...settings.value, disguise: disguiseConfig.value })
+    );
+    const savedSnapshot = ref(settingsSnapshot.value);
+    const hasUnsavedChanges = computed(
+        () => !isLoading.value && settingsSnapshot.value !== savedSnapshot.value
+    );
+
     // ========== 计算属性 ==========
     const hasWhitespace = computed(() => {
         const fieldsCheck = [
@@ -78,20 +86,22 @@ export function useSettingsLogic() {
      */
     const loadSettings = async () => {
         isLoading.value = true;
+        let cancelled = false;
         try {
             const result = await fetchSettings();
-            if (result.cancelled) return;
+            if (result.cancelled) {
+                cancelled = true;
+                return;
+            }
             if (result.success) {
                 const incoming = result.data && typeof result.data === 'object' ? result.data : {};
                 settings.value = normalizeSettingsObject(incoming);
 
-                if (settings.value.disguise) {
-                    disguiseConfig.value = {
-                        enabled: settings.value.disguise.enabled ?? false,
-                        pageType: settings.value.disguise.pageType ?? 'default',
-                        redirectUrl: settings.value.disguise.redirectUrl ?? '',
-                    };
-                }
+                disguiseConfig.value = {
+                    enabled: settings.value.disguise?.enabled ?? false,
+                    pageType: settings.value.disguise?.pageType ?? 'default',
+                    redirectUrl: settings.value.disguise?.redirectUrl ?? '',
+                };
 
                 if (!settings.value.storageType) {
                     settings.value.storageType = 'kv';
@@ -110,6 +120,9 @@ export function useSettingsLogic() {
             settings.value = normalizeSettingsObject(DEFAULT_SETTINGS);
         } finally {
             isLoading.value = false;
+            // Include defaults hydrated by the settings sections during their first render.
+            await nextTick();
+            if (!cancelled) savedSnapshot.value = settingsSnapshot.value;
         }
     };
 
@@ -117,6 +130,7 @@ export function useSettingsLogic() {
      * 保存设置到 API
      */
     const handleSave = async () => {
+        if (isLoading.value || isSaving.value) return false;
         if (hasWhitespace.value) {
             showToast(t('settings.noWhitespace'), 'error');
             return false;
@@ -131,11 +145,14 @@ export function useSettingsLogic() {
             if (!settings.value.storageType) settings.value.storageType = 'kv';
             settings.value.externalApi = normalizeExternalApiConfig(settings.value.externalApi);
 
-            const settingsToSave = {
-                ...settings.value,
-                externalApi: normalizeExternalApiConfig(settings.value.externalApi),
-                disguise: disguiseConfig.value,
-            };
+            const submittedSnapshot = settingsSnapshot.value;
+            const settingsToSave = JSON.parse(
+                JSON.stringify({
+                    ...settings.value,
+                    externalApi: normalizeExternalApiConfig(settings.value.externalApi),
+                    disguise: disguiseConfig.value,
+                })
+            );
 
             settingsToSave.ruleLevel =
                 settingsToSave.ruleLevel || settingsToSave.clashRuleLevel || 'std';
@@ -147,6 +164,7 @@ export function useSettingsLogic() {
 
             const result = await saveSettings(settingsToSave);
             if (result.success) {
+                savedSnapshot.value = submittedSnapshot;
                 showToast(t('settings.savedReloading'), 'success');
                 setTimeout(() => window.location.reload(), 1500);
                 return true;
@@ -203,6 +221,7 @@ export function useSettingsLogic() {
         disguiseConfig,
         isLoading,
         isSaving,
+        hasUnsavedChanges,
         showMigrationModal,
         hasWhitespace,
         isStorageTypeValid,

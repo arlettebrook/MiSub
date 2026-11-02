@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, computed, onMounted, onActivated, watch } from 'vue';
+    import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
     import { useRoute } from 'vue-router';
     import { useI18n } from '../i18n/index.js';
     import MigrationModal from '../components/modals/MigrationModal.vue';
@@ -7,6 +7,7 @@
     import SettingsLayout from '../components/layout/SettingsLayout.vue';
 
     import SettingsSidebar from '../components/settings/SettingsSidebar.vue';
+    import SettingsSaveButton from '../components/settings/SettingsSaveButton.vue';
     import BasicSettings from '../components/settings/sections/BasicSettings.vue';
     import HomeSettings from '../components/settings/sections/HomeSettings.vue';
     import ServiceSettings from '../components/settings/sections/ServiceSettings.vue';
@@ -25,6 +26,7 @@
         disguiseConfig,
         isLoading,
         isSaving,
+        hasUnsavedChanges,
         showMigrationModal,
         hasWhitespace,
         isStorageTypeValid,
@@ -41,6 +43,49 @@
     const route = useRoute();
     const emit = defineEmits(['content-ready']);
     const settingsRoutePath = route.path;
+    const bottomSaveAction = ref(null);
+    const isBottomSaveVisible = ref(true);
+    const floatingSaveTop = ref(0);
+    const isSaveDisabled = computed(
+        () => isLoading.value || isSaving.value || hasWhitespace.value || !isStorageTypeValid.value
+    );
+    const showFloatingSave = computed(
+        () => hasUnsavedChanges.value && !isLoading.value && !isBottomSaveVisible.value
+    );
+    let saveVisibilityObserver;
+
+    const observeBottomSave = () => {
+        saveVisibilityObserver?.disconnect();
+        const button = bottomSaveAction.value;
+        if (!button) return;
+
+        const headerBottom = Math.max(
+            0,
+            ...Array.from(document.querySelectorAll('.app-nav-bar')).map(
+                (header) => header.getBoundingClientRect().bottom
+            )
+        );
+        const mobileNavHeight =
+            document.querySelector('.mobile-nav-glass')?.getBoundingClientRect().height || 0;
+        floatingSaveTop.value = headerBottom + 12;
+        const rect = button.getBoundingClientRect();
+        isBottomSaveVisible.value =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            rect.bottom > headerBottom &&
+            rect.top < window.innerHeight - mobileNavHeight;
+
+        if (typeof IntersectionObserver === 'undefined') return;
+        saveVisibilityObserver = new IntersectionObserver(
+            ([entry]) => {
+                isBottomSaveVisible.value = entry.isIntersecting;
+            },
+            { rootMargin: `-${headerBottom}px 0px -${mobileNavHeight}px 0px` }
+        );
+        saveVisibilityObserver.observe(button);
+    };
+
+    watch(bottomSaveAction, observeBottomSave, { flush: 'post' });
 
     const loadPageSettings = async () => {
         await loadSettings();
@@ -78,6 +123,12 @@
 
     onMounted(() => {
         loadPageSettings();
+        window.addEventListener('resize', observeBottomSave);
+    });
+
+    onBeforeUnmount(() => {
+        saveVisibilityObserver?.disconnect();
+        window.removeEventListener('resize', observeBottomSave);
     });
 
     onActivated(() => {
@@ -175,42 +226,26 @@
             </div>
 
             <template #footer>
-                <button
-                    type="button"
-                    @click="handleSave"
-                    :disabled="isLoading || isSaving || hasWhitespace || !isStorageTypeValid"
-                    class="min-h-11 min-w-28 shrink-0 justify-center px-6 py-2.5 misub-radius-lg text-white text-sm font-medium shadow-sm transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                    :class="
-                        isSaving
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-primary-600 hover:bg-primary-700 hover:shadow-md active:scale-95'
-                    "
-                >
-                    <svg
-                        v-if="isSaving"
-                        class="animate-spin h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                    >
-                        <circle
-                            class="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            stroke-width="4"
-                        ></circle>
-                        <path
-                            class="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                    </svg>
-                    <span>{{ isSaving ? t('settings.saving') : t('settings.saveChanges') }}</span>
-                </button>
+                <div ref="bottomSaveAction">
+                    <SettingsSaveButton
+                        :is-saving="isSaving"
+                        :disabled="isSaveDisabled"
+                        @save="handleSave"
+                    />
+                </div>
             </template>
         </SettingsLayout>
+
+        <Teleport to="body">
+            <SettingsSaveButton
+                v-if="showFloatingSave"
+                class="settings-floating-save"
+                :style="{ top: `${floatingSaveTop}px` }"
+                :is-saving="isSaving"
+                :disabled="isSaveDisabled"
+                @save="handleSave"
+            />
+        </Teleport>
 
         <!-- Modals -->
         <MigrationModal v-model:show="showMigrationModal" @success="handleMigrationSuccess" />
@@ -218,12 +253,23 @@
 </template>
 
 <style scoped>
-    @media (width < 48rem) {
-        /* Keep saving at the end of the form, above the floating page controls. */
-        .settings-page-layout :deep(.settings-layout-footer) {
-            position: static;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
+    .settings-floating-save {
+        position: fixed;
+        right: max(1rem, env(safe-area-inset-right, 0px));
+        z-index: 30;
+        box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+    }
+
+    @media (width >= 48rem) {
+        .settings-floating-save {
+            right: max(1.5rem, calc((100vw - 80rem) / 2 + 2rem));
         }
+    }
+
+    /* Keep the page save action at the end of the form on every screen size. */
+    .settings-page-layout :deep(.settings-layout-footer) {
+        position: static;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
     }
 </style>

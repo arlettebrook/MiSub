@@ -1,0 +1,152 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref, nextTick } from 'vue';
+import { mount, flushPromises } from '@vue/test-utils';
+import { createI18n } from '../../src/i18n/index.js';
+
+const controls = vi.hoisted(() => ({ logic: null }));
+vi.mock('../../src/composables/useSettingsLogic.js', () => ({
+    useSettingsLogic: () => controls.logic,
+}));
+vi.mock('vue-router', () => ({
+    useRoute: () => ({ path: '/dashboard/settings' }),
+}));
+
+import SettingsView from '../../src/views/SettingsView.vue';
+
+describe('settings floating save button', () => {
+    let wrapper;
+    let observers;
+    const floatingButton = () => document.querySelector('.settings-floating-save');
+    const setBottomVisible = async (visible) => {
+        observers.at(-1).callback([{ isIntersecting: visible }]);
+        await nextTick();
+    };
+
+    beforeEach(() => {
+        observers = [];
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                constructor(callback, options) {
+                    this.callback = callback;
+                    this.options = options;
+                    this.disconnect = vi.fn();
+                    this.observe = vi.fn();
+                    observers.push(this);
+                }
+            }
+        );
+        controls.logic = {
+            settings: ref({}),
+            disguiseConfig: ref({}),
+            isLoading: ref(false),
+            isSaving: ref(false),
+            hasUnsavedChanges: ref(false),
+            showMigrationModal: ref(false),
+            hasWhitespace: ref(false),
+            isStorageTypeValid: ref(true),
+            loadSettings: vi.fn(async () => {}),
+            handleSave: vi.fn(),
+            handleMigrationSuccess: vi.fn(),
+            handleReset: vi.fn(),
+            exportBackup: vi.fn(),
+            importBackup: vi.fn(),
+        };
+    });
+
+    afterEach(() => {
+        wrapper?.unmount();
+        document.body.innerHTML = '';
+        vi.unstubAllGlobals();
+    });
+
+    const mountPage = async () => {
+        wrapper = mount(SettingsView, {
+            attachTo: document.body,
+            global: {
+                plugins: [createI18n({ initialLocale: 'zh-CN' })],
+                stubs: {
+                    SettingsSidebar: true,
+                    BasicSettings: true,
+                    HomeSettings: true,
+                    GlobalSettings: true,
+                    ServiceSettings: true,
+                    ClientSettings: true,
+                    CustomPageSettings: true,
+                    WebdavBackupSettings: true,
+                    SystemSettings: true,
+                    MigrationModal: true,
+                },
+            },
+        });
+        await flushPromises();
+    };
+
+    it('only floats unsaved changes while the permanent bottom button is out of view', async () => {
+        await mountPage();
+        const bottom = wrapper.find('.settings-layout-footer button');
+        expect(bottom.text()).toBe('保存修改');
+        await setBottomVisible(false);
+        expect(floatingButton()).toBeNull();
+
+        controls.logic.hasUnsavedChanges.value = true;
+        await nextTick();
+        expect(floatingButton()?.textContent).toContain('保存修改');
+        expect(bottom.exists()).toBe(true);
+
+        await setBottomVisible(true);
+        expect(floatingButton()).toBeNull();
+        await setBottomVisible(false);
+        expect(floatingButton()).not.toBeNull();
+
+        controls.logic.hasUnsavedChanges.value = false;
+        await nextTick();
+        expect(floatingButton()).toBeNull();
+    });
+
+    it('uses the same save handler, validation, and saving state for both buttons', async () => {
+        await mountPage();
+        await setBottomVisible(false);
+        controls.logic.hasUnsavedChanges.value = true;
+        await nextTick();
+        floatingButton().click();
+        await wrapper.find('.settings-layout-footer button').trigger('click');
+        expect(controls.logic.handleSave).toHaveBeenCalledTimes(2);
+
+        controls.logic.hasWhitespace.value = true;
+        await nextTick();
+        expect(floatingButton().disabled).toBe(true);
+        expect(wrapper.find('.settings-layout-footer button').element.disabled).toBe(true);
+
+        controls.logic.hasWhitespace.value = false;
+        controls.logic.isStorageTypeValid.value = false;
+        await nextTick();
+        expect(floatingButton().disabled).toBe(true);
+
+        controls.logic.isStorageTypeValid.value = true;
+        controls.logic.isSaving.value = true;
+        await nextTick();
+        expect(floatingButton().disabled).toBe(true);
+        expect(floatingButton().textContent).toContain('保存中');
+    });
+
+    it('accounts for mobile navigation and refreshes observation when the viewport changes', async () => {
+        const header = document.createElement('header');
+        header.className = 'app-nav-bar';
+        header.getBoundingClientRect = () => ({ bottom: 52 });
+        const nav = document.createElement('nav');
+        nav.className = 'mobile-nav-glass';
+        nav.getBoundingClientRect = () => ({ height: 65 });
+        document.body.append(header, nav);
+        await mountPage();
+        expect(observers.at(-1).options.rootMargin).toBe('-52px 0px -65px 0px');
+        const oldObserver = observers.at(-1);
+        window.dispatchEvent(new Event('resize'));
+        expect(oldObserver.disconnect).toHaveBeenCalled();
+        expect(observers.at(-1)).not.toBe(oldObserver);
+        const finalObserver = observers.at(-1);
+        wrapper.unmount();
+        wrapper = null;
+        expect(finalObserver.disconnect).toHaveBeenCalled();
+    });
+});
