@@ -36,11 +36,12 @@ export const useSessionStore = defineStore('session', () => {
         customPage: { ...defaultPublicConfig.customPage },
     }); // Default true until fetched
 
-    async function checkSession() {
+    async function checkSession(navigationReady) {
         // Parallel fetch of initial data (auth check) and public config
         const [dataResult, pConfigResult] = await Promise.all([
             fetchInitialData(),
             fetchPublicConfig(),
+            navigationReady,
         ]);
 
         // Update public config
@@ -88,17 +89,17 @@ export const useSessionStore = defineStore('session', () => {
         const result = await apiLogin(password);
         if (result.success) {
             securityWarning.value = result.data?.securityWarning || null;
-            handleLoginSuccess();
-            // 登录成功后跳转到仪表盘
-            router.push({ path: '/dashboard' });
+            sessionState.value = 'loading';
+            try {
+                // Fetch session data and the dashboard chunk together, then reveal the page.
+                await checkSession(router.push({ path: '/dashboard' }));
+            } catch (error) {
+                sessionState.value = 'loggedOut';
+                throw error;
+            }
         } else {
             throw new Error(result.error || t('settings.loginFailed'));
         }
-    }
-
-    function handleLoginSuccess() {
-        sessionState.value = 'loading';
-        checkSession();
     }
 
     async function logout() {

@@ -3,6 +3,7 @@
     import { useSessionStore } from '../stores/session';
     import { storeToRefs } from 'pinia';
     import { useRoute, useRouter } from 'vue-router';
+    import DashboardLoading from '../components/ui/DashboardLoading.vue';
 
     // Lazy load components
     const PublicProfilesView = defineAsyncComponent(() => import('./PublicProfilesView.vue'));
@@ -32,9 +33,9 @@
         }
 
         // 2. 根路径 /
-        // 已登录：显示空白（等待 watchEffect 执行重定向）
+        // Keep a dashboard placeholder visible while the target route chunk loads.
         if (sessionState.value === 'loggedIn') {
-            return { template: '<div></div>' };
+            return DashboardLoading;
         }
 
         // 未登录 + 公开页关闭：显示 404 (Disguise)

@@ -1,7 +1,7 @@
 <script setup>
     import { defineAsyncComponent, onMounted, watch, computed, ref } from 'vue';
     import RouteErrorBoundary from './components/ui/RouteErrorBoundary.vue';
-    import { useRoute } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
     import { useThemeStore } from './stores/theme';
     import { useSessionStore } from './stores/session';
     import { useToastStore } from './stores/toast';
@@ -10,6 +10,8 @@
     import { useVersionStore } from './stores/version';
     import { storeToRefs } from 'pinia';
     import NavBar from './components/layout/NavBar.vue';
+    import Footer from './components/layout/Footer.vue';
+    import DashboardLoading from './components/ui/DashboardLoading.vue';
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
 
@@ -17,10 +19,11 @@
     const Login = defineAsyncComponent(() => import('./components/modals/Login.vue'));
     const NotFound = defineAsyncComponent(() => import('./views/NotFound.vue'));
     const Toast = defineAsyncComponent(() => import('./components/ui/Toast.vue'));
-    const Footer = defineAsyncComponent(() => import('./components/layout/Footer.vue'));
-    const Dashboard = defineAsyncComponent(
-        () => import('./components/features/Dashboard/Dashboard.vue')
-    );
+    const Dashboard = defineAsyncComponent({
+        loader: () => import('./components/features/Dashboard/Dashboard.vue'),
+        loadingComponent: DashboardLoading,
+        delay: 0,
+    });
     const Header = defineAsyncComponent(() => import('./components/layout/Header.vue'));
     const SavePrompt = defineAsyncComponent(() => import('./components/ui/SavePrompt.vue'));
     const ScrollToTop = defineAsyncComponent(() => import('./components/ui/ScrollToTop.vue'));
@@ -32,6 +35,7 @@
     );
 
     const route = useRoute();
+    const router = useRouter();
     const { t } = useI18n();
     const themeStore = useThemeStore();
     const { theme } = storeToRefs(themeStore);
@@ -59,9 +63,48 @@
 
     const isLoggedIn = computed(() => sessionState.value === 'loggedIn');
     const isPublicRoute = computed(() => route.meta.isPublic);
-    const isSessionLoading = computed(() => sessionState.value === 'loading');
+    const isInitialRouteReady = ref(false);
+    const authenticatedContentKey = computed(() => `${layoutMode.value}:${route.path}`);
+    const readyAuthenticatedContentKey = ref(null);
+    const hasAuthenticatedContentMounted = computed(
+        () => readyAuthenticatedContentKey.value === authenticatedContentKey.value
+    );
+    const isPageLoading = computed(
+        () => sessionState.value === 'loading' || !isInitialRouteReady.value
+    );
 
-    const showModernNavBar = computed(() => isLoggedIn.value && layoutMode.value === 'modern');
+    watch(
+        [isLoggedIn, layoutMode],
+        () => {
+            readyAuthenticatedContentKey.value = null;
+        },
+        { flush: 'sync' }
+    );
+
+    const markMainContentReady = () => {
+        // Home redirects authenticated visitors; its temporary placeholder is not the page.
+        if (
+            isLoggedIn.value &&
+            (layoutMode.value === 'legacy' || !['Home', 'Entrance'].includes(route.name))
+        ) {
+            readyAuthenticatedContentKey.value = authenticatedContentKey.value;
+        }
+    };
+
+    const handleMainContentMounted = () => {
+        // Settings has a separate initial data request after its component mounts.
+        if (layoutMode.value === 'modern' && route.name === 'Settings') return;
+        markMainContentReady();
+    };
+
+    const handleMainContentReady = (path) => {
+        // Ignore requests that finish after the user has left their page.
+        if (path === route.path) markMainContentReady();
+    };
+
+    const showModernNavBar = computed(
+        () => isLoggedIn.value && !isPageLoading.value && layoutMode.value === 'modern'
+    );
     const shouldHidePublicBranding = computed(() => {
         if (isLoggedIn.value || !isPublicRoute.value) return false;
         return (
@@ -86,21 +129,25 @@
     });
 
     const showLegacyHeader = computed(() => {
+        if (isPageLoading.value) return false;
         if (showModernNavBar.value) return false;
         if (isLoggedIn.value) return true;
-        if (isSessionLoading.value || !isPublicRoute.value) return false;
+        if (!isPublicRoute.value) return false;
         return !shouldHidePublicHeader.value;
     });
     const showPublicFooter = computed(() => {
         return !shouldHidePublicFooter.value;
     });
     const shouldShowFooter = computed(
-        () => !isSessionLoading.value && (!isPublicRoute.value || showPublicFooter.value)
+        () =>
+            !isPageLoading.value &&
+            (!isLoggedIn.value || hasAuthenticatedContentMounted.value) &&
+            (!isPublicRoute.value || showPublicFooter.value)
     );
 
     const shouldCenterMain = computed(
         () =>
-            isSessionLoading.value ||
+            isPageLoading.value ||
             (!isLoggedIn.value && (!isPublicRoute.value || route.name === 'Entrance'))
     );
 
@@ -133,7 +180,10 @@
 
     onMounted(async () => {
         initTheme();
-        await checkSession();
+        const initialNavigation = router.isReady().finally(() => {
+            isInitialRouteReady.value = true;
+        });
+        await Promise.all([checkSession(), initialNavigation]);
     });
 
     watch(
@@ -246,7 +296,7 @@
             ]"
         >
             <div
-                v-if="sessionState === 'loading'"
+                v-if="isPageLoading"
                 class="flex flex-col items-center justify-center p-8"
                 role="status"
                 aria-live="polite"
@@ -344,12 +394,16 @@
                 <router-view v-if="layoutMode === 'modern'" v-slot="{ Component }">
                     <transition name="fade" mode="out-in">
                         <RouteErrorBoundary :reset-key="route.fullPath">
-                            <component :is="Component" />
+                            <component
+                                :is="Component"
+                                @vue:mounted="handleMainContentMounted"
+                                @content-ready="handleMainContentReady"
+                            />
                         </RouteErrorBoundary>
                     </transition>
                 </router-view>
 
-                <Dashboard v-else />
+                <Dashboard v-else @vue:mounted="handleMainContentMounted" />
             </template>
 
             <!-- PUBLIC ROUTE VIEW (Not logged in, but isPublic) -->

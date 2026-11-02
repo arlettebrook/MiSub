@@ -39,6 +39,13 @@
     // 仅新布局需要的状态
     const activeTab = ref('basic');
     const route = useRoute();
+    const emit = defineEmits(['content-ready']);
+    const settingsRoutePath = route.path;
+
+    const loadPageSettings = async () => {
+        await loadSettings();
+        emit('content-ready', settingsRoutePath);
+    };
 
     const currentTabLabel = computed(() => {
         switch (activeTab.value) {
@@ -70,11 +77,11 @@
     // 备份函数已由 composable 提供
 
     onMounted(() => {
-        loadSettings();
+        loadPageSettings();
     });
 
     onActivated(() => {
-        loadSettings();
+        loadPageSettings();
     });
 
     watch(
@@ -82,7 +89,7 @@
         (path) => {
             if (path === '/settings') {
                 activeTab.value = 'basic';
-                loadSettings();
+                loadPageSettings();
             }
         }
     );
