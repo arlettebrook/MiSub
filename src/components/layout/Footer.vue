@@ -83,6 +83,13 @@
         animation: footer-reveal 160ms ease-out;
     }
 
+    @media (width >= 48rem) {
+        .footer-revealed {
+            margin-top: 0;
+            padding: 1rem 2rem;
+        }
+    }
+
     @keyframes footer-reveal {
         from {
             opacity: 0;
