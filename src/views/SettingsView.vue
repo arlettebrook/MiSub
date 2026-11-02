@@ -96,7 +96,8 @@
 </script>
 
 <template>
-    <div class="pt-0 md:pb-6 md:min-h-[calc(100vh-80px)]">
+    <!-- Leave room below the form for the shared floating page controls. -->
+    <div class="pt-0 pb-16 md:min-h-[calc(100vh-80px)]">
         <div
             class="mb-4 bg-white/80 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg p-4"
         >
@@ -176,9 +177,10 @@
 
             <template #footer>
                 <button
+                    type="button"
                     @click="handleSave"
-                    :disabled="isSaving || hasWhitespace || !isStorageTypeValid"
-                    class="px-6 py-2.5 misub-radius-lg text-white text-sm font-medium shadow-sm transition-all flex items-center gap-2"
+                    :disabled="isLoading || isSaving || hasWhitespace || !isStorageTypeValid"
+                    class="min-h-11 min-w-28 shrink-0 justify-center px-6 py-2.5 misub-radius-lg text-white text-sm font-medium shadow-sm transition-all flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     :class="
                         isSaving
                             ? 'bg-gray-400 cursor-not-allowed'
@@ -215,3 +217,14 @@
         <MigrationModal v-model:show="showMigrationModal" @success="handleMigrationSuccess" />
     </div>
 </template>
+
+<style scoped>
+    @media (width < 48rem) {
+        /* Keep saving at the end of the form, above the floating page controls. */
+        .settings-page-layout :deep(.settings-layout-footer) {
+            position: static;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+    }
+</style>

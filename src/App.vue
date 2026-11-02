@@ -477,10 +477,6 @@
             margin-top: 0;
             padding: 1rem;
         }
-
-        .app-shell-mobile-nav .settings-page-layout .settings-layout-footer {
-            bottom: var(--mobile-nav-height);
-        }
     }
 
     .app-main-centered {
