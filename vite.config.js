@@ -81,8 +81,13 @@ export default defineConfig({
     },
     // 路径解析
     resolve: {
-        alias: {
-            '@': '/src',
-        },
+        alias: [
+            { find: '@', replacement: '/src' },
+            {
+                // UMD 内含 Vue 运行时编译器；ESM 源码只使用 Vue runtime。
+                find: /^vuedraggable$/,
+                replacement: 'vuedraggable/src/vuedraggable',
+            },
+        ],
     },
 });
