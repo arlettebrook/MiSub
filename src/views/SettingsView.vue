@@ -39,7 +39,36 @@
     } = useSettingsLogic();
 
     // 仅新布局需要的状态
-    const activeTab = ref('basic');
+    const settingsTabStorageKey = 'misub:settings-active-tab';
+    const settingsTabIds = new Set([
+        'basic',
+        'home',
+        'custom-page',
+        'global',
+        'service',
+        'client',
+        'system',
+    ]);
+    const restoreActiveTab = () => {
+        try {
+            const savedTab = sessionStorage.getItem(settingsTabStorageKey);
+            return settingsTabIds.has(savedTab) ? savedTab : 'basic';
+        } catch {
+            return 'basic';
+        }
+    };
+    const activeTab = ref(restoreActiveTab());
+    watch(
+        activeTab,
+        (tab) => {
+            try {
+                sessionStorage.setItem(settingsTabStorageKey, tab);
+            } catch {
+                // Tab switching still works when browser storage is unavailable.
+            }
+        },
+        { flush: 'sync' }
+    );
     const route = useRoute();
     const emit = defineEmits(['content-ready']);
     const settingsRoutePath = route.path;
@@ -138,8 +167,7 @@
     watch(
         () => route.path,
         (path) => {
-            if (path === '/settings') {
-                activeTab.value = 'basic';
+            if (path === settingsRoutePath) {
                 loadPageSettings();
             }
         }
@@ -263,7 +291,7 @@
 
     @media (width >= 48rem) {
         .settings-floating-save {
-            top: calc(var(--settings-header-bottom, 0px) + 2rem);
+            top: calc(var(--settings-header-bottom, 0px) + 1.75rem);
             right: max(1.5rem, calc((100vw - 80rem) / 2 + 2rem));
         }
     }
