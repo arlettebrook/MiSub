@@ -42,7 +42,11 @@
         :aria-label="t('nav.top')"
         class="app-nav-bar mobile-nav-header md:hidden sticky top-0 z-50 flex items-center justify-between px-4 py-2.5 w-full border-b transition-colors duration-300"
     >
-        <BrandLogo text-size-class="text-lg" :icon-size="32" />
+        <BrandLogo
+            :to="isLoggedIn ? '/dashboard' : '/'"
+            text-size-class="text-lg"
+            :icon-size="32"
+        />
 
         <NavActionGroup
             :is-logged-in="isLoggedIn"
@@ -63,7 +67,11 @@
             class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 md:h-[76px] flex items-center justify-between"
         >
             <div class="shrink-0 pr-5">
-                <BrandLogo text-size-class="text-lg" :icon-size="32" />
+                <BrandLogo
+                    :to="isLoggedIn ? '/dashboard' : '/'"
+                    text-size-class="text-lg"
+                    :icon-size="32"
+                />
             </div>
 
             <nav :aria-label="t('nav.main')" class="nav-tab-shell">

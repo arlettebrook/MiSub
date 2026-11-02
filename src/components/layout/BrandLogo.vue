@@ -10,11 +10,15 @@
             type: Number,
             default: 28,
         },
+        to: {
+            type: String,
+            default: '/',
+        },
     });
 </script>
 
 <template>
-    <router-link to="/" class="nav-brand-wrap">
+    <router-link :to="to" class="nav-brand-wrap">
         <div class="nav-brand-badge nav-brand-badge-sm" aria-hidden="true">
             <img :width="iconSize" :height="iconSize" :src="brandLogo" alt="MiSub" />
         </div>
