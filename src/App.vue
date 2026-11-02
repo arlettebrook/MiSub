@@ -134,6 +134,7 @@
     const showPublicFooter = computed(() => {
         return !shouldHidePublicFooter.value;
     });
+    const revealedFooterHeight = ref(0);
     const shouldShowFooter = computed(
         () =>
             !isPageLoading.value &&
@@ -442,8 +443,16 @@
             @confirm="handleVersionModalConfirm"
             @suppress="handleVersionModalSuppress"
         />
-        <Footer v-if="shouldShowFooter" :hide-branding="shouldHidePublicBranding" />
-        <ScrollToTop v-if="isLoggedIn || isPublicRoute" :above-mobile-nav="showModernNavBar" />
+        <Footer
+            v-if="shouldShowFooter"
+            :hide-branding="shouldHidePublicBranding"
+            @visible-height="revealedFooterHeight = $event"
+        />
+        <ScrollToTop
+            v-if="isLoggedIn || isPublicRoute"
+            :above-mobile-nav="showModernNavBar"
+            :footer-offset="revealedFooterHeight"
+        />
     </div>
 </template>
 

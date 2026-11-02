@@ -1,6 +1,8 @@
 <script setup>
-    import { computed } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
     import { useVersionStore } from '../../stores/version';
+    import { useRoute } from 'vue-router';
+    import { useFooterReveal } from '../../composables/useFooterReveal.js';
     import packageJson from '../../../package.json';
 
     defineProps({
@@ -9,14 +11,46 @@
             default: false,
         },
     });
+    const emit = defineEmits(['visible-height']);
 
     const versionStore = useVersionStore();
+    const route = useRoute();
+    const { footer, isRevealed } = useFooterReveal(() => route.fullPath);
+    let resizeObserver;
+    const publishHeight = () => {
+        const element = footer.value;
+        const style = element ? getComputedStyle(element) : null;
+        const height =
+            isRevealed.value && element
+                ? element.getBoundingClientRect().height +
+                  (parseFloat(style.marginTop) || 0) +
+                  (parseFloat(style.marginBottom) || 0)
+                : 0;
+        emit('visible-height', height);
+    };
+    watch(isRevealed, publishHeight, { flush: 'post' });
+    onMounted(() => {
+        if (typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(publishHeight);
+            resizeObserver.observe(footer.value);
+        }
+    });
+    onBeforeUnmount(() => {
+        resizeObserver?.disconnect();
+        emit('visible-height', 0);
+    });
     const currentYear = computed(() => new Date().getFullYear());
     const currentVersion = packageJson.version;
 </script>
 
 <template>
-    <footer class="w-full text-center p-8 border-t border-gray-200 dark:border-white/10 mt-8">
+    <footer
+        ref="footer"
+        v-show="isRevealed"
+        tabindex="-1"
+        class="w-full text-center p-8 border-t border-gray-200 dark:border-white/10 mt-8"
+        :class="{ 'footer-revealed': isRevealed }"
+    >
         <div
             class="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-gray-400 dark:text-gray-500"
         >
@@ -43,3 +77,24 @@
         </div>
     </footer>
 </template>
+
+<style scoped>
+    .footer-revealed {
+        animation: footer-reveal 160ms ease-out;
+    }
+
+    @keyframes footer-reveal {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .footer-revealed {
+            animation: none;
+        }
+    }
+</style>
