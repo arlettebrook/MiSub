@@ -120,11 +120,14 @@ export function useSubscriptions(markDirty) {
                 subToUpdate.url,
                 subToUpdate.fetchProxy,
                 Boolean(subToUpdate.plusAsSpace),
-                subToUpdate.customUserAgent
+                subToUpdate.customUserAgent,
+                { background: isInitialLoad }
             );
 
             // 清除超时保护
             clearTimeout(timeoutId);
+
+            if (result.cancelled) return;
 
             // 检查是否成功
             if (!result.success) {
@@ -388,6 +391,25 @@ export function useSubscriptions(markDirty) {
     const DEFAULT_INTERVAL_MS = TIMING.AUTO_UPDATE_INTERVAL_MS;
     let autoUpdateTimerId = null;
     let currentIntervalMs = DEFAULT_INTERVAL_MS;
+    let autoUpdateEnabled = false;
+
+    function pauseAutoUpdate() {
+        if (autoUpdateTimerId) clearInterval(autoUpdateTimerId);
+        autoUpdateTimerId = null;
+    }
+
+    function resumeAutoUpdate() {
+        if (!autoUpdateEnabled || autoUpdateTimerId || document.visibilityState === 'hidden')
+            return;
+        autoUpdateTimerId = setInterval(() => {
+            void autoUpdateAllSubscriptions();
+        }, currentIntervalMs);
+    }
+
+    function handleAutoUpdateVisibility() {
+        if (document.visibilityState === 'hidden') pauseAutoUpdate();
+        else resumeAutoUpdate();
+    }
 
     async function autoUpdateAllSubscriptions() {
         try {
@@ -395,6 +417,7 @@ export function useSubscriptions(markDirty) {
                 (sub) => sub.enabled && sub.url && sub.url.startsWith('http') && !sub.isUpdating
             );
             for (const sub of subsToUpdate) {
+                if (!autoUpdateEnabled || document.visibilityState === 'hidden') break;
                 await handleUpdateNodeCount(sub.id, true);
             }
         } catch (e) {
@@ -411,7 +434,7 @@ export function useSubscriptions(markDirty) {
             const settings = dataStore.settings;
             const settingsInterval = settings?.autoUpdateInterval;
             intervalMs =
-                settingsInterval != null && settingsInterval > 0
+                settingsInterval != null && settingsInterval >= 0
                     ? settingsInterval * 60 * 1000
                     : DEFAULT_INTERVAL_MS;
         }
@@ -431,22 +454,24 @@ export function useSubscriptions(markDirty) {
         // 停止旧定时器
         stopAutoUpdate();
 
-        // 启动新定时器
+        // Run scheduled refreshes only while the page is visible.
         currentIntervalMs = intervalMs;
-        autoUpdateTimerId = setInterval(() => {
-            void autoUpdateAllSubscriptions();
-        }, intervalMs);
+        autoUpdateEnabled = true;
+        document.addEventListener('visibilitychange', handleAutoUpdateVisibility);
+        window.addEventListener('pagehide', pauseAutoUpdate);
+        window.addEventListener('pageshow', resumeAutoUpdate);
+        resumeAutoUpdate();
 
         if (isDev)
             console.debug(`[AutoUpdate] Started with interval: ${intervalMs / 60000} minutes`);
     }
 
     function stopAutoUpdate() {
-        if (autoUpdateTimerId) {
-            clearInterval(autoUpdateTimerId);
-            autoUpdateTimerId = null;
-            if (isDev) console.debug('[AutoUpdate] Stopped');
-        }
+        autoUpdateEnabled = false;
+        pauseAutoUpdate();
+        document.removeEventListener('visibilitychange', handleAutoUpdateVisibility);
+        window.removeEventListener('pagehide', pauseAutoUpdate);
+        window.removeEventListener('pageshow', resumeAutoUpdate);
     }
 
     function restartAutoUpdate(intervalMinutes) {

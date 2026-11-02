@@ -7,6 +7,7 @@ import App from '../../src/App.vue';
 import HomeView from '../../src/views/HomeView.vue';
 import { createI18n } from '../../src/i18n/index.js';
 import { useUIStore } from '../../src/stores/ui.js';
+import { loadLegacyDashboard } from '../../src/router/component-loaders.js';
 
 const legacyGate = vi.hoisted(() => {
     let resolve;
@@ -16,13 +17,14 @@ const legacyGate = vi.hoisted(() => {
     return { promise, resolve };
 });
 
-vi.mock('../../src/components/features/Dashboard/Dashboard.vue', async () => {
-    await legacyGate.promise;
-    return {
-        __esModule: true,
-        default: { template: '<section data-testid="legacy-panel">Legacy dashboard</section>' },
-    };
-});
+vi.mock('../../src/router/component-loaders.js', () => ({
+    loadLegacyDashboard: () => legacyGate.promise,
+}));
+
+vi.mock('../../src/components/ui/SavePrompt.vue', () => ({
+    __esModule: true,
+    default: { name: 'SavePrompt', template: '<div />' },
+}));
 
 vi.mock('../../src/stores/session.js', async () => {
     const { defineStore } = await import('pinia');
@@ -101,6 +103,7 @@ describe('authenticated dashboard first render', () => {
         const wrapper = mountApp(router);
         await flushPromises();
         expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+        expect(wrapper.findAll('main [aria-busy="true"]')).toHaveLength(0);
         expect(wrapper.find('footer').exists()).toBe(false);
 
         finishRoute(panel);
@@ -126,6 +129,7 @@ describe('authenticated dashboard first render', () => {
         const wrapper = mountApp(router);
         await flushPromises();
         expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+        expect(wrapper.findAll('main [aria-busy="true"]')).toHaveLength(0);
         expect(wrapper.find('footer').exists()).toBe(false);
 
         finishRoute(panel);
@@ -144,13 +148,16 @@ describe('authenticated dashboard first render', () => {
         const wrapper = mountApp(router, 'legacy');
         await flushPromises();
         expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+        expect(wrapper.findAll('main [aria-busy="true"]')).toHaveLength(0);
         expect(wrapper.find('footer').exists()).toBe(false);
 
-        legacyGate.resolve();
-        await vi.waitFor(() =>
-            expect(wrapper.find('[data-testid="legacy-panel"]').exists()).toBe(true)
-        );
+        legacyGate.resolve({
+            __esModule: true,
+            default: { template: '<section data-testid="legacy-panel">Legacy dashboard</section>' },
+        });
+        await loadLegacyDashboard();
         await flushPromises();
+        expect(wrapper.find('[data-testid="legacy-panel"]').exists()).toBe(true);
         expect(wrapper.find('footer').exists()).toBe(true);
     });
 

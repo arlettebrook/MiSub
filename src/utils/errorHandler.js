@@ -3,6 +3,8 @@
  * @author MiSub Team
  */
 
+import { request } from '../lib/http.js';
+
 let toastHandler = null;
 let monitoringEndpoint = null;
 let monitoringHeaders = null;
@@ -46,6 +48,7 @@ class ErrorHandler {
      * @param {Object} additionalData - 附加数据
      */
     handleError(error, context = '', additionalData = {}) {
+        if (error?.cancelled) return;
         const errorKey = this.getErrorKey(error, context);
 
         // 更新错误计数
@@ -228,19 +231,16 @@ class ErrorHandler {
             };
             const body = JSON.stringify(payload);
 
-            if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-                const blob = new Blob([body], { type: 'application/json' });
-                navigator.sendBeacon(endpoint, blob);
-                return;
-            }
-
-            await fetch(endpoint, {
+            await request(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(monitoringHeaders || {}) },
                 body,
-                keepalive: true,
+                background: true,
+                timeoutMs: 5000,
+                credentials: 'same-origin',
             });
         } catch (e) {
+            if (e?.cancelled) return;
             // 监控服务失败，避免无限递归
             console.warn('[Error Monitoring Failed]', e);
         }

@@ -5,6 +5,8 @@ import { fetchInitialData, login as apiLogin, fetchPublicConfig } from '../lib/a
 import { api } from '../lib/http.js';
 import { handleError } from '../utils/errorHandler.js';
 import { useDataStore } from './useDataStore';
+import { useUIStore } from './ui.js';
+import { loadLegacyDashboard } from '../router/component-loaders.js';
 import { t } from '../i18n/index.js';
 
 export const useSessionStore = defineStore('session', () => {
@@ -43,6 +45,8 @@ export const useSessionStore = defineStore('session', () => {
             fetchPublicConfig(),
             navigationReady,
         ]);
+
+        if (dataResult.cancelled || pConfigResult.cancelled) return;
 
         // Update public config
         if (pConfigResult.success) {
@@ -87,12 +91,17 @@ export const useSessionStore = defineStore('session', () => {
 
     async function login(password) {
         const result = await apiLogin(password);
+        if (result.cancelled) return;
         if (result.success) {
             securityWarning.value = result.data?.securityWarning || null;
             sessionState.value = 'loading';
             try {
                 // Fetch session data and the dashboard chunk together, then reveal the page.
-                await checkSession(router.push({ path: '/dashboard' }));
+                const navigationReady = Promise.all([
+                    router.push({ path: '/dashboard' }),
+                    useUIStore().layoutMode === 'legacy' ? loadLegacyDashboard() : undefined,
+                ]);
+                await checkSession(navigationReady);
             } catch (error) {
                 sessionState.value = 'loggedOut';
                 throw error;

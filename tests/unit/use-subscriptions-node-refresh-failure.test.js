@@ -18,6 +18,7 @@ vi.mock('pinia', () => ({
 vi.mock('../../src/stores/useDataStore', () => ({
     useDataStore: () => ({
         saveData: mocks.saveData,
+        settings: { autoUpdateInterval: 0 },
     }),
 }));
 
@@ -127,6 +128,69 @@ describe('useSubscriptions manual node refresh failures', () => {
             expect(mocks.saveData).not.toHaveBeenCalled();
         } finally {
             errorSpy.mockRestore();
+        }
+    });
+
+    it('does not erase cached nodes when a background refresh is cancelled on hide', async () => {
+        const original = {
+            id: 'sub-1',
+            name: 'Airport',
+            url: 'https://airport.example/sub',
+            enabled: true,
+            nodeCount: 86,
+            userInfo: { total: 100 },
+        };
+        mocks.subscriptionsRef.value = [original];
+        mocks.fetchNodeCount.mockResolvedValue({ success: false, cancelled: true });
+        const { useSubscriptions } = await import('../../src/composables/useSubscriptions.js');
+        const markDirty = vi.fn();
+        await useSubscriptions(markDirty).handleUpdateNodeCount('sub-1', true);
+        expect(original.nodeCount).toBe(86);
+        expect(original.userInfo).toEqual({ total: 100 });
+        expect(markDirty).not.toHaveBeenCalled();
+        expect(mocks.saveData).not.toHaveBeenCalled();
+        expect(mocks.fetchNodeCount.mock.calls[0][4]).toEqual({ background: true });
+    });
+
+    it('pauses scheduled refreshes while hidden and resumes without duplicating timers', async () => {
+        vi.useFakeTimers();
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        const { useSubscriptions } = await import('../../src/composables/useSubscriptions.js');
+        const subscriptions = useSubscriptions(vi.fn());
+        try {
+            subscriptions.startAutoUpdate(1);
+            expect(vi.getTimerCount()).toBe(1);
+            visibility.mockReturnValue('hidden');
+            document.dispatchEvent(new Event('visibilitychange'));
+            expect(vi.getTimerCount()).toBe(0);
+            await vi.advanceTimersByTimeAsync(120000);
+            expect(mocks.fetchNodeCount).not.toHaveBeenCalled();
+            visibility.mockReturnValue('visible');
+            document.dispatchEvent(new Event('visibilitychange'));
+            document.dispatchEvent(new Event('visibilitychange'));
+            expect(vi.getTimerCount()).toBe(1);
+            window.dispatchEvent(new Event('pagehide'));
+            expect(vi.getTimerCount()).toBe(0);
+            window.dispatchEvent(new Event('pageshow'));
+            expect(vi.getTimerCount()).toBe(1);
+        } finally {
+            subscriptions.stopAutoUpdate();
+            expect(vi.getTimerCount()).toBe(0);
+            visibility.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+
+    it('respects the disabled automatic refresh setting', async () => {
+        vi.useFakeTimers();
+        const { useSubscriptions } = await import('../../src/composables/useSubscriptions.js');
+        const subscriptions = useSubscriptions(vi.fn());
+        try {
+            subscriptions.startAutoUpdate();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            subscriptions.stopAutoUpdate();
+            vi.useRealTimers();
         }
     });
 });

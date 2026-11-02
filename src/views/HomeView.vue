@@ -3,7 +3,6 @@
     import { useSessionStore } from '../stores/session';
     import { storeToRefs } from 'pinia';
     import { useRoute, useRouter } from 'vue-router';
-    import DashboardLoading from '../components/ui/DashboardLoading.vue';
 
     // Lazy load components
     const PublicProfilesView = defineAsyncComponent(() => import('./PublicProfilesView.vue'));
@@ -33,9 +32,9 @@
         }
 
         // 2. 根路径 /
-        // Keep a dashboard placeholder visible while the target route chunk loads.
+        // Initial authenticated entry is prepared by App before this view is revealed.
         if (sessionState.value === 'loggedIn') {
-            return DashboardLoading;
+            return { template: '<div></div>' };
         }
 
         // 未登录 + 公开页关闭：显示 404 (Disguise)

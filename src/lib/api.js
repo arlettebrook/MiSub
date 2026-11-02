@@ -12,6 +12,9 @@ import { t } from '../i18n/index.js';
  * @returns {Object} 标准错误响应
  */
 function handleApiError(error, context = '') {
+    if (error?.cancelled) {
+        return { success: false, cancelled: true, errorType: 'cancelled', error: '' };
+    }
     console.error(`[API Error - ${context}]`, error);
 
     let errorType = 'unknown';
@@ -29,7 +32,7 @@ function handleApiError(error, context = '') {
             const message = error.message || `HTTP ${error.status}`;
             errorMessage = formatHttpErrorMessage(error.status, message);
         }
-    } else if (error.name === 'AbortError') {
+    } else if (error.name === 'AbortError' || error.name === 'TimeoutError') {
         errorType = 'timeout';
         errorMessage = t('settings.requestTimeout');
     } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -82,10 +85,9 @@ function normalizeApiFailure(data, fallbackMessage = t('settings.operationFailed
     };
 }
 export async function fetchInitialData() {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
-
         const data = await api.get('/api/data', { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -97,6 +99,8 @@ export async function fetchInitialData() {
         return { success: true, data };
     } catch (error) {
         return handleApiError(error, 'fetchInitialData');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -134,11 +138,16 @@ export async function saveMisubs(misubs, profiles) {
     }
 }
 
-export async function fetchNodeCount(subUrl, fetchProxy = '', plusAsSpace = false, userAgent = '') {
+export async function fetchNodeCount(
+    subUrl,
+    fetchProxy = '',
+    plusAsSpace = false,
+    userAgent = '',
+    { background = false } = {}
+) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60秒超时
-
         const payload = { url: subUrl };
         if (fetchProxy) {
             payload.fetchProxy = fetchProxy;
@@ -150,7 +159,10 @@ export async function fetchNodeCount(subUrl, fetchProxy = '', plusAsSpace = fals
             payload.userAgent = userAgent;
         }
 
-        const data = await api.post('/api/node_count', payload, { signal: controller.signal });
+        const data = await api.post('/api/node_count', payload, {
+            signal: controller.signal,
+            background,
+        });
         clearTimeout(timeoutId);
 
         if (data?.success === false) {
@@ -160,6 +172,8 @@ export async function fetchNodeCount(subUrl, fetchProxy = '', plusAsSpace = fals
         return { success: true, data }; // data 包含 { count, userInfo }
     } catch (error) {
         return handleApiError(error, 'fetchNodeCount');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -207,10 +221,9 @@ export async function resetSettings() {
  * @returns {Promise<Object>} - 更新结果
  */
 export async function batchUpdateNodes(subscriptionIds) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120秒超时
-
         const result = await api.post(
             '/api/batch_update_nodes',
             { subscriptionIds },
@@ -225,6 +238,8 @@ export async function batchUpdateNodes(subscriptionIds) {
         return result;
     } catch (error) {
         return handleApiError(error, 'batchUpdateNodes');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -250,7 +265,7 @@ export async function migrateToD1() {
 
 export async function detectLegacyD1() {
     try {
-        return await api.get('/api/detect_legacy_d1');
+        return await api.get('/api/detect_legacy_d1', { background: true, timeoutMs: 8000 });
     } catch (error) {
         return handleApiError(error, 'detectLegacyD1');
     }
@@ -274,16 +289,19 @@ export async function migrateLegacyD1() {
 
 export async function fetchGithubLatestRelease(repo) {
     try {
-        return await api.get(`/api/github/release?repo=${encodeURIComponent(repo)}`);
+        return await api.get(`/api/github/release?repo=${encodeURIComponent(repo)}`, {
+            background: true,
+            timeoutMs: 8000,
+        });
     } catch (error) {
         return handleApiError(error, 'fetchGithubLatestRelease');
     }
 }
 
 export async function testSubconverterBackend(backend, target = 'clash') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
         const data = await api.post(
             '/api/subconverter/test',
             { backend, target },
@@ -293,6 +311,8 @@ export async function testSubconverterBackend(backend, target = 'clash') {
         return data;
     } catch (error) {
         return handleApiError(error, 'testSubconverterBackend');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

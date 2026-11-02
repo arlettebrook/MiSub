@@ -94,6 +94,7 @@ export const useDataStore = defineStore('data', () => {
             pruneInvalidReferences(); // 数据拉取后执行自愈
             clearDirty();
         } catch (error) {
+            if (error?.cancelled) return;
             console.error('Failed to fetch data:', error);
             showToast(t('store.fetchDataFailed', { message: error.message }), 'error');
             throw error;

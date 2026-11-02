@@ -80,6 +80,7 @@ export function useSettingsLogic() {
         isLoading.value = true;
         try {
             const result = await fetchSettings();
+            if (result.cancelled) return;
             if (result.success) {
                 const incoming = result.data && typeof result.data === 'object' ? result.data : {};
                 settings.value = normalizeSettingsObject(incoming);

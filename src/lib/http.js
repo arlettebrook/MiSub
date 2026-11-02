@@ -12,6 +12,29 @@ export class APIError extends Error {
     }
 }
 
+export class RequestCancelledError extends Error {
+    constructor() {
+        super('The page is no longer active');
+        this.name = 'AbortError';
+        this.cancelled = true;
+    }
+}
+
+const activeRequests = new Map();
+
+export function cancelPendingRequests(backgroundOnly = false) {
+    for (const [controller, background] of activeRequests) {
+        if (!backgroundOnly || background) controller.abort(new RequestCancelledError());
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', (event) => cancelPendingRequests(event.persisted === true));
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') cancelPendingRequests(true);
+    });
+}
+
 const buildHeaders = (headers, body) => {
     if (headers instanceof Headers) {
         return headers;
@@ -34,21 +57,45 @@ const parseJson = async (response) => {
 };
 
 export async function request(url, options = {}) {
-    const { headers, body, ...rest } = options;
-    const response = await fetch(url, {
-        credentials: 'include',
-        ...rest,
-        body,
-        headers: buildHeaders(headers, body),
-    });
-
-    const data = await parseJson(response);
-    if (!response.ok) {
-        const message = data?.message || data?.error || `HTTP ${response.status}`;
-        throw new APIError(message, response.status, data);
+    const { headers, body, signal, background = false, timeoutMs, ...rest } = options;
+    if (background && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        throw new RequestCancelledError();
     }
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort(signal.reason);
+    if (signal?.aborted) forwardAbort();
+    else signal?.addEventListener('abort', forwardAbort, { once: true });
+    activeRequests.set(controller, background);
+    const timeout =
+        timeoutMs > 0
+            ? setTimeout(
+                  () => controller.abort(new DOMException('Request timed out', 'TimeoutError')),
+                  timeoutMs
+              )
+            : null;
 
-    return data;
+    try {
+        const response = await fetch(url, {
+            credentials: 'include',
+            ...rest,
+            body,
+            headers: buildHeaders(headers, body),
+            signal: controller.signal,
+        });
+        const data = await parseJson(response);
+        if (!response.ok) {
+            const message = data?.message || data?.error || `HTTP ${response.status}`;
+            throw new APIError(message, response.status, data);
+        }
+        return data;
+    } catch (error) {
+        if (controller.signal.reason?.cancelled) throw controller.signal.reason;
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener('abort', forwardAbort);
+        activeRequests.delete(controller);
+    }
 }
 
 const stringifyBody = (data) => (data === undefined ? undefined : JSON.stringify(data));

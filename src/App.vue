@@ -11,7 +11,7 @@
     import { storeToRefs } from 'pinia';
     import NavBar from './components/layout/NavBar.vue';
     import Footer from './components/layout/Footer.vue';
-    import DashboardLoading from './components/ui/DashboardLoading.vue';
+    import { loadLegacyDashboard } from './router/component-loaders.js';
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
 
@@ -19,11 +19,7 @@
     const Login = defineAsyncComponent(() => import('./components/modals/Login.vue'));
     const NotFound = defineAsyncComponent(() => import('./views/NotFound.vue'));
     const Toast = defineAsyncComponent(() => import('./components/ui/Toast.vue'));
-    const Dashboard = defineAsyncComponent({
-        loader: () => import('./components/features/Dashboard/Dashboard.vue'),
-        loadingComponent: DashboardLoading,
-        delay: 0,
-    });
+    const Dashboard = defineAsyncComponent(loadLegacyDashboard);
     const Header = defineAsyncComponent(() => import('./components/layout/Header.vue'));
     const SavePrompt = defineAsyncComponent(() => import('./components/ui/SavePrompt.vue'));
     const ScrollToTop = defineAsyncComponent(() => import('./components/ui/ScrollToTop.vue'));
@@ -180,10 +176,18 @@
 
     onMounted(async () => {
         initTheme();
-        const initialNavigation = router.isReady().finally(() => {
+        try {
+            await Promise.all([checkSession(), router.isReady()]);
+            // Keep the existing loading screen until the actual destination is ready.
+            if (isLoggedIn.value && layoutMode.value === 'modern' && route.name === 'Home') {
+                await router.replace('/dashboard');
+            }
+            if (isLoggedIn.value && layoutMode.value === 'legacy') {
+                await loadLegacyDashboard();
+            }
+        } finally {
             isInitialRouteReady.value = true;
-        });
-        await Promise.all([checkSession(), initialNavigation]);
+        }
     });
 
     watch(

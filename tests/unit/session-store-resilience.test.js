@@ -8,6 +8,8 @@ const apiMocks = vi.hoisted(() => ({
     login: vi.fn(),
 }));
 const routerMocks = vi.hoisted(() => ({ push: vi.fn() }));
+const loaderMocks = vi.hoisted(() => ({ loadLegacyDashboard: vi.fn() }));
+vi.mock('../../src/router/component-loaders.js', () => loaderMocks);
 
 vi.mock('../../src/lib/api', () => apiMocks);
 vi.mock('../../src/lib/http.js', () => ({
@@ -24,6 +26,8 @@ describe('session store resilience', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        localStorage.setItem('layoutMode', 'modern');
+        loaderMocks.loadLegacyDashboard.mockReset().mockResolvedValue({});
         routerMocks.push.mockReset().mockResolvedValue(undefined);
     });
 
@@ -140,5 +144,37 @@ describe('session store resilience', () => {
 
         await expect(store.login('password')).rejects.toBe(error);
         expect(store.sessionState).toBe('loggedOut');
+    });
+
+    it('prepares the legacy dashboard during login without revealing another loading screen', async () => {
+        localStorage.setItem('layoutMode', 'legacy');
+        let finishLegacy;
+        loaderMocks.loadLegacyDashboard.mockReturnValue(
+            new Promise((resolve) => {
+                finishLegacy = resolve;
+            })
+        );
+        apiMocks.login.mockResolvedValue({ success: true, data: {} });
+        apiMocks.fetchInitialData.mockResolvedValue({
+            success: true,
+            data: { config: {}, misubs: [], profiles: [] },
+        });
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: true, data: {} });
+        const store = useSessionStore();
+        const login = store.login('password');
+        await vi.waitFor(() => expect(loaderMocks.loadLegacyDashboard).toHaveBeenCalled());
+        expect(store.sessionState).toBe('loading');
+        finishLegacy({});
+        await login;
+        expect(store.sessionState).toBe('loggedIn');
+    });
+
+    it('does not clear an authenticated session when leaving the page cancels its requests', async () => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        apiMocks.fetchInitialData.mockResolvedValue({ success: false, cancelled: true });
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: false, cancelled: true });
+        await store.checkSession();
+        expect(store.sessionState).toBe('loggedIn');
     });
 });

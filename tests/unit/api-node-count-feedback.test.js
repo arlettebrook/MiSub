@@ -81,4 +81,19 @@ describe('fetchNodeCount feedback normalization', () => {
             errorSpy.mockRestore();
         }
     });
+
+    it('clears the node-count timeout even when the network request fails', async () => {
+        vi.useFakeTimers();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        mocks.post.mockRejectedValue(new TypeError('Failed to fetch'));
+        try {
+            const { fetchNodeCount } = await import('../../src/lib/api.js');
+            const result = await fetchNodeCount('https://airport.example/sub');
+            expect(result.success).toBe(false);
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            errorSpy.mockRestore();
+            vi.useRealTimers();
+        }
+    });
 });
