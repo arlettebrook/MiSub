@@ -40,6 +40,7 @@ export const messages = {
             viewLog: '订阅日志',
             backToHome: '返回首页',
             clearAll: '清空',
+            clearSearch: '清除搜索',
             manualSort: '手动排序',
             finishSort: '完成排序',
             moveUp: '上移',
@@ -73,7 +74,6 @@ export const messages = {
             linkInvalid: '链接无效，请先完成配置',
             copied: '已复制到剪贴板',
             copyFailed: '复制失败',
-            clearSearch: '清除搜索',
         },
         profiles: {
             title: '我的订阅组',
@@ -1314,6 +1314,7 @@ export const messages = {
             viewLog: 'Logs',
             backToHome: 'Home',
             clearAll: 'Clear',
+            clearSearch: 'Clear search',
             manualSort: 'Sort',
             finishSort: 'Done',
             moveUp: 'Up',
@@ -1347,7 +1348,6 @@ export const messages = {
             linkInvalid: 'Invalid link; finish setup',
             copied: 'Copied to clipboard',
             copyFailed: 'Copy failed',
-            clearSearch: 'Clear search',
         },
         profiles: {
             title: 'My Subs',

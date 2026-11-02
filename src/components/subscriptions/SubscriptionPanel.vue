@@ -5,6 +5,7 @@
     import MoreActionsMenu from '@/components/shared/MoreActionsMenu.vue';
     import PanelPagination from '@/components/shared/PanelPagination.vue';
     import EmptyState from '@/components/ui/EmptyState.vue';
+    import Button from '@/components/ui/Button.vue';
     import { useUIStore } from '@/stores/ui';
     import { useI18n } from '@/i18n/index.js';
 
@@ -216,13 +217,9 @@
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
                     {{ t('subscriptions.noSearchResults') }}
                 </p>
-                <button
-                    type="button"
-                    class="mt-3 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                    @click="searchModel = ''"
-                >
+                <Button class="mt-3" @click="searchModel = ''">
                     {{ t('actions.clearSearch') }}
-                </button>
+                </Button>
             </div>
             <PanelPagination
                 v-if="totalPages > 1 && !isSorting"
