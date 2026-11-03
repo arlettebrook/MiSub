@@ -1,7 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { getDashboardHealthItems, shouldShowFullGuide } from '../../src/utils/dashboard-health.js';
+import {
+    getDashboardHealthItems,
+    resolveHealthItemCopy,
+    shouldShowFullGuide,
+} from '../../src/utils/dashboard-health.js';
+import { t } from '../../src/i18n/index.js';
+import { matchesSubscriptionStatus } from '../../src/utils/dashboard-deeplink.js';
 
 describe('dashboard health helpers', () => {
+    it('keeps traffic filters consistent with health counts at the 20% threshold', () => {
+        const subscriptions = [
+            { id: 'at-limit', enabled: true, userInfo: { total: 100, upload: 80 } },
+            { id: 'above-limit', enabled: true, userInfo: { total: 100, upload: 79 } },
+            { id: 'disabled', enabled: false, userInfo: { total: 100, upload: 99 } },
+            { id: 'expired', enabled: true, userInfo: { total: 100, upload: 99, expire: 1 } },
+        ];
+        const item = getDashboardHealthItems({ subscriptions }).find(
+            (item) => item.id === 'low-traffic'
+        );
+        expect(item.count).toBe(1);
+        expect(
+            subscriptions
+                .filter((sub) => matchesSubscriptionStatus(sub, 'low-traffic'))
+                .map((sub) => sub.id)
+        ).toEqual(['at-limit']);
+    });
+
+    it('provides complete translated copy for every health item in both languages', () => {
+        const items = [
+            ...getDashboardHealthItems(),
+            ...getDashboardHealthItems({
+                subscriptions: [{ enabled: false }],
+                profiles: [{ enabled: false }],
+            }),
+            ...getDashboardHealthItems({
+                settings: { mytoken: 'auto' },
+                profiles: [{ enabled: true }],
+                totalNodesCount: 2,
+                subscriptions: [
+                    { enabled: true, lastError: 'timeout' },
+                    { enabled: true, userInfo: { expire: 1 } },
+                    { enabled: true, userInfo: { total: 100, upload: 90 } },
+                    { enabled: false },
+                ],
+            }),
+        ];
+        expect(new Set(items.map((item) => item.id)).size).toBe(11);
+        for (const locale of ['zh-CN', 'en-US']) {
+            for (const item of items) {
+                const copy = resolveHealthItemCopy(item, (key, params) => t(key, params, locale));
+                for (const field of ['title', 'description', 'actionLabel']) {
+                    expect(copy[field]).toBeTruthy();
+                    expect(copy[field]).not.toMatch(/dashboard\.healthItems|\{count\}/);
+                    if (locale === 'en-US') expect(copy[field]).not.toMatch(/[\u4e00-\u9fff]/);
+                }
+            }
+        }
+    });
     it('prompts first-time users to add subscriptions and create profiles', () => {
         const items = getDashboardHealthItems({
             subscriptions: [],
@@ -82,11 +137,11 @@ describe('dashboard health helpers', () => {
             actionQuery: { focus: 'mytoken' },
         });
         expect(items.find((item) => item.id === 'subscription-errors')).toMatchObject({
-            actionRoute: '/dashboard/subscriptions',
+            actionRoute: '/dashboard/groups',
             actionQuery: { status: 'error' },
         });
         expect(items.find((item) => item.id === 'disabled-subscriptions')).toMatchObject({
-            actionRoute: '/dashboard/subscriptions',
+            actionRoute: '/dashboard/groups',
             actionQuery: { status: 'disabled' },
         });
     });

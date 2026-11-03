@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
+    import { ref, computed, nextTick, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
     import { useRoute } from 'vue-router';
     import { useI18n } from '../i18n/index.js';
     import MigrationModal from '../components/modals/MigrationModal.vue';
@@ -17,6 +17,7 @@
     import WebdavBackupSettings from '../components/settings/sections/WebdavBackupSettings.vue';
     import ClientSettings from '../components/settings/sections/ClientSettings.vue';
     import CustomPageSettings from '../components/settings/sections/CustomPageSettings.vue';
+    import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
 
     // 使用 composable 获取所有设置相关的状态和函数
     const { t } = useI18n();
@@ -72,6 +73,31 @@
     const route = useRoute();
     const emit = defineEmits(['content-ready']);
     const settingsRoutePath = route.path;
+    const settingsPage = ref(null);
+    const highlightedFocusId = ref('');
+    watch(
+        [() => route.path, () => route.query?.focus, isLoading],
+        async ([path, focus, loading]) => {
+            if (path !== settingsRoutePath) return;
+            const anchor = resolveSettingsFocusAnchor(focus);
+            highlightedFocusId.value = anchor;
+            if (!anchor) return;
+            activeTab.value = 'basic';
+            if (loading) return;
+            await nextTick();
+            if (
+                highlightedFocusId.value !== anchor ||
+                route.path !== settingsRoutePath ||
+                isLoading.value
+            )
+                return;
+            settingsPage.value?.querySelector(`#${anchor}`)?.scrollIntoView?.({
+                behavior: 'smooth',
+                block: 'center',
+            });
+        },
+        { immediate: true }
+    );
     const bottomSaveAction = ref(null);
     const isBottomSaveVisible = ref(true);
     const floatingSaveHeaderBottom = ref(0);
@@ -175,7 +201,7 @@
 </script>
 
 <template>
-    <div class="pt-0 md:min-h-[calc(100vh-80px)]">
+    <div ref="settingsPage" class="pt-0 md:min-h-[calc(100vh-80px)]">
         <div
             class="mb-4 bg-white/80 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg p-4"
         >
@@ -235,6 +261,7 @@
                     v-show="activeTab === 'basic'"
                     :settings="settings"
                     :disguiseConfig="disguiseConfig"
+                    :highlighted-focus-id="highlightedFocusId"
                 />
                 <HomeSettings v-show="activeTab === 'home'" :settings="settings" />
                 <GlobalSettings v-show="activeTab === 'global'" :settings="settings" />

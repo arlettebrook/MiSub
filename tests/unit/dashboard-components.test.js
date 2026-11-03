@@ -44,7 +44,7 @@ describe('dashboard UI components', () => {
 
         await nodeCard.trigger('click');
         expect(wrapper.emitted('navigate')?.[0]).toEqual([
-            '/dashboard/subscriptions',
+            '/dashboard/groups',
             { status: 'zero-nodes' },
         ]);
     });

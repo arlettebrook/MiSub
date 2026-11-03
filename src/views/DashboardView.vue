@@ -11,7 +11,11 @@
     import { useManualNodes } from '../composables/useManualNodes.js';
     import { formatBytes } from '../lib/utils.js';
     import StatCards from '../components/features/Dashboard/StatCards.vue';
-    import { getDashboardHealthItems, shouldShowFullGuide } from '../utils/dashboard-health.js';
+    import {
+        getDashboardHealthItems,
+        resolveHealthItemCopy,
+        shouldShowFullGuide,
+    } from '../utils/dashboard-health.js';
     import { useI18n } from '../i18n/index.js';
 
     const { t } = useI18n();
@@ -70,10 +74,19 @@
             profiles: profiles.value || [],
             settings: settings.value || {},
             totalNodesCount: totalNodesCount.value,
-        })
+        }).map((item) => resolveHealthItemCopy(item, t))
     );
 
     const hasHealthItems = computed(() => dashboardHealthItems.value.length > 0);
+    const showAllHealthItems = ref(false);
+    const visibleHealthItems = computed(() =>
+        showAllHealthItems.value
+            ? dashboardHealthItems.value
+            : dashboardHealthItems.value.slice(0, 4)
+    );
+    const hiddenHealthItemsCount = computed(() =>
+        Math.max(0, dashboardHealthItems.value.length - visibleHealthItems.value.length)
+    );
     const showFullGuide = computed(() =>
         shouldShowFullGuide({
             subscriptions: subscriptions.value || [],
@@ -110,10 +123,6 @@
     };
 
     const handleHealthAction = (item) => {
-        if (item.action === 'openLog') {
-            showLogModal.value = true;
-            return;
-        }
         if (item.actionRoute) {
             router.push({ path: item.actionRoute, query: item.actionQuery || {} });
         }
@@ -147,6 +156,9 @@
 
     // --- Log Modal Logic ---
     const showLogModal = ref(false);
+    const handleHealthSecondaryAction = (item) => {
+        if (item.secondaryAction === 'openLog') showLogModal.value = true;
+    };
     const LogModal = defineAsyncComponent(() => import('../components/modals/LogModal.vue'));
 
     // --- QRCode Modal Logic ---
@@ -290,7 +302,7 @@
 
                         <div v-if="hasHealthItems" class="grid gap-3">
                             <div
-                                v-for="item in dashboardHealthItems"
+                                v-for="item in visibleHealthItems"
                                 :key="item.id"
                                 class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--misub-radius-md)] border p-3"
                                 :class="healthToneClasses[item.tone] || healthToneClasses.info"
@@ -322,14 +334,28 @@
                                         v-if="item.secondaryActionLabel"
                                         type="button"
                                         class="min-h-10 rounded-[var(--misub-radius-md)] border border-current/15 px-3 py-2 text-sm font-semibold opacity-80 hover:opacity-100 transition-opacity"
-                                        @click="
-                                            handleHealthAction({ action: item.secondaryAction })
-                                        "
+                                        @click="handleHealthSecondaryAction(item)"
                                     >
                                         {{ item.secondaryActionLabel }}
                                     </button>
                                 </div>
                             </div>
+                            <button
+                                v-if="hiddenHealthItemsCount > 0 || showAllHealthItems"
+                                type="button"
+                                :aria-expanded="showAllHealthItems"
+                                data-testid="health-items-toggle"
+                                class="min-h-10 justify-self-start rounded-[var(--misub-radius-md)] border border-gray-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
+                                @click="showAllHealthItems = !showAllHealthItems"
+                            >
+                                {{
+                                    showAllHealthItems
+                                        ? t('dashboard.health.showLess')
+                                        : t('dashboard.health.showMore', {
+                                              count: hiddenHealthItemsCount,
+                                          })
+                                }}
+                            </button>
                         </div>
                         <div
                             v-else

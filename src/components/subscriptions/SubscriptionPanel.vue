@@ -21,6 +21,8 @@
         searchable: { type: Boolean, default: false },
         searchQuery: { type: String, default: '' },
         filteredCount: { type: Number, default: undefined },
+        statusFilter: { type: String, default: '' },
+        statusFilterLabel: { type: String, default: '' },
     });
 
     const emit = defineEmits([
@@ -38,6 +40,7 @@
         'import',
         'qrcode',
         'updateSearch',
+        'clearStatusFilter',
     ]);
 
     const searchModel = computed({
@@ -165,6 +168,22 @@
                 </span>
             </div>
         </div>
+        <div
+            v-if="statusFilter && !isSorting"
+            data-testid="subscription-status-filter"
+            class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+            <span>{{ statusFilterLabel }}</span>
+            <span class="opacity-70">{{ visibleCount }}/{{ subscriptions.length }}</span>
+            <button
+                type="button"
+                data-testid="subscription-status-filter-clear"
+                class="ml-auto font-semibold underline underline-offset-2 hover:opacity-80"
+                @click="emit('clearStatusFilter')"
+            >
+                {{ t('subscriptions.clearStatusFilter') }}
+            </button>
+        </div>
         <div v-if="subscriptions.length > 0">
             <draggable
                 v-if="isSorting"
@@ -217,7 +236,7 @@
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
                     {{ t('subscriptions.noSearchResults') }}
                 </p>
-                <Button class="mt-3" @click="searchModel = ''">
+                <Button v-if="searchQuery" class="mt-3" @click="searchModel = ''">
                     {{ t('actions.clearSearch') }}
                 </Button>
             </div>

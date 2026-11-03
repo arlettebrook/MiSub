@@ -87,10 +87,7 @@
             ]"
             style="--delay: 0ms"
             @click="
-                navigate(
-                    '/dashboard/subscriptions',
-                    hasTrafficWarning ? { status: 'low-traffic' } : {}
-                )
+                navigate('/dashboard/groups', hasTrafficWarning ? { status: 'low-traffic' } : {})
             "
         >
             <div class="flex items-center justify-between mb-2">
@@ -168,7 +165,7 @@
             style="--delay: 100ms"
             @click="
                 navigate(
-                    '/dashboard/subscriptions',
+                    '/dashboard/groups',
                     hasSubscriptionWarning
                         ? { status: subscriptionsCount === 0 ? 'missing' : 'disabled' }
                         : {}
@@ -242,9 +239,7 @@
                 { 'stat-card-visible': isVisible },
             ]"
             style="--delay: 200ms"
-            @click="
-                navigate('/dashboard/subscriptions', hasNodeWarning ? { status: 'zero-nodes' } : {})
-            "
+            @click="navigate('/dashboard/groups', hasNodeWarning ? { status: 'zero-nodes' } : {})"
         >
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-xs font-medium text-gray-500 uppercase">

@@ -12,11 +12,30 @@
     import SubscriptionEditModal from '../components/modals/SubscriptionEditModal.vue';
     import { useToastStore } from '../stores/toast.js';
     import { useI18n } from '../i18n/index.js';
+    import { useRoute, useRouter } from 'vue-router';
+    import { resolveSubscriptionStatus } from '../utils/dashboard-deeplink.js';
 
     const dataStore = useDataStore();
     const { showToast } = useToastStore();
     const { markDirty } = dataStore;
     const { t } = useI18n();
+    const route = useRoute();
+    const router = useRouter();
+    const activeStatusFilter = computed(() => resolveSubscriptionStatus(route.query.status));
+    const statusFilterLabel = computed(() => {
+        const keys = {
+            error: 'subscriptions.filterStatusError',
+            disabled: 'subscriptions.filterStatusDisabled',
+            expired: 'subscriptions.filterStatusExpired',
+            'low-traffic': 'subscriptions.filterStatusLowTraffic',
+            'zero-nodes': 'subscriptions.filterStatusZeroNodes',
+        };
+        return activeStatusFilter.value ? t(keys[activeStatusFilter.value]) : '';
+    });
+    const clearStatusFilter = () => {
+        const { status, ...query } = route.query;
+        return router.replace({ query, hash: route.hash });
+    };
 
     // State
     // State
@@ -39,7 +58,7 @@
         handleUpdateNodeCount,
         batchUpdateAllSubscriptions,
         reorderSubscriptions,
-    } = useSubscriptions(markDirty);
+    } = useSubscriptions(markDirty, { statusFilter: activeStatusFilter });
 
     const { addNodesFromBulk } = useManualNodes(markDirty);
 
@@ -122,6 +141,8 @@
             :paginated-subscriptions="paginatedSubscriptions"
             :search-query="subscriptionSearchQuery"
             :filtered-count="filteredSubscriptions.length"
+            :status-filter="activeStatusFilter"
+            :status-filter-label="statusFilterLabel"
             :current-page="subsCurrentPage"
             :total-pages="subsTotalPages"
             :is-sorting="isSortingSubs"
@@ -140,6 +161,7 @@
             @import="openBulkImportModal"
             @qrcode="handleQRCode"
             @update-search="subscriptionSearchQuery = $event"
+            @clear-status-filter="clearStatusFilter"
         >
             <!-- Slot removed as user requested button move to dropdown -->
         </SubscriptionPanel>

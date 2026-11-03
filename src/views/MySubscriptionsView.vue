@@ -1,5 +1,7 @@
 <script setup>
-    import { ref, defineAsyncComponent } from 'vue';
+    import { ref, nextTick, watch, defineAsyncComponent } from 'vue';
+    import { useRoute } from 'vue-router';
+    import { normalizeDashboardQuery } from '../utils/dashboard-deeplink.js';
     import { useDataStore } from '../stores/useDataStore.js';
     import { useProfiles } from '../composables/useProfiles.js';
     import ProfilePanel from '../components/profiles/ProfilePanel.vue';
@@ -35,6 +37,22 @@
         paginatedProfiles,
         changeProfilesPage,
     } = useProfiles(markDirty);
+    const route = useRoute();
+    const profilesSection = ref(null);
+    watch(
+        [() => route.path, () => route.query.focus],
+        async ([path, focus]) => {
+            if (
+                path !== '/dashboard/subscriptions' ||
+                normalizeDashboardQuery(focus) !== 'profiles'
+            )
+                return;
+            profilesCurrentPage.value = 1;
+            await nextTick();
+            profilesSection.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        },
+        { immediate: true }
+    );
 
     // For ProfileModal need access to all subscriptions and nodes
     const { subscriptions } = storeToRefs(dataStore);
@@ -130,7 +148,7 @@
 </script>
 
 <template>
-    <div class="max-w-(--breakpoint-xl) mx-auto">
+    <div ref="profilesSection" class="max-w-(--breakpoint-xl) mx-auto scroll-mt-24">
         <ProfilePanel
             :profiles="profiles"
             :paginated-profiles="paginatedProfiles"

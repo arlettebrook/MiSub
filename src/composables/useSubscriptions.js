@@ -7,10 +7,11 @@ import { fetchNodeCount, batchUpdateNodes } from '../lib/api.js';
 import { handleError } from '../utils/errorHandler.js';
 import { TIMING } from '../constants/timing.js';
 import { t } from '../i18n/index.js';
+import { matchesSubscriptionStatus } from '../utils/dashboard-deeplink.js';
 
 const isDev = import.meta.env.DEV;
 
-export function useSubscriptions(markDirty) {
+export function useSubscriptions(markDirty, { statusFilter = ref('') } = {}) {
     const { showToast } = useToastStore();
     const dataStore = useDataStore();
     // Rename the store ref to avoid confusion, as it contains ALL items
@@ -26,22 +27,23 @@ export function useSubscriptions(markDirty) {
     const searchQuery = ref('');
     const filteredSubscriptions = computed(() => {
         const query = searchQuery.value.trim().toLowerCase();
-        if (!query) return subscriptions.value;
-
-        return subscriptions.value.filter((sub) =>
-            [
-                sub.name,
-                sub.description,
-                sub.remark,
-                sub.note,
-                sub.website,
-                sub.url,
-                sub.customId,
-            ].some((value) =>
-                String(value || '')
-                    .toLowerCase()
-                    .includes(query)
-            )
+        return subscriptions.value.filter(
+            (sub) =>
+                matchesSubscriptionStatus(sub, statusFilter.value) &&
+                (!query ||
+                    [
+                        sub.name,
+                        sub.description,
+                        sub.remark,
+                        sub.note,
+                        sub.website,
+                        sub.url,
+                        sub.customId,
+                    ].some((value) =>
+                        String(value || '')
+                            .toLowerCase()
+                            .includes(query)
+                    ))
         );
     });
 
@@ -77,8 +79,11 @@ export function useSubscriptions(markDirty) {
         return filteredSubscriptions.value.slice(start, end);
     });
 
-    watch(searchQuery, () => {
+    watch([searchQuery, statusFilter], () => {
         subsCurrentPage.value = 1;
+    });
+    watch(subsTotalPages, (totalPages) => {
+        subsCurrentPage.value = Math.min(subsCurrentPage.value, Math.max(1, totalPages));
     });
 
     function changeSubsPage(page) {

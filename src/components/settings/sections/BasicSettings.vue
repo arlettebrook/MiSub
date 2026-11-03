@@ -1,6 +1,7 @@
 <script setup>
     import SectionHeader from '../SectionHeader.vue';
     const props = defineProps({
+        highlightedFocusId: { type: String, default: '' },
         settings: {
             type: Object,
             required: true,
@@ -254,19 +255,29 @@
                 </div>
                 <div>
                     <Input
+                        id="setting-mytoken"
                         :label="t('settings.customToken')"
                         v-model="settings.mytoken"
                         :error="myTokenError"
-                        class="misub-radius-lg"
+                        class="misub-radius-lg transition-shadow duration-300"
+                        :class="{
+                            'ring-2 ring-primary-500/60 ring-offset-2':
+                                highlightedFocusId === 'setting-mytoken',
+                        }"
                     />
                 </div>
                 <div>
                     <Input
+                        id="setting-profileToken"
                         :label="t('settings.profileToken')"
                         v-model="settings.profileToken"
                         :placeholder="t('settings.profileTokenPlaceholder')"
                         :error="profileTokenError"
-                        class="misub-radius-lg"
+                        class="misub-radius-lg transition-shadow duration-300"
+                        :class="{
+                            'ring-2 ring-primary-500/60 ring-offset-2':
+                                highlightedFocusId === 'setting-profileToken',
+                        }"
                     />
                 </div>
             </div>
