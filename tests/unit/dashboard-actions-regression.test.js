@@ -68,6 +68,7 @@ beforeEach(() => {
         controls.route.query = query;
     });
     sessionStorage.clear();
+    localStorage.removeItem('misub:dismissedHealthItems');
     controls.route = reactive({ path: '/dashboard/settings', query: {} });
     controls.logic = {
         settings: ref({ mytoken: 'stable-token' }),
@@ -112,10 +113,127 @@ beforeEach(() => {
 afterEach(() => {
     wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
     sessionStorage.clear();
+    localStorage.removeItem('misub:dismissedHealthItems');
     vi.restoreAllMocks();
 });
 
 describe('dashboard action regressions', () => {
+    it('dismisses an item locally while preserving source data and other pending items', async () => {
+        const store = useDataStore(pinia);
+        store.settings.mytoken = 'auto';
+        const originalSubscriptions = JSON.stringify(store.subscriptions);
+        const wrapper = mountView(DashboardView);
+        expect(wrapper.find('[data-testid="health-items-restore"]').exists()).toBe(false);
+
+        await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+
+        expect(wrapper.vm.dashboardHealthItems.map((item) => item.id)).toEqual([
+            'subscription-errors',
+        ]);
+        expect(wrapper.vm.dismissedHealthItemsCount).toBe(1);
+        expect(wrapper.get('[data-testid="health-items-restore"]').text()).toContain('已忽略 1 项');
+        expect(JSON.stringify(store.subscriptions)).toBe(originalSubscriptions);
+        expect(store.settings.mytoken).toBe('auto');
+        expect(store.isDirty).toBe(false);
+        expect(controls.push).not.toHaveBeenCalled();
+    });
+
+    it('restores every item after dismissing the whole list', async () => {
+        const store = useDataStore(pinia);
+        store.settings.mytoken = 'auto';
+        const wrapper = mountView(DashboardView);
+        await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+        await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+
+        expect(wrapper.vm.hasHealthItems).toBe(false);
+        expect(wrapper.vm.dismissedHealthItemsCount).toBe(2);
+        expect(wrapper.get('[data-testid="health-items-restore"]').text()).toContain('已忽略 2 项');
+
+        await wrapper.get('[data-testid="health-items-restore"]').trigger('click');
+        expect(wrapper.vm.dashboardHealthItems.map((item) => item.id)).toEqual([
+            'auto-token',
+            'subscription-errors',
+        ]);
+        expect(wrapper.vm.dismissedHealthItemsCount).toBe(0);
+        expect(wrapper.find('[data-testid="health-items-restore"]').exists()).toBe(false);
+        expect(localStorage.getItem('misub:dismissedHealthItems')).toBeNull();
+    });
+
+    it('persists dismissal across remounts', async () => {
+        const first = mountView(DashboardView);
+        await first.get('[data-testid="health-item-dismiss"]').trigger('click');
+        first.unmount();
+        wrappers.splice(wrappers.indexOf(first), 1);
+
+        const second = mountView(DashboardView);
+        expect(second.vm.dashboardHealthItems).toEqual([]);
+        expect(second.vm.dismissedHealthItemsCount).toBe(1);
+        expect(second.find('[data-testid="health-items-restore"]').exists()).toBe(true);
+    });
+
+    it('counts only dismissed issues that still exist', async () => {
+        const store = useDataStore(pinia);
+        const wrapper = mountView(DashboardView);
+        await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+        store.subscriptions[0].lastError = '';
+        await flushPromises();
+        expect(wrapper.vm.dismissedHealthItemsCount).toBe(0);
+        expect(wrapper.find('[data-testid="health-items-restore"]').exists()).toBe(false);
+
+        store.subscriptions[0].lastError = 'timeout';
+        await flushPromises();
+        expect(wrapper.vm.dashboardHealthItems).toEqual([]);
+        expect(wrapper.vm.dismissedHealthItemsCount).toBe(1);
+    });
+
+    it('fills the collapsed list with remaining items when one is dismissed', async () => {
+        const store = useDataStore(pinia);
+        store.settings.mytoken = 'auto';
+        store.subscriptions.push(
+            {
+                id: 'expired',
+                url: 'https://example.com/expired',
+                enabled: true,
+                nodeCount: 2,
+                userInfo: { expire: 1 },
+            },
+            {
+                id: 'low',
+                url: 'https://example.com/low',
+                enabled: true,
+                nodeCount: 2,
+                userInfo: { total: 100, upload: 90 },
+            },
+            { id: 'off', url: 'https://example.com/off', enabled: false, nodeCount: 2 }
+        );
+        const wrapper = mountView(DashboardView);
+        expect(wrapper.vm.hiddenHealthItemsCount).toBe(1);
+        await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+        expect(wrapper.findAll('[data-testid="health-item-dismiss"]')).toHaveLength(4);
+        expect(wrapper.vm.hiddenHealthItemsCount).toBe(0);
+        expect(wrapper.text()).toContain('1 个订阅已停用');
+        expect(wrapper.find('[data-testid="health-items-toggle"]').exists()).toBe(false);
+    });
+
+    it.each([
+        ['zh-CN', '有待处理项', '待处理事项', '忽略', '已忽略 1 项，点击恢复'],
+        ['en-US', 'Items pending', 'Pending items', 'Dismiss', '1 dismissed — restore'],
+    ])(
+        'renders distinct status and list copy in %s',
+        async (locale, status, title, dismiss, restore) => {
+            const wrapper = mountView(DashboardView, locale);
+            expect(wrapper.vm.readinessText).toBe(status);
+            expect(wrapper.findAll('h3').map((heading) => heading.text())).toContain(title);
+            expect(wrapper.get('[data-testid="health-item-dismiss"]').text()).toBe(dismiss);
+            expect(
+                wrapper.get('[data-testid="health-item-dismiss"]').attributes('aria-label')
+            ).toBeTruthy();
+            await wrapper.get('[data-testid="health-item-dismiss"]').trigger('click');
+            expect(wrapper.get('[data-testid="health-items-restore"]').text()).toBe(restore);
+            expect(wrapper.text()).not.toContain('dashboard.');
+        }
+    );
+
     it('primary failure button navigates and does not open logs', async () => {
         const wrapper = mountView(DashboardView);
         await wrapper

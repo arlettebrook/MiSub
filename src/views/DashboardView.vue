@@ -12,6 +12,11 @@
     import { formatBytes } from '../lib/utils.js';
     import StatCards from '../components/features/Dashboard/StatCards.vue';
     import {
+        clearDismissedHealthItems,
+        dismissHealthItem,
+        readDismissedHealthItemIds,
+    } from '../utils/health-item-dismissal.js';
+    import {
         getDashboardHealthItems,
         resolveHealthItemCopy,
         shouldShowFullGuide,
@@ -68,13 +73,22 @@
         };
     });
 
-    const dashboardHealthItems = computed(() =>
+    // Mirror localStorage in reactive state so dismiss/restore updates the list immediately.
+    const dismissedHealthItemIds = ref(readDismissedHealthItemIds());
+    const allHealthItems = computed(() =>
         getDashboardHealthItems({
             subscriptions: subscriptions.value || [],
             profiles: profiles.value || [],
             settings: settings.value || {},
             totalNodesCount: totalNodesCount.value,
         }).map((item) => resolveHealthItemCopy(item, t))
+    );
+
+    const dashboardHealthItems = computed(() =>
+        allHealthItems.value.filter((item) => !dismissedHealthItemIds.value.includes(item.id))
+    );
+    const dismissedHealthItemsCount = computed(
+        () => allHealthItems.value.length - dashboardHealthItems.value.length
     );
 
     const hasHealthItems = computed(() => dashboardHealthItems.value.length > 0);
@@ -160,6 +174,16 @@
         if (item.secondaryAction === 'openLog') showLogModal.value = true;
     };
     const LogModal = defineAsyncComponent(() => import('../components/modals/LogModal.vue'));
+
+    const dismissHealthItemById = (id) => {
+        dismissHealthItem(id);
+        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+    };
+
+    const restoreDismissedHealthItems = () => {
+        clearDismissedHealthItems();
+        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+    };
 
     // --- QRCode Modal Logic ---
     const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
@@ -338,6 +362,16 @@
                                     >
                                         {{ item.secondaryActionLabel }}
                                     </button>
+                                    <button
+                                        type="button"
+                                        class="min-h-10 rounded-[var(--misub-radius-md)] px-3 py-2 text-sm font-medium opacity-60 hover:opacity-100 transition-opacity"
+                                        :title="t('dashboard.health.dismissItem')"
+                                        :aria-label="t('dashboard.health.dismissItem')"
+                                        data-testid="health-item-dismiss"
+                                        @click="dismissHealthItemById(item.id)"
+                                    >
+                                        {{ t('dashboard.health.dismiss') }}
+                                    </button>
                                 </div>
                             </div>
                             <button
@@ -366,6 +400,19 @@
                                 {{ t('dashboard.health.allGoodDesc') }}
                             </p>
                         </div>
+                        <button
+                            v-if="dismissedHealthItemsCount > 0"
+                            type="button"
+                            class="justify-self-start text-sm font-medium text-gray-500 underline decoration-dotted underline-offset-4 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                            data-testid="health-items-restore"
+                            @click="restoreDismissedHealthItems"
+                        >
+                            {{
+                                t('dashboard.health.restoreDismissed', {
+                                    count: dismissedHealthItemsCount,
+                                })
+                            }}
+                        </button>
                     </section>
 
                     <section
