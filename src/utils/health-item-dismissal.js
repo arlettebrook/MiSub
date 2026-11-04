@@ -1,6 +1,6 @@
-// Local display preferences only; subscription data and backups are unaffected.
+// Local cache for dashboard preferences; the dashboard store synchronizes it with the server.
 const STORAGE_KEY = 'misub:dismissedHealthItems';
-const MAX_ENTRIES = 100;
+const MAX_ENTRIES = 1000;
 
 function readAll() {
     try {
@@ -23,6 +23,15 @@ function writeAll(ids) {
     } catch {
         // Storage may be unavailable or full; keep the dashboard usable.
     }
+}
+
+export function writeDismissedHealthItemIds(ids) {
+    if (!Array.isArray(ids)) return;
+    if (ids.length === 0) {
+        clearDismissedHealthItems();
+        return;
+    }
+    writeAll([...new Set(ids.filter((id) => typeof id === 'string' && id))]);
 }
 
 export function isHealthItemDismissed(id) {

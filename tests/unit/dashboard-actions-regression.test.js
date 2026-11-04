@@ -4,6 +4,24 @@ import { reactive, ref } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const controls = vi.hoisted(() => ({ route: null, logic: null, push: vi.fn(), replace: vi.fn() }));
+const preferences = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), ids: null }));
+vi.mock('../../src/lib/http.js', async () => {
+    const actual = await vi.importActual('../../src/lib/http.js');
+    return {
+        ...actual,
+        api: {
+            ...actual.api,
+            get: (url, ...args) =>
+                url === '/api/dashboard/preferences'
+                    ? preferences.get()
+                    : actual.api.get(url, ...args),
+            post: (url, body, ...args) =>
+                url === '/api/dashboard/preferences'
+                    ? preferences.post(body)
+                    : actual.api.post(url, body, ...args),
+        },
+    };
+});
 vi.mock('vue-router', async () => ({
     ...(await vi.importActual('vue-router')),
     useRouter: () => ({ push: controls.push, replace: controls.replace }),
@@ -63,12 +81,31 @@ function mountView(view, locale = 'zh-CN', stubs = {}) {
 }
 
 beforeEach(() => {
+    preferences.ids = null;
+    preferences.get
+        .mockReset()
+        .mockImplementation(async () => ({
+            success: true,
+            initialized: preferences.ids != null,
+            data: { dismissedHealthItemIds: [...(preferences.ids || [])] },
+        }));
+    preferences.post.mockReset().mockImplementation(async (body) => {
+        let ids = preferences.ids || [];
+        if (body.action === 'dismiss') ids = [...new Set([...ids, body.id])];
+        if (body.action === 'restore') ids = ids.filter((id) => id !== body.id);
+        if (body.action === 'restore-all') ids = [];
+        if (body.action === 'migrate' && preferences.ids == null) ids = body.ids;
+        preferences.ids = [...ids];
+        return { success: true, initialized: true, data: { dismissedHealthItemIds: [...ids] } };
+    });
     controls.push.mockClear();
     controls.replace.mockReset().mockImplementation(async ({ query }) => {
         controls.route.query = query;
     });
     sessionStorage.clear();
     localStorage.removeItem('misub:dismissedHealthItems');
+    localStorage.removeItem('misub:dismissedHealthItems:pending');
+    localStorage.removeItem('misub:dismissedHealthItems:serverSynced');
     controls.route = reactive({ path: '/dashboard/settings', query: {} });
     controls.logic = {
         settings: ref({ mytoken: 'stable-token' }),
@@ -110,10 +147,13 @@ beforeEach(() => {
         },
     ];
 });
-afterEach(() => {
+afterEach(async () => {
+    await flushPromises();
     wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
     sessionStorage.clear();
     localStorage.removeItem('misub:dismissedHealthItems');
+    localStorage.removeItem('misub:dismissedHealthItems:pending');
+    localStorage.removeItem('misub:dismissedHealthItems:serverSynced');
     vi.restoreAllMocks();
 });
 

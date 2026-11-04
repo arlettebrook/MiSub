@@ -133,12 +133,12 @@ describe('health-item-dismissal', () => {
     });
 
     it('caps the stored list so it cannot grow without bound', () => {
-        for (let i = 0; i < 150; i += 1) dismissHealthItem(`item-${i}`);
+        for (let i = 0; i < 1050; i += 1) dismissHealthItem(`item-${i}`);
 
         const ids = readDismissedHealthItemIds();
-        expect(ids.length).toBe(100);
+        expect(ids.length).toBe(1000);
         // The newest entries are the ones kept.
-        expect(ids[ids.length - 1]).toBe('item-149');
+        expect(ids[ids.length - 1]).toBe('item-1049');
         expect(ids).not.toContain('item-0');
     });
 });

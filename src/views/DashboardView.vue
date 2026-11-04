@@ -1,5 +1,5 @@
 <script setup>
-    import { computed, ref, defineAsyncComponent } from 'vue';
+    import { computed, ref, defineAsyncComponent, onMounted, onUnmounted } from 'vue';
     import { useDataStore } from '../stores/useDataStore.js';
     import { useBulkImportLogic } from '../composables/useBulkImportLogic.js';
     import { storeToRefs } from 'pinia';
@@ -11,12 +11,7 @@
     import { useManualNodes } from '../composables/useManualNodes.js';
     import { formatBytes } from '../lib/utils.js';
     import StatCards from '../components/features/Dashboard/StatCards.vue';
-    import {
-        clearDismissedHealthItems,
-        dismissHealthItem,
-        readDismissedHealthItemIds,
-        restoreHealthItem,
-    } from '../utils/health-item-dismissal.js';
+    import { useDashboardPreferencesStore } from '../stores/dashboard-preferences.js';
     import {
         getDashboardHealthItems,
         resolveHealthItemCopy,
@@ -74,8 +69,20 @@
         };
     });
 
-    // Mirror localStorage in reactive state so dismiss/restore updates the list immediately.
-    const dismissedHealthItemIds = ref(readDismissedHealthItemIds());
+    const dashboardPreferences = useDashboardPreferencesStore();
+    const { dismissedHealthItemIds } = storeToRefs(dashboardPreferences);
+    const syncDismissedHealthItems = () => {
+        void dashboardPreferences.sync();
+    };
+    onMounted(() => {
+        syncDismissedHealthItems();
+        window.addEventListener('online', syncDismissedHealthItems);
+        window.addEventListener('focus', syncDismissedHealthItems);
+    });
+    onUnmounted(() => {
+        window.removeEventListener('online', syncDismissedHealthItems);
+        window.removeEventListener('focus', syncDismissedHealthItems);
+    });
     const allHealthItems = computed(() =>
         getDashboardHealthItems({
             subscriptions: subscriptions.value || [],
@@ -179,19 +186,16 @@
     const LogModal = defineAsyncComponent(() => import('../components/modals/LogModal.vue'));
 
     const dismissHealthItemById = (id) => {
-        dismissHealthItem(id);
-        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+        void dashboardPreferences.dismiss(id);
     };
 
     const restoreDismissedHealthItems = () => {
-        clearDismissedHealthItems();
-        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+        void dashboardPreferences.restoreAll();
         showDismissedHealthItems.value = false;
     };
 
     const restoreHealthItemById = (id) => {
-        restoreHealthItem(id);
-        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+        void dashboardPreferences.restore(id);
         if (dismissedHealthItemsCount.value === 0) showDismissedHealthItems.value = false;
     };
 

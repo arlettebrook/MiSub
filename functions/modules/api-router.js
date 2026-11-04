@@ -30,6 +30,7 @@ import {
     handleUpdatePassword,
 } from './api-handler.js';
 import { handleRuleTemplatesRequest } from './rule-template-handler.js';
+import { handleDashboardPreferencesRequest } from './dashboard-preferences-handler.js';
 import { handleCronTrigger } from './notifications.js';
 import {
     handleSubscriptionNodesRequest,
@@ -414,6 +415,9 @@ export async function handleApiRequest(request, env, context = null) {
 
         case '/rule_templates':
             return await handleRuleTemplatesRequest(request, env);
+
+        case '/dashboard/preferences':
+            return await handleDashboardPreferencesRequest(request, env);
 
         case '/backup/export':
             return await handleBackupExport(request, env);

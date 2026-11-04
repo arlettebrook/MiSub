@@ -105,6 +105,11 @@ describe('API route access boundaries', () => {
 
         const protectedRequests = [
             new Request('https://example.com/api/settings'),
+            new Request('https://example.com/api/dashboard/preferences'),
+            new Request('https://example.com/api/dashboard/preferences', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'restore-all' }),
+            }),
             new Request('https://example.com/api/misubs', {
                 method: 'POST',
                 body: JSON.stringify({ misubs: [], profiles: [] }),

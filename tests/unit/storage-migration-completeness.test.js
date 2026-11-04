@@ -51,6 +51,7 @@ const KV_FIXTURE = {
   worker_settings_v1: { storageType: 'kv', mytoken: 't' },
   misub_dns_templates_v1: [{ id: 'dns-1', kind: 'policy', policy: { mode: 'clean' } }],
   misub_rule_templates_v1: [{ id: 'rule-1' }],
+  misub_dashboard_preferences_v1: { dismissedHealthItemIds: ['subscription-errors:s1'] },
   misub_clients_v1: [{ id: 'c1' }],
   misub_guestbook_v1: [{ id: 'g1' }],
   misub_settings_v1: { legacy: true },
@@ -70,6 +71,7 @@ describe('KV → D1 迁移清单完整性', () => {
       'misub_profiles_v1',
       'misub_dns_templates_v1',
       'misub_rule_templates_v1',
+      'misub_dashboard_preferences_v1',
       'misub_clients_v1',
       'misub_guestbook_v1',
       'misub_settings_v1',
@@ -104,7 +106,7 @@ describe('migrateKVToD1 实际搬运行为', () => {
 
   it('规则模板 / 客户端 / 留言板 / 恢复快照一并搬运', async () => {
     const { result } = await run();
-    for (const key of ['misub_rule_templates_v1', 'misub_clients_v1', 'misub_guestbook_v1', 'misub_restore_snapshot_latest']) {
+    for (const key of ['misub_rule_templates_v1', 'misub_dashboard_preferences_v1', 'misub_clients_v1', 'misub_guestbook_v1', 'misub_restore_snapshot_latest']) {
       expect(result.keys[key]).toBe('migrated');
     }
   });

@@ -84,6 +84,7 @@ const D1_SCHEMA_STATEMENTS = [
 const D1_KNOWN_SETTINGS_KEYS = new Set([
     'misub_dns_templates_v1',
     'misub_rule_templates_v1',
+    'misub_dashboard_preferences_v1',
     'misub_clients_v1',
     'misub_guestbook_v1',
     'misub_settings_v1',
@@ -896,6 +897,7 @@ const D1_MIGRATION_KEYS = [
     DATA_KEYS.PROFILES,
     'misub_dns_templates_v1',
     'misub_rule_templates_v1',
+    'misub_dashboard_preferences_v1',
     'misub_clients_v1',
     'misub_guestbook_v1',
     'misub_settings_v1',
