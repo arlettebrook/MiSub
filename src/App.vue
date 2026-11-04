@@ -206,7 +206,11 @@
         try {
             await Promise.all([checkSession(), router.isReady()]);
             // Keep the existing loading screen until the actual destination is ready.
-            if (isLoggedIn.value && layoutMode.value === 'modern' && route.name === 'Home') {
+            if (
+                isLoggedIn.value &&
+                ((layoutMode.value === 'modern' && route.name === 'Home') ||
+                    (route.name === 'Entrance' && route.path === loginPath.value))
+            ) {
                 await router.replace('/dashboard');
             }
             if (isLoggedIn.value && layoutMode.value === 'legacy') {

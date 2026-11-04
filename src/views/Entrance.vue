@@ -8,7 +8,7 @@
 
 <script setup>
     import { ref, defineAsyncComponent, watch, markRaw } from 'vue';
-    import { useRoute } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
     import { useSessionStore } from '../stores/session';
     import { storeToRefs } from 'pinia';
 
@@ -17,6 +17,7 @@
     const NotFound = defineAsyncComponent(() => import('./NotFound.vue'));
 
     const route = useRoute();
+    const router = useRouter();
     const sessionStore = useSessionStore();
     const { publicConfig } = storeToRefs(sessionStore);
 
@@ -37,6 +38,10 @@
         const isLoginPath = await sessionStore.checkLoginPath(currentPath);
         if (checkId !== pathCheckId || currentPath !== route.path) return;
         if (isLoginPath) {
+            if (sessionStore.sessionState === 'loggedIn') {
+                await router.replace('/dashboard');
+                return;
+            }
             activeComponent.value = markRaw(Login);
             componentProps.value = { login: sessionStore.login };
         } else {

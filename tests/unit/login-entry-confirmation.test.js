@@ -42,22 +42,60 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-async function openEntrance(path) {
+async function openEntrance(path, sessionState = 'loggedOut') {
     const pinia = createPinia();
     store = useSessionStore(pinia);
-    store.sessionState = 'loggedOut';
+    store.sessionState = sessionState;
     router = createRouter({
         history: createMemoryHistory(),
-        routes: [{ path: '/:pathMatch(.*)*', component: Entrance }],
+        routes: [
+            {
+                path: '/dashboard',
+                component: { template: '<section data-testid="dashboard">Dashboard</section>' },
+            },
+            { path: '/:pathMatch(.*)*', component: Entrance },
+        ],
     });
     await router.push(path);
-    wrapper = mount(Entrance, { global: { plugins: [pinia, router] } });
+    wrapper = mount({ template: '<router-view />' }, { global: { plugins: [pinia, router] } });
     await flushPromises();
     await vi.dynamicImportSettled();
     await flushPromises();
 }
 
 describe('login entry path confirmation', () => {
+    it.each(['/admin-login', '/login'])(
+        'redirects an authenticated visitor from %s to the dashboard without showing a login form',
+        async (path) => {
+            if (path === '/login') {
+                apiMocks.fetchPublicConfig.mockResolvedValue({
+                    success: true,
+                    data: { isLoginPath: true, hasCustomLoginPath: false },
+                });
+            }
+            await openEntrance(path, 'loggedIn');
+            expect(router.currentRoute.value.path).toBe('/dashboard');
+            expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+            expect(wrapper.find('[data-testid="dashboard"]').exists()).toBe(true);
+        }
+    );
+
+    it('waits for session restoration before redirecting an authenticated visitor', async () => {
+        await openEntrance('/admin-login', 'loading');
+        expect(apiMocks.fetchPublicConfig).not.toHaveBeenCalled();
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+        store.sessionState = 'loggedIn';
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/dashboard');
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+    });
+
+    it('keeps unknown paths as 404 pages for authenticated visitors', async () => {
+        await openEntrance('/unknown', 'loggedIn');
+        expect(router.currentRoute.value.path).toBe('/unknown');
+        expect(wrapper.find('[data-testid="not-found"]').exists()).toBe(true);
+    });
+
     it('recognizes and remembers the custom login entry without receiving its address', async () => {
         await openEntrance('/admin-login');
         expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(true);

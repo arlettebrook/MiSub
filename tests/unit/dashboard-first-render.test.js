@@ -75,9 +75,10 @@ vi.mock('../../src/lib/api.js', () => ({
 
 const panel = { template: '<section data-testid="dashboard-panel">Dashboard panel</section>' };
 const wrappers = [];
-const mountApp = (router, layoutMode = 'modern') => {
+const mountApp = (router, layoutMode = 'modern', loginPath = '/login') => {
     const pinia = createPinia();
     useUIStore(pinia).layoutMode = layoutMode;
+    useSessionStore(pinia).loginPath = loginPath;
     const wrapper = mount(App, {
         global: {
             plugins: [pinia, router, createI18n({ initialLocale: 'zh-CN' })],
@@ -99,6 +100,44 @@ const mountApp = (router, layoutMode = 'modern') => {
 afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
 
 describe('authenticated dashboard first render', () => {
+    it.each(['/login', '/admin-login'])(
+        'keeps the login entry %s hidden until the restored session reaches the dashboard',
+        async (loginPath) => {
+            let finishRoute;
+            const routeChunk = new Promise((resolve) => {
+                finishRoute = resolve;
+            });
+            const loginMounted = vi.fn();
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [
+                    {
+                        path: loginPath,
+                        name: 'Entrance',
+                        component: {
+                            template: '<form data-testid="login-entry" />',
+                            mounted: loginMounted,
+                        },
+                        meta: { isPublic: true },
+                    },
+                    { path: '/dashboard', name: 'Dashboard', component: () => routeChunk },
+                ],
+            });
+            await router.push(loginPath);
+            const wrapper = mountApp(router, 'modern', loginPath);
+            await flushPromises();
+            expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+            expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+            expect(loginMounted).not.toHaveBeenCalled();
+
+            finishRoute(panel);
+            await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/dashboard'));
+            await flushPromises();
+            expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
+            expect(loginMounted).not.toHaveBeenCalled();
+        }
+    );
+
     it('redirects an expired session to its confirmed login entry with one notification', async () => {
         const router = createRouter({
             history: createMemoryHistory(),
