@@ -8,6 +8,7 @@ const apiMocks = vi.hoisted(() => ({
     fetchPublicConfig: vi.fn(),
     login: vi.fn(),
     apiGet: vi.fn(),
+    cancelPendingRequests: vi.fn(),
 }));
 const routerMocks = vi.hoisted(() => ({ push: vi.fn() }));
 const loaderMocks = vi.hoisted(() => ({ loadLegacyDashboard: vi.fn() }));
@@ -16,6 +17,7 @@ vi.mock('../../src/router/component-loaders.js', () => loaderMocks);
 vi.mock('../../src/lib/api', () => apiMocks);
 vi.mock('../../src/lib/http.js', () => ({
     api: { get: apiMocks.apiGet },
+    cancelPendingRequests: apiMocks.cancelPendingRequests,
 }));
 vi.mock('../../src/router', () => ({
     default: routerMocks,
@@ -36,6 +38,47 @@ describe('session store resilience', () => {
     });
 
     afterEach(() => vi.restoreAllMocks());
+
+    it('ignores unauthorized responses while an intentional logout is pending', async () => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        let finishLogout;
+        apiMocks.apiGet.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishLogout = resolve;
+                })
+        );
+        const logout = store.logout();
+        expect(store.isLoggingOut).toBe(true);
+        expect(store.handleUnauthorized()).toBe(false);
+        expect(store.sessionState).toBe('loggedIn');
+        expect(apiMocks.cancelPendingRequests).toHaveBeenCalledWith(true);
+        finishLogout({ success: true });
+        await expect(logout).resolves.toBe(true);
+        expect(store.sessionState).toBe('loggedOut');
+        expect(store.isLoggingOut).toBe(false);
+    });
+
+    it('does not restore a session from a request that started before logout', async () => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        let finishSession;
+        apiMocks.fetchInitialData.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishSession = resolve;
+                })
+        );
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: true, data: {} });
+        const checking = store.checkSession();
+        apiMocks.apiGet.mockResolvedValue({ success: true });
+        await store.logout();
+        finishSession({ success: true, data: { misubs: [{ id: 'stale' }] } });
+        await expect(checking).resolves.toBe(false);
+        expect(store.sessionState).toBe('loggedOut');
+        expect(store.initialData).toBeNull();
+    });
 
     it('clears an expired session only once while preserving the confirmed login entry', () => {
         const store = useSessionStore();

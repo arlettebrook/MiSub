@@ -41,7 +41,7 @@
     const { initTheme } = themeStore;
 
     const sessionStore = useSessionStore();
-    const { sessionState } = storeToRefs(sessionStore);
+    const { sessionState, isLoggingOut } = storeToRefs(sessionStore);
     const { checkSession, login, logout } = sessionStore;
 
     const toastStore = useToastStore();
@@ -174,8 +174,9 @@
     });
 
     const redirectUnauthenticatedRoute = () => {
-        if (sessionState.value !== 'loggedOut' || !route.meta?.requiresAuth) return;
-        router
+        if (sessionState.value !== 'loggedOut' || isLoggingOut.value || !route.meta?.requiresAuth)
+            return;
+        return router
             .replace({ path: loginPath.value, query: { redirect: route.fullPath } })
             .catch(() => {});
     };
@@ -186,9 +187,13 @@
         redirectUnauthenticatedRoute();
     };
 
-    watch([sessionState, () => route.fullPath, loginPath], redirectUnauthenticatedRoute, {
-        immediate: true,
-    });
+    watch(
+        [sessionState, isLoggingOut, () => route.fullPath, loginPath],
+        redirectUnauthenticatedRoute,
+        {
+            immediate: true,
+        }
+    );
 
     const isDefaultPassword = computed(() => {
         return (
@@ -200,11 +205,10 @@
         () => sessionStore.securityWarning?.message || t('notices.defaultPasswordWarning')
     );
 
-    onMounted(async () => {
-        window.addEventListener('misub:unauthorized', handleUnauthorized);
-        initTheme();
+    const prepareSessionRoute = async () => {
         try {
             await Promise.all([checkSession(), router.isReady()]);
+            await redirectUnauthenticatedRoute();
             // Keep the existing loading screen until the actual destination is ready.
             if (
                 isLoggedIn.value &&
@@ -219,10 +223,33 @@
         } finally {
             isInitialRouteReady.value = true;
         }
+    };
+
+    const handlePageHide = (event) => {
+        if (!event.persisted) return;
+        sessionStore.suspendSession();
+        isInitialRouteReady.value = false;
+    };
+
+    const handlePageShow = async (event) => {
+        if (!event.persisted) return;
+        sessionStore.suspendSession();
+        isInitialRouteReady.value = false;
+        await prepareSessionRoute();
+    };
+
+    onMounted(async () => {
+        window.addEventListener('misub:unauthorized', handleUnauthorized);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('pageshow', handlePageShow);
+        initTheme();
+        await prepareSessionRoute();
     });
 
     onUnmounted(() => {
         window.removeEventListener('misub:unauthorized', handleUnauthorized);
+        window.removeEventListener('pagehide', handlePageHide);
+        window.removeEventListener('pageshow', handlePageShow);
         configureAuthGuard(null);
     });
 

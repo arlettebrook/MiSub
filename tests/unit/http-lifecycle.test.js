@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { request, cancelPendingRequests, RequestCancelledError } from '../../src/lib/http.js';
+import {
+    request,
+    cancelPendingRequests,
+    configureUnauthorizedHandler,
+    RequestCancelledError,
+} from '../../src/lib/http.js';
 import { ErrorHandler, configureErrorMonitoring } from '../../src/utils/errorHandler.js';
 
 const pendingFetch = (_url, options) =>
@@ -14,6 +19,7 @@ const pendingFetch = (_url, options) =>
 beforeEach(() => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible'));
 afterEach(() => {
     cancelPendingRequests();
+    configureUnauthorizedHandler(null);
     configureErrorMonitoring({ endpoint: null });
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -21,6 +27,44 @@ afterEach(() => {
 });
 
 describe('HTTP page lifecycle', () => {
+    it('reads the current session instead of reusing a login response from browser history', async () => {
+        let authenticated = true;
+        let cachedResponse;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (_url, options) => {
+                if (cachedResponse && options.cache !== 'no-store') return cachedResponse.clone();
+                const response = new Response(JSON.stringify({ authenticated }), { status: 200 });
+                cachedResponse = response.clone();
+                return response;
+            })
+        );
+        expect(await request('/api/data')).toEqual({ authenticated: true });
+        authenticated = false;
+        expect(await request('/api/data')).toEqual({ authenticated: false });
+    });
+
+    it('does not expire the session when a cancelled request finishes parsing a 401 response', async () => {
+        let finishText;
+        const response = new Response('{}', { status: 401 });
+        const text = vi.spyOn(response, 'text').mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishText = resolve;
+                })
+        );
+        const unauthorized = vi.fn();
+        configureUnauthorizedHandler(unauthorized);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+        const pending = request('/api/dashboard/preferences', { background: true });
+        const cancelled = expect(pending).rejects.toBeInstanceOf(RequestCancelledError);
+        await vi.waitFor(() => expect(text).toHaveBeenCalled());
+        cancelPendingRequests(true);
+        finishText('{"error":"Unauthorized"}');
+        await cancelled;
+        expect(unauthorized).not.toHaveBeenCalled();
+    });
+
     it('cancels in-flight requests when the page closes', async () => {
         const fetch = vi.fn(pendingFetch);
         vi.stubGlobal('fetch', fetch);

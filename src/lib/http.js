@@ -83,12 +83,14 @@ export async function request(url, options = {}) {
     try {
         const response = await fetch(url, {
             credentials: 'include',
+            cache: 'no-store',
             ...rest,
             body,
             headers: buildHeaders(headers, body),
             signal: controller.signal,
         });
         const data = await parseJson(response);
+        controller.signal.throwIfAborted();
         if (!response.ok) {
             if (response.status === 401) {
                 try {

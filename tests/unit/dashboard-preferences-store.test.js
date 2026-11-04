@@ -2,9 +2,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useDashboardPreferencesStore } from '../../src/stores/dashboard-preferences.js';
 import { useToastStore } from '../../src/stores/toast.js';
+import { useSessionStore } from '../../src/stores/session.js';
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
-vi.mock('../../src/lib/http.js', () => ({ api }));
+vi.mock('../../src/lib/http.js', () => ({ api, cancelPendingRequests: vi.fn() }));
 const CACHE_KEY = 'misub:dismissedHealthItems';
 const PENDING_KEY = `${CACHE_KEY}:pending`;
 let server;
@@ -12,6 +13,7 @@ let server;
 function newClient(clearCache = false) {
     if (clearCache) localStorage.clear();
     setActivePinia(createPinia());
+    useSessionStore().sessionState = 'loggedIn';
     return useDashboardPreferencesStore();
 }
 function result() {
@@ -42,6 +44,55 @@ afterEach(() => {
 });
 
 describe('dashboard preference synchronization', () => {
+    it.each(['loading', 'loggedOut'])(
+        'does not request private preferences while the session is %s',
+        async (state) => {
+            const client = newClient();
+            useSessionStore().sessionState = state;
+            expect(await client.sync()).toBe(false);
+            expect(api.get).not.toHaveBeenCalled();
+            expect(useToastStore().toasts).toHaveLength(0);
+        }
+    );
+
+    it('pauses preference synchronization during an intentional logout', async () => {
+        const client = newClient();
+        useSessionStore().isLoggingOut = true;
+        expect(await client.sync()).toBe(false);
+        expect(api.get).not.toHaveBeenCalled();
+        expect(useToastStore().toasts).toHaveLength(0);
+    });
+
+    it('does not report an expired session as a network synchronization failure', async () => {
+        const client = newClient();
+        api.get.mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }));
+        expect(await client.sync()).toBe(false);
+        expect(useToastStore().toasts).toHaveLength(0);
+    });
+
+    it('keeps pending actions local when logout completes during a request', async () => {
+        const client = newClient();
+        let finishGet;
+        api.get.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishGet = resolve;
+                })
+        );
+        const dismissal = client.dismiss('subscription-errors:one');
+        useSessionStore().sessionState = 'loggedOut';
+        finishGet(result());
+        expect(await dismissal).toBe(false);
+        expect(api.post).not.toHaveBeenCalled();
+        expect(JSON.parse(localStorage.getItem(PENDING_KEY))).toEqual([
+            { action: 'dismiss', id: 'subscription-errors:one' },
+        ]);
+        expect(useToastStore().toasts).toHaveLength(0);
+        useSessionStore().sessionState = 'loggedIn';
+        expect(await client.sync()).toBe(true);
+        expect(server).toEqual(['subscription-errors:one']);
+    });
+
     it('loads ignored issues from the server with an empty browser cache', async () => {
         server = ['subscription-errors:one', 'low-traffic:two'];
         const client = newClient();
@@ -76,10 +127,11 @@ describe('dashboard preference synchronization', () => {
         const client = newClient();
         await client.sync();
         expect(server).toEqual(['auto-token']);
-        expect(api.post).toHaveBeenCalledWith('/api/dashboard/preferences', {
-            action: 'migrate',
-            ids: ['auto-token'],
-        });
+        expect(api.post).toHaveBeenCalledWith(
+            '/api/dashboard/preferences',
+            { action: 'migrate', ids: ['auto-token'] },
+            { background: true }
+        );
         await client.restore('auto-token');
         localStorage.clear();
         localStorage.setItem(CACHE_KEY, JSON.stringify(['auto-token']));

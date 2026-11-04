@@ -13,6 +13,8 @@ import SavePrompt from '../../src/components/ui/SavePrompt.vue';
 import { loadLegacyDashboard } from '../../src/router/component-loaders.js';
 import { useSessionStore } from '../../src/stores/session.js';
 
+const sessionGate = vi.hoisted(() => ({ nextCheck: null }));
+
 const legacyGate = vi.hoisted(() => {
     let resolve;
     const promise = new Promise((finish) => {
@@ -38,11 +40,20 @@ vi.mock('../../src/stores/session.js', async () => {
             const sessionState = ref('loading');
             return {
                 sessionState,
+                isLoggingOut: ref(false),
                 publicConfig: ref({ enablePublicPage: true }),
                 loginPath: ref('/login'),
                 subscriptionConfig: ref({}),
                 checkSession: async () => {
+                    if (sessionGate.nextCheck) {
+                        const check = sessionGate.nextCheck;
+                        sessionGate.nextCheck = null;
+                        return check();
+                    }
                     sessionState.value = 'loggedIn';
+                },
+                suspendSession: () => {
+                    sessionState.value = 'loading';
                 },
                 login: vi.fn(),
                 logout: vi.fn(),
@@ -97,9 +108,65 @@ const mountApp = (router, layoutMode = 'modern', loginPath = '/login') => {
     return wrapper;
 };
 
-afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
+afterEach(() => {
+    wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+    sessionGate.nextCheck = null;
+});
 
 describe('authenticated dashboard first render', () => {
+    it('revalidates a cached dashboard before resuming it after logout in another document', async () => {
+        const router = createRouter({
+            history: createMemoryHistory(),
+            routes: [
+                {
+                    path: '/dashboard',
+                    name: 'Dashboard',
+                    component: panel,
+                    meta: { requiresAuth: true },
+                },
+                {
+                    path: '/admin-login',
+                    name: 'Entrance',
+                    component: { template: '<form data-testid="login-entry" />' },
+                    meta: { isPublic: true },
+                },
+            ],
+        });
+        await router.push('/dashboard');
+        const wrapper = mountApp(router, 'modern', '/admin-login');
+        await flushPromises();
+        const store = useSessionStore(wrapper.vm.$pinia);
+        let finishSession;
+        const checkSession = vi.fn(
+            () =>
+                new Promise((resolve) => {
+                    finishSession = () => {
+                        store.sessionState = 'loggedOut';
+                        resolve(false);
+                    };
+                })
+        );
+        sessionGate.nextCheck = checkSession;
+        const hide = new Event('pagehide');
+        Object.defineProperty(hide, 'persisted', { value: true });
+        window.dispatchEvent(hide);
+        await flushPromises();
+        expect(store.sessionState).toBe('loading');
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
+        const show = new Event('pageshow');
+        Object.defineProperty(show, 'persisted', { value: true });
+        window.dispatchEvent(show);
+        await flushPromises();
+        expect(checkSession).toHaveBeenCalledTimes(1);
+        expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+        window.dispatchEvent(new CustomEvent('misub:unauthorized'));
+        finishSession();
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/admin-login');
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(true);
+        expect(useToastStore(wrapper.vm.$pinia).toasts).toHaveLength(0);
+    });
+
     it.each(['/login', '/admin-login'])(
         'keeps the login entry %s hidden until the restored session reaches the dashboard',
         async (loginPath) => {

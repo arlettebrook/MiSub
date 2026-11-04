@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import router from '../router';
 import { fetchInitialData, login as apiLogin, fetchPublicConfig } from '../lib/api';
-import { api } from '../lib/http.js';
+import { api, cancelPendingRequests } from '../lib/http.js';
 import { handleError } from '../utils/errorHandler.js';
 import { useDataStore } from './useDataStore';
 import { useUIStore } from './ui.js';
@@ -12,6 +12,8 @@ import { normalizeLoginPath, readRememberedLoginPath } from '../utils/login-path
 
 export const useSessionStore = defineStore('session', () => {
     const sessionState = ref('loading'); // loading, loggedIn, loggedOut
+    const isLoggingOut = ref(false);
+    let sessionCheckId = 0;
     const initialData = ref(null);
     const subscriptionConfig = ref({}); // [NEW] Added subscriptionConfig
     const securityWarning = ref(null);
@@ -96,13 +98,21 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     function handleUnauthorized() {
-        if (sessionState.value !== 'loggedIn') return false;
+        if (sessionState.value !== 'loggedIn' || isLoggingOut.value) return false;
+        sessionCheckId++;
         sessionState.value = 'loggedOut';
         clearSessionData();
         return true;
     }
 
+    function suspendSession() {
+        sessionCheckId++;
+        sessionState.value = 'loading';
+        cancelPendingRequests(true);
+    }
+
     async function checkSession(navigationReady) {
+        const checkId = ++sessionCheckId;
         const pathname = globalThis.window?.location?.pathname || '/login';
         // Parallel fetch of initial data (auth check) and public config
         const [dataResult, pConfigResult] = await Promise.all([
@@ -110,7 +120,9 @@ export const useSessionStore = defineStore('session', () => {
             fetchPublicConfig(pathname),
         ]);
 
-        if (dataResult.cancelled || pConfigResult.cancelled) return false;
+        if (checkId !== sessionCheckId || dataResult.cancelled || pConfigResult.cancelled) {
+            return false;
+        }
 
         // Update public config
         updatePublicConfig(pConfigResult, pathname);
@@ -118,6 +130,7 @@ export const useSessionStore = defineStore('session', () => {
         if (dataResult.success) {
             // Confirm authentication before navigating, and reveal the page only when it is ready.
             await (typeof navigationReady === 'function' ? navigationReady() : navigationReady);
+            if (checkId !== sessionCheckId) return false;
             initialData.value = dataResult.data;
             if (dataResult.data.config) {
                 subscriptionConfig.value = dataResult.data.config;
@@ -181,39 +194,54 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     async function logout() {
-        let logoutConfirmed = false;
+        if (isLoggingOut.value) return false;
+        isLoggingOut.value = true;
+        sessionCheckId++;
+        cancelPendingRequests(true);
         try {
-            await api.get('/api/logout');
-            logoutConfirmed = true;
-        } catch (error) {
-            if (error.cancelled) return false;
-            console.warn('Logout request failed:', error);
-        }
-        if (!logoutConfirmed) {
-            const sessionCheck = await fetchInitialData();
-            if (sessionCheck.success || sessionCheck.errorType !== 'auth') {
-                handleError(new Error(t('settings.logoutFailed')), t('settings.logoutContext'), {
-                    errorType: 'logout_failed',
-                });
-                return false;
+            let logoutConfirmed = false;
+            try {
+                await api.get('/api/logout');
+                logoutConfirmed = true;
+            } catch (error) {
+                if (error.cancelled) return false;
+                console.warn('Logout request failed:', error);
             }
-        }
-        sessionState.value = 'loggedOut';
-        clearSessionData();
+            if (!logoutConfirmed) {
+                const sessionCheck = await fetchInitialData();
+                if (sessionCheck.success || sessionCheck.errorType !== 'auth') {
+                    handleError(
+                        new Error(t('settings.logoutFailed')),
+                        t('settings.logoutContext'),
+                        {
+                            errorType: 'logout_failed',
+                        }
+                    );
+                    return false;
+                }
+            }
+            sessionCheckId++;
+            sessionState.value = 'loggedOut';
+            clearSessionData();
 
-        // 跳转到首页（公开页）
-        await router.push({ path: '/' });
-        return true;
+            // 跳转到首页（公开页）
+            await router.push({ path: '/' });
+            return true;
+        } finally {
+            isLoggingOut.value = false;
+        }
     }
 
     return {
         sessionState,
+        isLoggingOut,
         initialData,
         publicConfig,
         loginPath,
         subscriptionConfig,
         securityWarning,
         checkSession,
+        suspendSession,
         checkLoginPath,
         handleUnauthorized,
         login,

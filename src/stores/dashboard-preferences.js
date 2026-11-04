@@ -6,6 +6,7 @@ import {
     writeDismissedHealthItemIds,
 } from '../utils/health-item-dismissal.js';
 import { useToastStore } from './toast.js';
+import { useSessionStore } from './session.js';
 import { t } from '../i18n/index.js';
 
 const ENDPOINT = '/api/dashboard/preferences';
@@ -44,6 +45,7 @@ function responseIds(result) {
 
 export const useDashboardPreferencesStore = defineStore('dashboard-preferences', () => {
     const { showToast } = useToastStore();
+    const sessionStore = useSessionStore();
     const dismissedHealthItemIds = ref(readDismissedHealthItemIds());
     const isSyncing = ref(false);
     const storedPending = readLocal(PENDING_KEY, []);
@@ -66,19 +68,27 @@ export const useDashboardPreferencesStore = defineStore('dashboard-preferences',
         writeDismissedHealthItemIds(dismissedHealthItemIds.value);
     }
 
+    function canSync() {
+        return sessionStore.sessionState === 'loggedIn' && !sessionStore.isLoggingOut;
+    }
+
     async function sync() {
+        if (!canSync()) return false;
         if (syncing) return syncing;
         isSyncing.value = true;
         syncing = (async () => {
             try {
-                let result = await api.get(ENDPOINT);
+                let result = await api.get(ENDPOINT, { background: true });
+                if (!canSync()) return false;
                 let ids = responseIds(result);
                 if (!migrated) {
                     if (!result.initialized && dismissedHealthItemIds.value.length > 0) {
-                        result = await api.post(ENDPOINT, {
-                            action: 'migrate',
-                            ids: dismissedHealthItemIds.value,
-                        });
+                        result = await api.post(
+                            ENDPOINT,
+                            { action: 'migrate', ids: dismissedHealthItemIds.value },
+                            { background: true }
+                        );
+                        if (!canSync()) return false;
                         ids = responseIds(result);
                     }
                     migrated = true;
@@ -86,7 +96,8 @@ export const useDashboardPreferencesStore = defineStore('dashboard-preferences',
                 }
                 publish(ids);
                 while (pending.length > 0) {
-                    result = await api.post(ENDPOINT, pending[0]);
+                    result = await api.post(ENDPOINT, pending[0], { background: true });
+                    if (!canSync()) return false;
                     ids = responseIds(result);
                     pending.shift();
                     saveLocal(PENDING_KEY, pending);
@@ -95,7 +106,7 @@ export const useDashboardPreferencesStore = defineStore('dashboard-preferences',
                 reportedError = false;
                 return true;
             } catch (error) {
-                if (!error?.cancelled && !reportedError) {
+                if (canSync() && !error?.cancelled && error?.status !== 401 && !reportedError) {
                     showToast(t('dashboard.health.syncFailed'), 'error');
                     reportedError = true;
                 }
