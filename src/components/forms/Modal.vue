@@ -1,7 +1,8 @@
 <script setup>
-    import { ref, watch, nextTick, onUnmounted, computed } from 'vue';
+    import { ref, computed } from 'vue';
     import { useI18n } from '@/i18n/index.js';
     import { useBackdropDismiss } from '@/composables/useBackdropDismiss.js';
+    import { useModalFocus } from '@/composables/useModalFocus.js';
 
     const props = defineProps({
         show: Boolean,
@@ -30,6 +31,20 @@
             type: String,
             default: '',
         },
+        confirmVariant: {
+            type: String,
+            default: 'primary',
+            validator: (value) => ['primary', 'danger'].includes(value),
+        },
+        layer: {
+            type: String,
+            default: 'modal',
+            validator: (value) => ['modal', 'confirmation'].includes(value),
+        },
+        descriptionId: {
+            type: String,
+            default: '',
+        },
     });
 
     const emit = defineEmits(['update:show', 'confirm']);
@@ -42,83 +57,18 @@
     const modalPanelRef = ref(null);
     const titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
 
-    // 记录打开弹窗前的焦点元素，关闭时还原
-    let previouslyFocused = null;
+    const { isTopModal } = useModalFocus(modalPanelRef, () => props.show, {
+        priority: () => (props.layer === 'confirmation' ? 1 : 0),
+        onEscape: () => emit('update:show', false),
+    });
 
-    const FOCUSABLE = [
-        'a[href]',
-        'button:not([disabled])',
-        'input:not([disabled])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
-        '[tabindex]:not([tabindex="-1"])',
-    ].join(', ');
-
-    function getFocusableElements() {
-        return modalPanelRef.value
-            ? Array.from(modalPanelRef.value.querySelectorAll(FOCUSABLE))
-            : [];
-    }
-
-    // Focus trap：Tab / Shift+Tab 循环限制在弹窗内，Escape 关闭
-    const handleKeydown = (e) => {
-        if (e.key === 'Escape') {
-            emit('update:show', false);
+    const handleConfirm = () => {
+        if (
+            props.confirmDisabled ||
+            (props.confirmKeyword && confirmInput.value !== props.confirmKeyword)
+        )
             return;
-        }
-        if (e.key !== 'Tab') return;
-
-        const focusable = getFocusableElements();
-        if (!focusable.length) {
-            e.preventDefault();
-            return;
-        }
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (e.shiftKey) {
-            if (document.activeElement === first) {
-                e.preventDefault();
-                last.focus();
-            }
-        } else {
-            if (document.activeElement === last) {
-                e.preventDefault();
-                first.focus();
-            }
-        }
-    };
-
-    watch(
-        () => props.show,
-        async (val) => {
-            if (val) {
-                previouslyFocused = document.activeElement;
-                window.addEventListener('keydown', handleKeydown);
-                await nextTick();
-                // 优先聚焦第一个可交互元素，否则聚焦弹窗面板本身
-                const focusable = getFocusableElements();
-                if (focusable.length) {
-                    focusable[0].focus();
-                } else {
-                    modalPanelRef.value?.focus();
-                }
-            } else {
-                window.removeEventListener('keydown', handleKeydown);
-                // 还原焦点到触发元素
-                if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-                    previouslyFocused.focus();
-                    previouslyFocused = null;
-                }
-            }
-        }
-    );
-
-    onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
-
-    const handleConfirm = async () => {
-        await emit('confirm');
+        emit('confirm');
         if (props.closeOnConfirm) {
             emit('update:show', false);
         }
@@ -135,19 +85,24 @@
             <div
                 v-if="show"
                 class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
-                :style="{ zIndex: 'var(--z-modal)' }"
+                :style="{
+                    zIndex: layer === 'confirmation' ? 'var(--z-confirm)' : 'var(--z-modal)',
+                }"
                 @pointerdown.capture="handleBackdropPointerDown"
                 @click="handleBackdropClick"
                 role="dialog"
-                aria-modal="true"
+                :aria-modal="isTopModal ? 'true' : 'false'"
+                :aria-hidden="isTopModal ? undefined : 'true'"
+                :inert="!isTopModal"
                 :aria-labelledby="titleId"
+                :aria-describedby="descriptionId || undefined"
             >
                 <Transition name="modal-inner">
                     <div
                         v-if="show"
                         ref="modalPanelRef"
                         tabindex="-1"
-                        class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl misub-radius-lg shadow-2xl w-full text-left ring-1 ring-black/5 dark:ring-white/10 flex flex-col max-h-[85vh] lg:max-h-[90vh] border border-white/20 dark:border-white/5 focus:outline-none"
+                        class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl misub-radius-lg shadow-2xl w-full text-left ring-1 ring-black/5 dark:ring-white/10 flex flex-col max-h-[85vh] lg:max-h-[90vh] border border-white/20 dark:border-white/5 focus-visible:outline-none"
                         :class="{
                             'max-w-sm': size === 'sm',
                             'max-w-md': size === 'md',
@@ -182,19 +137,26 @@
                         >
                             <slot name="footer">
                                 <button
+                                    type="button"
                                     @click="emit('update:show', false)"
-                                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold text-sm misub-radius-lg transition-colors"
+                                    class="touch-target px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold text-sm misub-radius-lg transition-colors"
                                 >
                                     {{ cancelLabel }}
                                 </button>
                                 <button
+                                    type="button"
                                     @click="handleConfirm"
                                     :disabled="
                                         confirmDisabled ||
                                         (confirmKeyword && confirmInput !== confirmKeyword)
                                     "
                                     :title="confirmDisabled ? confirmTitle : t('actions.confirm')"
-                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm misub-radius-lg transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    class="touch-target px-4 py-2 text-white font-semibold text-sm misub-radius-lg transition-colors disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    :class="
+                                        confirmVariant === 'danger'
+                                            ? 'bg-red-600 hover:bg-red-700'
+                                            : 'bg-indigo-600 hover:bg-indigo-700'
+                                    "
                                 >
                                     {{ confirmLabel }}
                                 </button>

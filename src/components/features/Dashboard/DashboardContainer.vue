@@ -283,6 +283,7 @@
 
         <Modal
             v-model:show="showDeleteSubsModal"
+            confirm-variant="danger"
             @confirm="handleDeleteAllSubscriptionsWithCleanup"
         >
             <template #title>
@@ -297,7 +298,11 @@
             </template>
         </Modal>
 
-        <Modal v-model:show="showDeleteNodesModal" @confirm="handleDeleteAllNodesWithCleanup">
+        <Modal
+            v-model:show="showDeleteNodesModal"
+            confirm-variant="danger"
+            @confirm="handleDeleteAllNodesWithCleanup"
+        >
             <template #title>
                 <h3 class="text-lg font-bold text-red-500">
                     {{ t('manualNodes.deleteAllConfirmTitle') }}
@@ -310,7 +315,11 @@
             </template>
         </Modal>
 
-        <Modal v-model:show="showDeleteProfilesModal" @confirm="handleDeleteAllProfiles">
+        <Modal
+            v-model:show="showDeleteProfilesModal"
+            confirm-variant="danger"
+            @confirm="handleDeleteAllProfiles"
+        >
             <template #title>
                 <h3 class="text-lg font-bold text-red-500">
                     {{ t('subscriptions.deleteAllConfirmTitle') }}组

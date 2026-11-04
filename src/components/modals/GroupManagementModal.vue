@@ -1,8 +1,9 @@
 <script setup>
-    import { ref, computed, watch } from 'vue';
+    import { ref, computed, watch, nextTick } from 'vue';
     import Modal from '../forms/Modal.vue';
     import draggable from 'vuedraggable';
     import { useI18n } from '../../i18n/index.js';
+    import { useConfirm } from '../../composables/useConfirm.js';
 
     const { t } = useI18n();
 
@@ -15,11 +16,13 @@
     });
 
     const emit = defineEmits(['close', 'rename', 'delete', 'reorder', 'update:show']);
+    const { confirmAction } = useConfirm({ enabled: () => props.show });
 
     // 本地可编辑的分组列表
     const localGroups = ref([]);
     const editingGroupIndex = ref(null);
     const editingGroupName = ref('');
+    const groupBodyRef = ref(null);
 
     // 监听 props.groups 变化，同步到本地
     const syncGroups = () => {
@@ -46,11 +49,34 @@
     const startEdit = (index) => {
         editingGroupIndex.value = index;
         editingGroupName.value = localGroups.value[index].name;
+        void nextTick().then(() => {
+            if (props.show) groupBodyRef.value?.querySelector('input')?.focus();
+        });
     };
 
     const cancelEdit = () => {
+        const index = editingGroupIndex.value;
         editingGroupIndex.value = null;
         editingGroupName.value = '';
+        if (index !== null)
+            void nextTick().then(() => {
+                if (props.show)
+                    groupBodyRef.value
+                        ?.querySelector(
+                            `[data-group-index="${index}"] [data-group-action="rename"]`
+                        )
+                        ?.focus();
+            });
+    };
+
+    const handleEditKeydown = (event) => {
+        if (event.isComposing || editingGroupIndex.value === null) return;
+        if (event.key !== 'Escape' && !(event.key === 'Enter' && event.target.tagName === 'INPUT'))
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === 'Escape') cancelEdit();
+        else confirmEdit();
     };
 
     const confirmEdit = () => {
@@ -69,15 +95,16 @@
         cancelEdit();
     };
 
-    const handleDelete = (groupName) => {
-        if (
-            confirm(
-                t('manualNodes.deleteGroupConfirm', {
-                    name: groupName,
-                    defaultGroup: t('manualNodes.defaultGroup'),
-                })
-            )
-        ) {
+    const handleDelete = async (groupName) => {
+        const confirmed = await confirmAction({
+            message: t('manualNodes.deleteGroupConfirm', {
+                name: groupName,
+                defaultGroup: t('manualNodes.defaultGroup'),
+            }),
+            confirmText: t('actions.delete'),
+            variant: 'danger',
+        });
+        if (confirmed) {
             emit('delete', groupName);
             localGroups.value = localGroups.value.filter((g) => g.name !== groupName);
         }
@@ -92,7 +119,7 @@
 </script>
 
 <template>
-    <Modal :show="show" @close="handleClose" max-width="max-w-2xl">
+    <Modal :show="show" @update:show="handleClose" size="2xl">
         <template #title>
             <div class="flex items-center gap-2">
                 <svg
@@ -110,7 +137,7 @@
         </template>
 
         <template #body>
-            <div class="space-y-3">
+            <div ref="groupBodyRef" class="space-y-3" @keydown="handleEditKeydown">
                 <div
                     v-if="localGroups.length === 0"
                     class="text-center py-8 text-gray-500 dark:text-gray-400"
@@ -144,6 +171,7 @@
                 >
                     <template #item="{ element, index }">
                         <div
+                            :data-group-index="index"
                             class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors"
                             :class="
                                 editingGroupIndex === index
@@ -154,7 +182,7 @@
                             <!-- 拖拽手柄 -->
                             <button
                                 v-if="isDraggable"
-                                class="drag-handle cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                class="touch-target drag-handle cursor-move text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                 :title="t('common.dragToSort')"
                                 :aria-label="t('common.dragToSort')"
                             >
@@ -171,20 +199,19 @@
                             </button>
 
                             <!-- 分组名称或编辑输入框 -->
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <input
                                     v-if="editingGroupIndex === index"
                                     v-model="editingGroupName"
                                     type="text"
-                                    class="w-full px-3 py-1.5 text-sm border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    @keyup.enter="confirmEdit"
-                                    @keyup.esc="cancelEdit"
+                                    class="w-full px-3 py-1.5 text-sm border border-indigo-300 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     ref="editInput"
                                     autofocus
                                     :aria-label="t('manualNodes.renameGroup')"
                                 />
                                 <div v-else class="flex items-center gap-2">
                                     <span
+                                        style="overflow-wrap: anywhere"
                                         class="text-sm font-medium text-gray-900 dark:text-white"
                                         >{{ element.name }}</span
                                     >
@@ -196,7 +223,7 @@
                                 <template v-if="editingGroupIndex === index">
                                     <button
                                         @click="confirmEdit"
-                                        class="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
+                                        class="touch-target p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
                                         :title="t('actions.confirm')"
                                         :aria-label="t('actions.confirm')"
                                     >
@@ -215,7 +242,7 @@
                                     </button>
                                     <button
                                         @click="cancelEdit"
-                                        class="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                                        class="touch-target p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                                         :title="t('actions.cancel')"
                                         :aria-label="t('actions.cancel')"
                                     >
@@ -235,8 +262,9 @@
                                 </template>
                                 <template v-else>
                                     <button
+                                        data-group-action="rename"
                                         @click="startEdit(index)"
-                                        class="p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-md transition-colors"
+                                        class="touch-target p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-md transition-colors"
                                         :title="t('manualNodes.renameGroup')"
                                         :aria-label="t('manualNodes.renameGroup')"
                                     >
@@ -253,7 +281,7 @@
                                     </button>
                                     <button
                                         @click="handleDelete(element.name)"
-                                        class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                        class="touch-target p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                                         :title="t('actions.delete')"
                                         :aria-label="t('actions.delete')"
                                     >
@@ -299,7 +327,7 @@
         <template #footer>
             <button
                 @click="handleClose"
-                class="w-full rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                class="touch-target w-full rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
                 {{ t('common.close') }}
             </button>

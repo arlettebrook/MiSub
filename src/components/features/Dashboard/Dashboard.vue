@@ -583,7 +583,10 @@
         @import="(txt, tag) => handleBulkImport(txt, tag)"
     />
     <LogModal v-model:show="showLogModal" />
-    <Modal v-model:show="showDeleteSubsModal" @confirm="handleDeleteAllSubscriptionsWithCleanup"
+    <Modal
+        v-model:show="showDeleteSubsModal"
+        confirm-variant="danger"
+        @confirm="handleDeleteAllSubscriptionsWithCleanup"
         ><template #title>
             <h3 class="text-lg font-bold text-red-500">
                 {{ t('subscriptions.deleteAllConfirmTitle') }}
@@ -592,7 +595,10 @@
             <p class="text-sm text-gray-400">{{ t('subscriptions.deleteAllConfirmBody') }}</p>
         </template></Modal
     >
-    <Modal v-model:show="showDeleteNodesModal" @confirm="handleDeleteAllNodesWithCleanup"
+    <Modal
+        v-model:show="showDeleteNodesModal"
+        confirm-variant="danger"
+        @confirm="handleDeleteAllNodesWithCleanup"
         ><template #title>
             <h3 class="text-lg font-bold text-red-500">
                 {{ t('manualNodes.deleteAllConfirmTitle') }}
@@ -601,7 +607,11 @@
             <p class="text-sm text-gray-400">{{ t('manualNodes.deleteAllConfirmBody') }}</p>
         </template></Modal
     >
-    <Modal v-model:show="showBatchDeleteModal" @confirm="confirmBatchDelete">
+    <Modal
+        v-model:show="showBatchDeleteModal"
+        confirm-variant="danger"
+        @confirm="confirmBatchDelete"
+    >
         <template #title>
             <h3 class="text-lg font-bold text-red-500">
                 {{ t('manualNodes.batchDeleteConfirmTitle') }}
@@ -613,7 +623,10 @@
             </p>
         </template>
     </Modal>
-    <Modal v-model:show="showDeleteProfilesModal" @confirm="handleDeleteAllProfiles"
+    <Modal
+        v-model:show="showDeleteProfilesModal"
+        confirm-variant="danger"
+        @confirm="handleDeleteAllProfiles"
         ><template #title>
             <h3 class="text-lg font-bold text-red-500">
                 {{ t('profiles.deleteAllConfirmTitle') }}

@@ -2,9 +2,11 @@
     import { computed } from 'vue';
     import { parseCustomPageSource } from '../../../utils/custom-page-source.js';
     import { useI18n } from '../../../i18n/index.js';
+    import { useConfirm } from '../../../composables/useConfirm.js';
     import Switch from '../../ui/Switch.vue';
 
     const { t } = useI18n();
+    const { confirmAction } = useConfirm();
 
     const props = defineProps({
         settings: {
@@ -101,8 +103,12 @@
         },
     ];
 
-    const applyTemplate = (tpl) => {
-        if (confirm(t('settings.customPageApplyConfirm', { name: t(tpl.nameKey) }))) {
+    const applyTemplate = async (tpl) => {
+        const confirmed = await confirmAction({
+            message: t('settings.customPageApplyConfirm', { name: t(tpl.nameKey) }),
+            variant: 'danger',
+        });
+        if (confirmed) {
             const parsed = parseCustomPageSource(tpl.content, tpl.css || '');
             props.settings.customPage.type = 'html';
             props.settings.customPage.content = parsed.html;
@@ -290,7 +296,7 @@
                         <textarea
                             v-model="props.settings.customPage.content"
                             rows="12"
-                            class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
+                            class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus-visible:ring-2 focus-visible:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
                             :placeholder="t('settings.customPageSourcePlaceholder')"
                         />
                     </div>
@@ -303,7 +309,7 @@
                         <textarea
                             v-model="props.settings.customPage.css"
                             rows="6"
-                            class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
+                            class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus-visible:ring-2 focus-visible:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
                             :placeholder="t('settings.customPageCssPlaceholder')"
                         />
                     </div>

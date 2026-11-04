@@ -3,6 +3,7 @@
     import { api } from '../../../lib/http.js';
     import { useToastStore } from '../../../stores/toast.js';
     import { useI18n } from '../../../i18n/index.js';
+    import { useConfirm } from '../../../composables/useConfirm.js';
     import Input from '../../ui/Input.vue';
 
     const props = defineProps({
@@ -14,6 +15,7 @@
 
     const { showToast } = useToastStore();
     const { t } = useI18n();
+    const { confirmAction } = useConfirm();
     const isTesting = ref(false);
     const isBackingUp = ref(false);
     const isRestoring = ref(false);
@@ -62,7 +64,7 @@
 
     const runBackup = async () => {
         const config = ensureConfig();
-        if (!confirm(t('settings.webdavRunBackupConfirm'))) return;
+        if (!(await confirmAction({ message: t('settings.webdavRunBackupConfirm') }))) return;
         isBackingUp.value = true;
         try {
             const result = await api.post('/api/backup/webdav/run', { scope: config.backupScope });
@@ -100,7 +102,13 @@
                         scope === 'dataAndSettings'
                             ? t('settings.webdavScopeDataAndSettings')
                             : t('settings.webdavScopeDataOnly');
-                    if (!confirm(t('settings.webdavRestoreLocalConfirm', { scope: label }))) return;
+                    if (
+                        !(await confirmAction({
+                            message: t('settings.webdavRestoreLocalConfirm', { scope: label }),
+                            variant: 'danger',
+                        }))
+                    )
+                        return;
                     const result = await api.post('/api/backup/restore', { payload, scope });
                     if (!result.success)
                         throw new Error(result.message || t('settings.webdavRestoreFailed'));
@@ -143,7 +151,13 @@
 
     const restoreRemoteFile = async (file) => {
         if (!file?.path) return;
-        if (!confirm(t('settings.webdavRestoreRemoteConfirm', { name: file.name }))) return;
+        if (
+            !(await confirmAction({
+                message: t('settings.webdavRestoreRemoteConfirm', { name: file.name }),
+                variant: 'danger',
+            }))
+        )
+            return;
         isRestoring.value = true;
         try {
             const result = await api.post('/api/backup/webdav/restore', { file: file.path });
@@ -361,7 +375,7 @@
                     <button
                         @click="testConnection"
                         :disabled="isTesting"
-                        class="px-4 py-2 text-sm font-medium text-white rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50"
+                        class="touch-target px-4 py-2 text-sm font-medium text-white rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50"
                     >
                         {{
                             isTesting
@@ -372,7 +386,7 @@
                     <button
                         @click="runBackup"
                         :disabled="isBackingUp"
-                        class="px-4 py-2 text-sm font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                        class="touch-target px-4 py-2 text-sm font-medium text-white rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50"
                     >
                         {{
                             isBackingUp
@@ -383,7 +397,7 @@
                     <button
                         @click="restoreFromLocalFile"
                         :disabled="isRestoring"
-                        class="px-4 py-2 text-sm font-medium text-white rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+                        class="touch-target px-4 py-2 text-sm font-medium text-white rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50"
                     >
                         {{
                             isRestoring
@@ -394,7 +408,7 @@
                     <button
                         @click="loadRemoteFiles"
                         :disabled="isLoadingRemoteFiles"
-                        class="px-4 py-2 text-sm font-medium text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                        class="touch-target px-4 py-2 text-sm font-medium text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
                     >
                         {{
                             isLoadingRemoteFiles
@@ -404,7 +418,7 @@
                     </button>
                     <button
                         @click="copyCronHint"
-                        class="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/10"
+                        class="touch-target px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/10"
                     >
                         {{ t('settings.webdavCopyCron') }}
                     </button>
@@ -430,7 +444,7 @@
                         <button
                             @click="restoreRemoteFile(file)"
                             :disabled="isRestoring"
-                            class="shrink-0 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+                            class="touch-target shrink-0 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50"
                         >
                             {{ t('settings.webdavRestore') }}
                         </button>

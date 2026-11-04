@@ -84,6 +84,7 @@
   --z-toast: 900;
   --z-modal: 1000000;
   --z-modal-popover: 1100000;
+  --z-confirm: 1200000;
 }
 
 @media (width >= 48rem) {
@@ -303,6 +304,19 @@
   @apply p-2 rounded-lg transition-colors duration-150 focus:outline-none;
   min-width: 2.25rem;
   min-height: 2.25rem;
+}
+
+.touch-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.touch-target:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
 }
 
 .nav-action-btn-neutral {

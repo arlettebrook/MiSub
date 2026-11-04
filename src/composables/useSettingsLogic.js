@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '../constants/default-settings.js';
 import { fetchSettings, saveSettings, resetSettings } from '../lib/api.js';
 import { useBackupLogic } from './useBackupLogic.js';
 import { t, setLocale } from '../i18n/index.js';
+import { useConfirm } from './useConfirm.js';
 
 function normalizeExternalApiConfig(value) {
     const defaults = DEFAULT_SETTINGS.externalApi;
@@ -36,6 +37,7 @@ function normalizeSettingsObject(source = {}) {
  */
 export function useSettingsLogic() {
     const { showToast } = useToastStore();
+    const { confirmAction } = useConfirm();
 
     // 使用备份 composable
     const { exportBackup, importBackup } = useBackupLogic();
@@ -192,11 +194,13 @@ export function useSettingsLogic() {
      * 处理恢复出厂设置
      */
     const handleReset = async () => {
-        if (!confirm(t('settings.resetConfirm'))) {
+        if (!(await confirmAction({ message: t('settings.resetConfirm'), variant: 'danger' }))) {
             return;
         }
 
-        if (!confirm(t('settings.resetConfirmAgain'))) {
+        if (
+            !(await confirmAction({ message: t('settings.resetConfirmAgain'), variant: 'danger' }))
+        ) {
             return;
         }
 

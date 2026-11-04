@@ -1,6 +1,7 @@
 import { useToastStore } from '../stores/toast.js';
 import { api } from '../lib/http.js';
 import { t } from '../i18n/index.js';
+import { useConfirm } from './useConfirm.js';
 
 /**
  * 备份和恢复逻辑 composable
@@ -11,6 +12,7 @@ import { t } from '../i18n/index.js';
  */
 export function useBackupLogic() {
     const { showToast } = useToastStore();
+    const { confirmAction } = useConfirm();
 
     const downloadJson = (data, filename) => {
         const jsonString = JSON.stringify(data, null, 2);
@@ -73,7 +75,7 @@ export function useBackupLogic() {
                             ? t('backup.scopeDataAndSettings')
                             : t('backup.scopeDataOnly');
                     const message = t('backup.restoreConfirm', { scope: scopeLabel });
-                    if (!confirm(message)) return;
+                    if (!(await confirmAction({ message, variant: 'danger' }))) return;
 
                     const result = await api.post('/api/backup/restore', { payload: data, scope });
                     if (!result?.success) {

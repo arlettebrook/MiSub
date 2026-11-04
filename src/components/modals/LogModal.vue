@@ -5,6 +5,7 @@
     import { getClientInfo } from '../../lib/utils';
     import { api } from '../../lib/http.js';
     import { useI18n } from '../../i18n/index.js';
+    import { useConfirm } from '../../composables/useConfirm.js';
 
     const props = defineProps({
         show: Boolean,
@@ -18,6 +19,7 @@
 
     const { showToast } = useToastStore();
     const { t, locale } = useI18n();
+    const { confirmAction } = useConfirm({ enabled: () => props.show });
     const logs = ref([]);
     const isLoading = ref(false);
     const expandedLogId = ref(null);
@@ -56,7 +58,11 @@
     };
 
     const clearLogs = async () => {
-        if (!confirm(t('logs.clearConfirm'))) return;
+        const confirmed = await confirmAction({
+            message: t('logs.clearConfirm'),
+            variant: 'danger',
+        });
+        if (!confirmed) return;
 
         try {
             await api.del('/api/logs');
@@ -108,7 +114,6 @@
         @update:show="emit('update:show', $event)"
         size="4xl"
         :confirm-disabled="true"
-        class="log-modal"
     >
         <template #title>
             <div class="flex justify-between items-center w-full">
@@ -118,13 +123,13 @@
                 <div class="flex gap-2">
                     <button
                         @click="fetchLogs"
-                        class="text-xs px-2 py-1 misub-radius-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"
+                        class="touch-target text-xs px-2 py-1 misub-radius-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"
                     >
                         {{ t('common.refresh') }}
                     </button>
                     <button
                         @click="clearLogs"
-                        class="text-xs px-2 py-1 misub-radius-md bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors text-red-600 dark:text-red-400"
+                        class="touch-target text-xs px-2 py-1 misub-radius-md bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors text-red-600 dark:text-red-400"
                     >
                         {{ t('common.clear') }}
                     </button>
@@ -160,7 +165,7 @@
                     </div>
                     <div v-else-if="filteredLogs.length === 0" class="py-16 text-center">
                         <svg
-                            class="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600"
+                            class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -256,7 +261,10 @@
                                 >
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         <div class="flex">
-                                            <span class="text-gray-400 w-16 shrink-0">ISP:</span>
+                                            <span
+                                                class="text-gray-500 dark:text-gray-400 w-16 shrink-0"
+                                                >ISP:</span
+                                            >
                                             <span class="text-gray-700 dark:text-gray-300 truncate"
                                                 >{{ log.geoInfo?.isp || '-' }} ({{
                                                     log.geoInfo?.asn ? 'AS' + log.geoInfo.asn : '-'
@@ -264,7 +272,8 @@
                                             >
                                         </div>
                                         <div class="flex">
-                                            <span class="text-gray-400 w-16 shrink-0"
+                                            <span
+                                                class="text-gray-500 dark:text-gray-400 w-16 shrink-0"
                                                 >{{ t('logs.duration') }}:</span
                                             >
                                             <span class="text-gray-700 dark:text-gray-300"
@@ -272,7 +281,8 @@
                                             >
                                         </div>
                                         <div class="flex col-span-1 sm:col-span-2">
-                                            <span class="text-gray-400 w-16 shrink-0"
+                                            <span
+                                                class="text-gray-500 dark:text-gray-400 w-16 shrink-0"
                                                 >{{ t('logs.nodes') }}:</span
                                             >
                                             <span class="text-gray-700 dark:text-gray-300 truncate">
@@ -286,7 +296,10 @@
                                             </span>
                                         </div>
                                         <div class="flex col-span-1 sm:col-span-2">
-                                            <span class="text-gray-400 w-16 shrink-0">UA:</span>
+                                            <span
+                                                class="text-gray-500 dark:text-gray-400 w-16 shrink-0"
+                                                >UA:</span
+                                            >
                                             <span
                                                 class="text-gray-700 dark:text-gray-300 truncate"
                                                 :title="log.userAgent"
@@ -299,7 +312,7 @@
                                 <div v-show="expandedLogId !== log.id" class="mt-2 text-center">
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
-                                        class="h-4 w-4 mx-auto text-gray-300 dark:text-gray-600"
+                                        class="h-4 w-4 mx-auto text-gray-500 dark:text-gray-400"
                                         fill="none"
                                         viewBox="0 0 24 24"
                                         stroke="currentColor"
@@ -335,14 +348,14 @@
                         <button
                             @click="prevPage"
                             :disabled="currentPage === 1"
-                            class="px-3 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="touch-target px-3 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {{ t('common.previousPage') }}
                         </button>
                         <button
                             @click="nextPage"
                             :disabled="currentPage === totalPages"
-                            class="px-3 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="touch-target px-3 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {{ t('common.nextPage') }}
                         </button>

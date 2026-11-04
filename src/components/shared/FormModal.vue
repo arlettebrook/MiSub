@@ -4,6 +4,7 @@
     import { ref, watch, nextTick, computed } from 'vue';
     import { t } from '../../i18n/index.js';
     import { useBackdropDismiss } from '../../composables/useBackdropDismiss.js';
+    import { useModalFocus } from '../../composables/useModalFocus.js';
 
     const props = defineProps({
         show: {
@@ -77,6 +78,16 @@
 
     const modalRef = ref(null);
     const contentRef = ref(null);
+    const panelRef = ref(null);
+    const { isTopModal } = useModalFocus(panelRef, () => props.show, {
+        preferredFocus: () =>
+            contentRef.value?.querySelector(
+                'input:not([disabled]), textarea:not([disabled]), select:not([disabled])'
+            ),
+        onEscape: () => {
+            if (!props.disabled && !props.loading) handleClose();
+        },
+    });
 
     // 尺寸样式映射
     const sizeClasses = {
@@ -110,14 +121,7 @@
         async (newVal) => {
             if (newVal) {
                 await nextTick();
-                emit('opened');
-                // 自动聚焦到第一个输入框
-                if (contentRef.value) {
-                    const firstInput = contentRef.value.querySelector('input, textarea, select');
-                    if (firstInput) {
-                        firstInput.focus();
-                    }
-                }
+                if (props.show) emit('opened');
             } else {
                 emit('closed');
             }
@@ -155,14 +159,9 @@
 
     // 键盘事件处理
     const handleKeydown = (event) => {
-        if (!props.show) return;
+        if (!props.show || !isTopModal.value) return;
 
         switch (event.key) {
-            case 'Escape':
-                if (!props.disabled && !props.loading) {
-                    handleClose();
-                }
-                break;
             case 'Enter':
                 if (event.ctrlKey || event.metaKey) {
                     // Ctrl/Cmd + Enter 确认
@@ -193,7 +192,9 @@
             class="fixed inset-0 overflow-y-auto"
             :style="{ zIndex }"
             role="dialog"
-            aria-modal="true"
+            :aria-modal="isTopModal ? 'true' : 'false'"
+            :aria-hidden="isTopModal ? undefined : 'true'"
+            :inert="!isTopModal"
             @keydown="handleKeydown"
         >
             <!-- 遮罩层 -->
@@ -204,7 +205,13 @@
                 @click="handleMaskClick"
             >
                 <!-- 模态框 -->
-                <div :class="modalClasses" class="w-full" @click.stop>
+                <div
+                    ref="panelRef"
+                    tabindex="-1"
+                    :class="modalClasses"
+                    class="w-full focus-visible:outline-none"
+                    @click.stop
+                >
                     <!-- 头部 -->
                     <div
                         v-if="title || closable"
@@ -220,10 +227,10 @@
                                 v-if="closable"
                                 type="button"
                                 :disabled="disabled || loading"
-                                class="rounded-[var(--misub-radius-md)] bg-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.055] focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-2 transition-colors duration-150"
+                                class="touch-target rounded-[var(--misub-radius-md)] bg-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-2 transition-colors duration-150"
                                 @click="handleClose"
                             >
-                                <span class="sr-only">关闭</span>
+                                <span class="sr-only">{{ t('common.close') }}</span>
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path
                                         fill-rule="evenodd"
@@ -254,7 +261,7 @@
                                     type="button"
                                     :disabled="disabled || loading"
                                     :class="cancelButtonClass"
-                                    class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-white/10 text-sm font-medium rounded-[var(--misub-radius-md)] text-gray-700 dark:text-gray-300 bg-white dark:bg-white/[0.04] hover:bg-gray-50 dark:hover:bg-white/[0.055] focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
+                                    class="touch-target inline-flex items-center px-4 py-2 border border-gray-300 dark:border-white/10 text-sm font-medium rounded-[var(--misub-radius-md)] text-gray-700 dark:text-gray-300 bg-white dark:bg-white/[0.04] hover:bg-gray-50 dark:hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
                                     @click="handleCancel"
                                 >
                                     {{ resolvedCancelText }}
@@ -267,7 +274,7 @@
                                         confirmButtonClass,
                                         { 'opacity-50 cursor-not-allowed': confirmDisabled },
                                     ]"
-                                    class="inline-flex items-center px-4 py-2 border border-primary-500/70 text-sm font-medium rounded-[var(--misub-radius-md)] text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
+                                    class="touch-target inline-flex items-center px-4 py-2 border border-primary-500/70 text-sm font-medium rounded-[var(--misub-radius-md)] text-white bg-primary-600 hover:bg-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
                                     @click="handleConfirm"
                                 >
                                     <!-- 加载图标 -->
