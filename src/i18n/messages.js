@@ -1,5 +1,13 @@
 export const messages = {
     'zh-CN': {
+        session: {
+            logoutSync: '正在同步退出状态',
+            verifying: '正在验证登录状态',
+            waiting: '连接中断，等待验证',
+            operationsPaused: '后台请求和提交已暂停，验证完成后才能继续操作。',
+            editsPreserved: '当前页面未保存的编辑已保留，恢复连接后不会自动覆盖或提交。',
+            retry: '重试验证',
+        },
         app: {
             name: 'MiSub',
             home: '首页',
@@ -1356,6 +1364,16 @@ export const messages = {
         },
     },
     'en-US': {
+        session: {
+            logoutSync: 'Synchronizing logout',
+            verifying: 'Verifying your session',
+            waiting: 'Connection interrupted',
+            operationsPaused:
+                'Management requests and submissions are paused until verification completes.',
+            editsPreserved:
+                'Unsaved edits on this page are preserved. Reconnecting will not overwrite or submit them.',
+            retry: 'Retry verification',
+        },
         app: {
             name: 'MiSub',
             home: 'Home',

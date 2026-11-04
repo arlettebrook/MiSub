@@ -23,6 +23,8 @@
 
 浏览器中的后台访问使用相同规则：已登录访问正确管理入口进入 `/dashboard`；未登录访问 `/dashboard` 或子页面显示配置的伪装页，不跳到管理入口，也不自动附加 `redirect` 参数。正确入口经服务端确认后才显示登录页，确认失败时保持伪装。退出回到 `/`，根据公开页开关展示公开首页或配置的伪装；恢复旧后台页面时重新验证会话。
 
+已确认过登录的页面在连接异常或重新验证期间保留编辑组件和内存草稿，锁定操作并暂停私有请求；验证成功后继续当前页面，不自动覆盖或提交草稿。确认会话失效或退出后清理私有数据。跨标签页退出通过 `BroadcastChannel` 通知，使用 `storage` 事件兜底；退出开始时先暂停其它标签页，确认后再清理会话，退出未确认则重新验证。消息仅包含事件类型、随机标识、发送者标识和时间，不包含 Cookie、令牌或管理入口路径。
+
 - `GET /sub/*`、`GET /{mytoken}`、`GET /{profileToken}`、其它疑似订阅短链路径
     - Handler：`handleMisubRequest()`，实现位于 `functions/modules/subscription/main-handler.js`，由 `functions/modules/subscription-handler.js` re-export。
     - 认证：公开短链/token 模式；具体访问控制由 token、profile、settings、浏览器伪装和订阅配置决定。
@@ -103,6 +105,12 @@
     - 认证：条件公开。未登录返回 HTTP 200 和 `{ authenticated: false, message: 'Not logged in' }`，不会返回业务数据。
     - 读取：登录后读取 subscriptions、profiles、settings、rule templates。
     - 写入：登录后可能异步迁移旧 profile ID。
+
+- `GET /api/session`
+    - 用于轻量会话验证，逐请求校验登录 Cookie 的签名和有效期。
+    - 返回：HTTP 200 和 `{ authenticated: true/false }`，不返回业务数据或配置。
+    - 验证服务不可用时返回 HTTP 503，不伪装成会话过期。
+    - 所有响应禁止缓存。重连和页面恢复优先使用此接口；已加载页面不会因此重新注入业务数据。
 
 - `GET /api/github/release?repo=owner/repo`
     - Handler：`handleGithubReleaseRequest()`，`functions/modules/handlers/github-proxy-handler.js`

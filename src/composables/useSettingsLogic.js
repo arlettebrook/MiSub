@@ -165,6 +165,7 @@ export function useSettingsLogic() {
             delete settingsToSave.clashRuleLevel;
 
             const result = await saveSettings(settingsToSave);
+            if (result.cancelled) return false;
             if (result.success) {
                 savedSnapshot.value = submittedSnapshot;
                 showToast(t('settings.savedReloading'), 'success');
@@ -174,6 +175,7 @@ export function useSettingsLogic() {
                 throw new Error(result.error || t('settings.saveFailed'));
             }
         } catch (error) {
+            if (error?.cancelled) return false;
             showToast(error.message, 'error');
             return false;
         } finally {

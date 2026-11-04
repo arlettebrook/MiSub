@@ -13,6 +13,51 @@ export class APIError extends Error {
 }
 
 let unauthorizedHandler = null;
+let sessionRequestGuard = null;
+let connectionErrorHandler = null;
+
+export function configureSessionRequestGuard(handler) {
+    sessionRequestGuard = handler;
+    return () => {
+        if (sessionRequestGuard === handler) sessionRequestGuard = null;
+    };
+}
+
+export function configureConnectionErrorHandler(handler) {
+    connectionErrorHandler = handler;
+    return () => {
+        if (connectionErrorHandler === handler) connectionErrorHandler = null;
+    };
+}
+
+const publicApiPaths = new Set([
+    '/api/login',
+    '/api/logout',
+    '/api/public_config',
+    '/api/config',
+    '/api/public/profiles',
+    '/api/public/preview',
+    '/api/public/guestbook',
+    '/api/system/error_report',
+    '/api/github/release',
+    '/api/telegram/webhook',
+    '/api/external-nodes-callback',
+]);
+
+function isPrivateRequest(url, method) {
+    try {
+        const target = new URL(url, globalThis.window?.location?.href || 'http://localhost/');
+        if (globalThis.window && target.origin !== window.location.origin) return false;
+        return (
+            target.pathname.startsWith('/api/') &&
+            !publicApiPaths.has(target.pathname) &&
+            !target.pathname.startsWith('/api/ext/v1') &&
+            !(target.pathname === '/api/clients' && method === 'GET')
+        );
+    } catch {
+        return false;
+    }
+}
 
 export function configureUnauthorizedHandler(handler) {
     unauthorizedHandler = typeof handler === 'function' ? handler : null;
@@ -29,8 +74,16 @@ export class RequestCancelledError extends Error {
 const activeRequests = new Map();
 
 export function cancelPendingRequests(backgroundOnly = false) {
-    for (const [controller, background] of activeRequests) {
-        if (!backgroundOnly || background) controller.abort(new RequestCancelledError());
+    for (const [controller, record] of activeRequests) {
+        if (!backgroundOnly || record.background) controller.abort(new RequestCancelledError());
+    }
+}
+
+export function cancelPrivateRequests(includeSessionChecks = true) {
+    for (const [controller, record] of activeRequests) {
+        if (record.privateRequest && (includeSessionChecks || !record.sessionCheck)) {
+            controller.abort(new RequestCancelledError());
+        }
     }
 }
 
@@ -63,7 +116,19 @@ const parseJson = async (response) => {
 };
 
 export async function request(url, options = {}) {
-    const { headers, body, signal, background = false, timeoutMs, ...rest } = options;
+    const {
+        headers,
+        body,
+        signal,
+        background = false,
+        timeoutMs,
+        sessionCheck = false,
+        ...rest
+    } = options;
+    const privateRequest = isPrivateRequest(url, String(rest.method || 'GET').toUpperCase());
+    if (privateRequest && !sessionCheck && sessionRequestGuard && !sessionRequestGuard()) {
+        throw new RequestCancelledError();
+    }
     if (background && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         throw new RequestCancelledError();
     }
@@ -71,7 +136,7 @@ export async function request(url, options = {}) {
     const forwardAbort = () => controller.abort(signal.reason);
     if (signal?.aborted) forwardAbort();
     else signal?.addEventListener('abort', forwardAbort, { once: true });
-    activeRequests.set(controller, background);
+    activeRequests.set(controller, { background, privateRequest, sessionCheck });
     const timeout =
         timeoutMs > 0
             ? setTimeout(
@@ -104,6 +169,14 @@ export async function request(url, options = {}) {
         }
         return data;
     } catch (error) {
+        if (controller.signal.reason?.cancelled) throw controller.signal.reason;
+        const networkFailure =
+            error instanceof TypeError ||
+            error?.name === 'TimeoutError' ||
+            controller.signal.reason?.name === 'TimeoutError' ||
+            error?.status >= 500;
+        if (privateRequest && !sessionCheck && networkFailure)
+            connectionErrorHandler?.({ url, error });
         if (controller.signal.reason?.cancelled) throw controller.signal.reason;
         throw error;
     } finally {

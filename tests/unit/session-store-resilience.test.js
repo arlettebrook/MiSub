@@ -5,10 +5,12 @@ import { useDataStore } from '../../src/stores/useDataStore.js';
 
 const apiMocks = vi.hoisted(() => ({
     fetchInitialData: vi.fn(),
+    fetchSessionStatus: vi.fn(),
     fetchPublicConfig: vi.fn(),
     login: vi.fn(),
     apiGet: vi.fn(),
     cancelPendingRequests: vi.fn(),
+    cancelPrivateRequests: vi.fn(),
 }));
 const routerMocks = vi.hoisted(() => ({ push: vi.fn() }));
 const loaderMocks = vi.hoisted(() => ({ loadLegacyDashboard: vi.fn() }));
@@ -18,6 +20,7 @@ vi.mock('../../src/lib/api', () => apiMocks);
 vi.mock('../../src/lib/http.js', () => ({
     api: { get: apiMocks.apiGet },
     cancelPendingRequests: apiMocks.cancelPendingRequests,
+    cancelPrivateRequests: apiMocks.cancelPrivateRequests,
 }));
 vi.mock('../../src/router', () => ({
     default: routerMocks,
@@ -31,6 +34,7 @@ describe('session store resilience', () => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
         apiMocks.apiGet.mockReset();
+        apiMocks.fetchSessionStatus.mockReset().mockResolvedValue({ success: true });
         apiMocks.fetchPublicConfig.mockReset().mockResolvedValue({
             success: true,
             data: { enablePublicPage: true, hasCustomLoginPath: false, isLoginPath: false },
@@ -116,7 +120,7 @@ describe('session store resilience', () => {
         store.subscriptionConfig = { customLoginPath: 'admin-login' };
         store.securityWarning = { type: 'default_admin_password' };
         store.loginPath = '/admin-login';
-        const clearCache = vi.spyOn(useDataStore(), 'clearCachedData');
+        const clearCache = vi.spyOn(useDataStore(), 'resetSessionData');
         expect(store.handleUnauthorized()).toBe(true);
         expect(store.handleUnauthorized()).toBe(false);
         expect(store.sessionState).toBe('loggedOut');
@@ -136,7 +140,10 @@ describe('session store resilience', () => {
             if (logoutSuccess) apiMocks.apiGet.mockResolvedValue({ success: true });
             else {
                 apiMocks.apiGet.mockRejectedValue(new Error('network down'));
-                apiMocks.fetchInitialData.mockResolvedValue({ success: false, errorType: 'auth' });
+                apiMocks.fetchSessionStatus.mockResolvedValue({
+                    success: false,
+                    errorType: 'auth',
+                });
                 vi.spyOn(console, 'warn').mockImplementation(() => {});
             }
             await expect(store.logout()).resolves.toBe(true);
@@ -169,10 +176,12 @@ describe('session store resilience', () => {
         store.sessionState = 'loggedIn';
         store.initialData = { misubs: [{ id: 'private-sub' }] };
         apiMocks.apiGet.mockRejectedValue(new Error('network down'));
-        apiMocks.fetchInitialData.mockResolvedValue(sessionCheck);
+        apiMocks.fetchSessionStatus.mockResolvedValue(sessionCheck);
         vi.spyOn(console, 'warn').mockImplementation(() => {});
         await expect(store.logout()).resolves.toBe(false);
-        expect(store.sessionState).toBe('loggedIn');
+        expect(store.sessionState).toBe(
+            sessionCheck.errorType === 'network' ? 'unverified' : 'loggedIn'
+        );
         expect(store.initialData).toEqual({ misubs: [{ id: 'private-sub' }] });
         expect(routerMocks.push).not.toHaveBeenCalled();
     });

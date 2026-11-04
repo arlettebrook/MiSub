@@ -202,6 +202,7 @@ export const useDataStore = defineStore('data', () => {
             syncCachedConfig(settingsStore.config);
             showToast(t('store.settingsUpdated'), 'success');
         } catch (error) {
+            if (error?.cancelled) throw error;
             console.error('Failed to save settings:', error);
             showToast(
                 t('store.saveSettingsFailedWithMessage', { message: error.message }),
@@ -232,6 +233,7 @@ export const useDataStore = defineStore('data', () => {
             showToast(t('store.ruleTemplatesSaved'), 'success');
             return ruleTemplates.value;
         } catch (error) {
+            if (error?.cancelled) throw error;
             console.error('Failed to save rule templates:', error);
             showToast(
                 t('store.saveRuleTemplatesFailedWithMessage', { message: error.message }),
@@ -255,6 +257,19 @@ export const useDataStore = defineStore('data', () => {
 
     function clearCachedData() {
         dataCache.clear();
+    }
+
+    function resetSessionData() {
+        clearCachedData();
+        subscriptions.value = [];
+        profiles.value = [];
+        ruleTemplates.value = [];
+        settingsStore.setConfig(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+        lastUpdated.value = null;
+        isLoading.value = false;
+        saveState.value = 'idle';
+        editorStore.clearDirty();
+        updateSnapshot();
     }
 
     function syncCachedConfig(nextConfig) {
@@ -446,6 +461,7 @@ export const useDataStore = defineStore('data', () => {
         saveRuleTemplates,
         hydrateFromData,
         clearCachedData,
+        resetSessionData,
 
         // Helpers
         addSubscription,

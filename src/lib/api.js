@@ -88,7 +88,7 @@ export async function fetchInitialData() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-        const data = await api.get('/api/data', { signal: controller.signal });
+        const data = await api.get('/api/data', { signal: controller.signal, sessionCheck: true });
         clearTimeout(timeoutId);
 
         // 检查新的认证状态响应 (200 OK with authenticated: false)
@@ -101,6 +101,17 @@ export async function fetchInitialData() {
         return handleApiError(error, 'fetchInitialData');
     } finally {
         clearTimeout(timeoutId);
+    }
+}
+
+export async function fetchSessionStatus() {
+    try {
+        const data = await api.get('/api/session', { timeoutMs: 8000, sessionCheck: true });
+        if (data?.authenticated === false) return { success: false, errorType: 'auth' };
+        if (data?.authenticated !== true) throw new Error('Invalid session status response');
+        return { success: true };
+    } catch (error) {
+        return handleApiError(error, 'fetchSessionStatus');
     }
 }
 

@@ -115,6 +115,24 @@ export async function handleApiRequest(request, env, context = null) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api/, '');
 
+    if (path === '/session') {
+        try {
+            const diagnostic = await getAuthSessionDiagnostic(request, env);
+            if (diagnostic.reason === 'no_secret') {
+                return preventPrivateResponseCaching(
+                    createJsonResponse({ error: 'Session verification unavailable' }, 503)
+                );
+            }
+            return preventPrivateResponseCaching(
+                createJsonResponse({ authenticated: diagnostic.isAuthenticated })
+            );
+        } catch {
+            return preventPrivateResponseCaching(
+                createJsonResponse({ error: 'Session verification unavailable' }, 503)
+            );
+        }
+    }
+
     if ((path === '/auth_debug' || path === '/auth_check') && !isAuthDiagnosticsEnabled(env)) {
         return createErrorResponse('Not Found', 404);
     }

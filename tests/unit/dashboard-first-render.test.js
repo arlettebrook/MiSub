@@ -43,23 +43,46 @@ vi.mock('../../src/views/PublicProfilesView.vue', () => ({
 
 vi.mock('../../src/stores/session.js', async () => {
     const { defineStore } = await import('pinia');
-    const { ref } = await import('vue');
+    const { ref, watch } = await import('vue');
     return {
         useSessionStore: defineStore('session', () => {
             const sessionState = ref('loading');
+            const hasAuthenticatedSession = ref(false);
+            const isVerifyingSession = ref(false);
+            watch(
+                sessionState,
+                (state) => {
+                    if (state === 'loggedIn') hasAuthenticatedSession.value = true;
+                    if (state === 'loggedOut') hasAuthenticatedSession.value = false;
+                },
+                { flush: 'sync' }
+            );
+            const checkSession = async () => {
+                if (sessionGate.nextCheck) {
+                    const check = sessionGate.nextCheck;
+                    sessionGate.nextCheck = null;
+                    return check();
+                }
+                sessionState.value = 'loggedIn';
+            };
             return {
                 sessionState,
+                hasAuthenticatedSession,
+                isVerifyingSession,
+                isRemoteLogoutPending: ref(false),
+                verificationReason: ref('connection'),
                 isLoggingOut: ref(false),
                 publicConfig: ref({ enablePublicPage: true }),
                 loginPath: ref('/login'),
                 subscriptionConfig: ref({}),
-                checkSession: async () => {
-                    if (sessionGate.nextCheck) {
-                        const check = sessionGate.nextCheck;
-                        sessionGate.nextCheck = null;
-                        return check();
-                    }
-                    sessionState.value = 'loggedIn';
+                checkSession,
+                revalidateSession: checkSession,
+                retrySession: checkSession,
+                startSessionSync: vi.fn(),
+                stopSessionSync: vi.fn(),
+                canSendPrivateRequest: () => sessionState.value === 'loggedIn',
+                reportConnectionIssue: () => {
+                    sessionState.value = 'unverified';
                 },
                 suspendSession: () => {
                     sessionState.value = 'loading';
@@ -123,6 +146,43 @@ afterEach(() => {
 });
 
 describe('authenticated dashboard first render', () => {
+    it('keeps an editor component and its unsaved input mounted while verification is paused', async () => {
+        const mounted = vi.fn();
+        const editor = defineComponent({
+            setup() {
+                mounted();
+                return { draft: ref('saved') };
+            },
+            template: '<input data-testid="editor-draft" v-model="draft" />',
+        });
+        const router = createRouter({
+            history: createMemoryHistory(),
+            routes: [
+                {
+                    path: '/dashboard',
+                    name: 'Dashboard',
+                    component: editor,
+                    meta: { requiresAuth: true },
+                },
+            ],
+        });
+        await router.push('/dashboard');
+        const wrapper = mountApp(router);
+        await flushPromises();
+        await wrapper.get('[data-testid="editor-draft"]').setValue('unsaved draft');
+        const store = useSessionStore(wrapper.vm.$pinia);
+        store.sessionState = 'unverified';
+        await flushPromises();
+        expect(wrapper.get('[data-testid="editor-draft"]').element.value).toBe('unsaved draft');
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeDefined();
+        expect(document.querySelector('[data-testid="session-verification"]')).not.toBeNull();
+        store.sessionState = 'loggedIn';
+        await flushPromises();
+        expect(wrapper.get('[data-testid="editor-draft"]').element.value).toBe('unsaved draft');
+        expect(mounted).toHaveBeenCalledTimes(1);
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeUndefined();
+    });
+
     it.each(['modern', 'legacy'])(
         'disguises protected routes without mounting their page or login form in %s layout',
         async (layoutMode) => {
@@ -221,13 +281,14 @@ describe('authenticated dashboard first render', () => {
         window.dispatchEvent(hide);
         await flushPromises();
         expect(store.sessionState).toBe('loading');
-        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeDefined();
         const show = new Event('pageshow');
         Object.defineProperty(show, 'persisted', { value: true });
         window.dispatchEvent(show);
         await flushPromises();
         expect(checkSession).toHaveBeenCalledTimes(1);
-        expect(wrapper.find('main [role="status"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
         window.dispatchEvent(new CustomEvent('misub:unauthorized'));
         finishSession();
         await flushPromises();

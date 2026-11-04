@@ -16,6 +16,9 @@
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
     import { normalizeLoginPath } from './utils/login-path.js';
+    import { configureSessionRequestGuard, configureConnectionErrorHandler } from './lib/http.js';
+    import SessionVerification from './components/ui/SessionVerification.vue';
+    import { settleConfirm } from './composables/useConfirm.js';
 
     // Lazy components
     const DisguiseView = defineAsyncComponent(() => import('./views/DisguiseView.vue'));
@@ -39,7 +42,14 @@
     const { initTheme } = themeStore;
 
     const sessionStore = useSessionStore();
-    const { sessionState, isLoggingOut } = storeToRefs(sessionStore);
+    const {
+        sessionState,
+        isLoggingOut,
+        hasAuthenticatedSession,
+        isVerifyingSession,
+        isRemoteLogoutPending,
+        verificationReason,
+    } = storeToRefs(sessionStore);
     const { checkSession, logout } = sessionStore;
 
     const toastStore = useToastStore();
@@ -75,17 +85,43 @@
                         sessionStore.publicConfig?.isLoginPath === false)))
     );
     const isInitialRouteReady = ref(false);
+    const hasMountedAuthenticatedView = ref(false);
+    const isDestinationLoading = ref(false);
+    const hasAuthenticatedView = computed(
+        () =>
+            isLoggedIn.value || (hasMountedAuthenticatedView.value && hasAuthenticatedSession.value)
+    );
+    const isSessionLocked = computed(
+        () =>
+            sessionState.value === 'loading' ||
+            sessionState.value === 'unverified' ||
+            isVerifyingSession.value ||
+            isLoggingOut.value ||
+            isRemoteLogoutPending.value
+    );
+    const preserveAuthenticatedView = computed(
+        () =>
+            hasMountedAuthenticatedView.value &&
+            hasAuthenticatedSession.value &&
+            (isSessionLocked.value || !isInitialRouteReady.value)
+    );
     const authenticatedContentKey = computed(() => `${layoutMode.value}:${route.path}`);
     const readyAuthenticatedContentKey = ref(null);
     const hasAuthenticatedContentMounted = computed(
         () => readyAuthenticatedContentKey.value === authenticatedContentKey.value
     );
     const isPageLoading = computed(
-        () => sessionState.value === 'loading' || isLoggingOut.value || !isInitialRouteReady.value
+        () =>
+            isDestinationLoading.value ||
+            ((sessionState.value === 'loading' ||
+                sessionState.value === 'unverified' ||
+                isLoggingOut.value ||
+                !isInitialRouteReady.value) &&
+                !preserveAuthenticatedView.value)
     );
 
     watch(
-        [isLoggedIn, layoutMode],
+        [hasAuthenticatedView, layoutMode],
         () => {
             readyAuthenticatedContentKey.value = null;
         },
@@ -103,6 +139,9 @@
     };
 
     const handleMainContentMounted = () => {
+        if (layoutMode.value === 'legacy' || !['Home', 'Entrance'].includes(route.name)) {
+            hasMountedAuthenticatedView.value = true;
+        }
         // Settings has a separate initial data request after its component mounts.
         if (layoutMode.value === 'modern' && route.name === 'Settings') return;
         markMainContentReady();
@@ -114,7 +153,7 @@
     };
 
     const showModernNavBar = computed(
-        () => isLoggedIn.value && !isPageLoading.value && layoutMode.value === 'modern'
+        () => hasAuthenticatedView.value && !isPageLoading.value && layoutMode.value === 'modern'
     );
     const shouldHidePublicBranding = computed(() => {
         if (isLoggedIn.value || !isPublicRoute.value) return false;
@@ -143,7 +182,7 @@
         if (isPageLoading.value) return false;
         if (isDisguiseRoute.value) return false;
         if (showModernNavBar.value) return false;
-        if (isLoggedIn.value) return true;
+        if (hasAuthenticatedView.value) return true;
         if (!isPublicRoute.value) return false;
         return !shouldHidePublicHeader.value;
     });
@@ -155,6 +194,7 @@
     const shouldShowFooter = computed(
         () =>
             !isPageLoading.value &&
+            !isSessionLocked.value &&
             !isDisguiseRoute.value &&
             (!isLoggedIn.value || hasAuthenticatedContentMounted.value) &&
             (!isPublicRoute.value || showPublicFooter.value)
@@ -189,9 +229,41 @@
         () => sessionStore.securityWarning?.message || t('notices.defaultPasswordWarning')
     );
 
-    const prepareSessionRoute = async () => {
+    const releaseRequestGuard = configureSessionRequestGuard(() =>
+        sessionStore.canSendPrivateRequest()
+    );
+    const releaseConnectionHandler = configureConnectionErrorHandler(() =>
+        sessionStore.reportConnectionIssue()
+    );
+    const releaseLockedNavigation = router.beforeEach((to) => {
+        if (
+            preserveAuthenticatedView.value &&
+            isSessionLocked.value &&
+            to.fullPath !== route.fullPath
+        )
+            return false;
+    });
+
+    watch(
+        sessionState,
+        (state) => {
+            if (state === 'loggedOut') {
+                hasMountedAuthenticatedView.value = false;
+                showLegacyD1MigrationModal.value = false;
+                versionStore.closeModal();
+                toastStore.hideToast();
+                settleConfirm(false);
+            }
+        },
+        { flush: 'sync' }
+    );
+
+    const prepareSessionRoute = async (restore = false) => {
         try {
-            await Promise.all([checkSession(), router.isReady()]);
+            await Promise.all([
+                restore ? sessionStore.revalidateSession() : checkSession(),
+                router.isReady(),
+            ]);
             // Keep the existing loading screen until the actual destination is ready.
             if (
                 isLoggedIn.value &&
@@ -208,6 +280,21 @@
         }
     };
 
+    watch([isLoggedIn, () => route.path], async () => {
+        if (!isInitialRouteReady.value || !isLoggedIn.value || isPageLoading.value) return;
+        if (
+            (route.name === 'Entrance' && route.path === loginPath.value) ||
+            (route.name === 'Home' && layoutMode.value === 'modern')
+        ) {
+            isDestinationLoading.value = true;
+            try {
+                await router.replace('/dashboard');
+            } finally {
+                isDestinationLoading.value = false;
+            }
+        }
+    });
+
     const handlePageHide = (event) => {
         if (!event.persisted) return;
         sessionStore.suspendSession();
@@ -218,18 +305,23 @@
         if (!event.persisted) return;
         sessionStore.suspendSession();
         isInitialRouteReady.value = false;
-        await prepareSessionRoute();
+        await prepareSessionRoute(true);
     };
 
     onMounted(async () => {
         window.addEventListener('misub:unauthorized', handleUnauthorized);
         window.addEventListener('pagehide', handlePageHide);
         window.addEventListener('pageshow', handlePageShow);
+        sessionStore.startSessionSync();
         initTheme();
         await prepareSessionRoute();
     });
 
     onUnmounted(() => {
+        sessionStore.stopSessionSync();
+        releaseRequestGuard();
+        releaseConnectionHandler();
+        releaseLockedNavigation();
         window.removeEventListener('misub:unauthorized', handleUnauthorized);
         window.removeEventListener('pagehide', handlePageHide);
         window.removeEventListener('pageshow', handlePageShow);
@@ -319,6 +411,12 @@
 
 <template>
     <div
+        :inert="isSessionLocked && (hasMountedAuthenticatedView || sessionState === 'unverified')"
+        :aria-hidden="
+            isSessionLocked && (hasMountedAuthenticatedView || sessionState === 'unverified')
+                ? 'true'
+                : undefined
+        "
         :class="[theme, { 'app-shell-mobile-nav': showModernNavBar }]"
         :style="{ '--save-prompt-height': `${savePromptHeight}px` }"
         class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
@@ -327,7 +425,7 @@
         <NavBar v-if="showModernNavBar" :is-logged-in="true" @logout="logout" />
         <Header
             v-else-if="showLegacyHeader"
-            :is-logged-in="isLoggedIn"
+            :is-logged-in="hasAuthenticatedView"
             :hide-branding="shouldHidePublicBranding"
             @logout="logout"
         />
@@ -369,7 +467,7 @@
                 </div>
             </div>
 
-            <template v-else-if="isLoggedIn">
+            <template v-else-if="hasAuthenticatedView">
                 <!-- Security Banner -->
                 <div
                     v-if="isDefaultPassword"
@@ -497,11 +595,18 @@
             @visible-height="revealedFooterHeight = $event"
         />
         <ScrollToTop
-            v-if="!isDisguiseRoute && (isLoggedIn || isPublicRoute)"
+            v-if="!isSessionLocked && !isDisguiseRoute && (isLoggedIn || isPublicRoute)"
             :above-mobile-nav="showModernNavBar"
             :footer-offset="revealedFooterHeight"
         />
     </div>
+    <SessionVerification
+        :show="sessionState === 'unverified' || (hasMountedAuthenticatedView && isSessionLocked)"
+        :busy="isVerifyingSession || isLoggingOut || isRemoteLogoutPending"
+        :reason="isLoggingOut ? 'logout' : verificationReason"
+        :preserve-editing="hasAuthenticatedSession"
+        @retry="sessionStore.retrySession()"
+    />
 </template>
 
 <style>
