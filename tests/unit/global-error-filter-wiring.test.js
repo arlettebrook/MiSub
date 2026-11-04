@@ -17,7 +17,10 @@ vi.mock('../../src/utils/errorHandler.js', () => ({
 }));
 
 let listeners;
+let originalUrl;
 beforeAll(async () => {
+    originalUrl = window.location.href;
+    window.happyDOM.setURL('https://misub.example/dashboard');
     const registration = vi.spyOn(window, 'addEventListener');
     await import('../../src/main.js');
     listeners = registration.mock.calls.slice();
@@ -37,6 +40,7 @@ afterAll(() => {
     for (const [type, callback, options] of listeners) {
         window.removeEventListener(type, callback, options);
     }
+    window.happyDOM.setURL(originalUrl);
     vi.restoreAllMocks();
 });
 
@@ -58,6 +62,13 @@ const runtimeError = (info) => {
     Object.defineProperty(event, 'target', { value: window });
     listeners.find(([type, , options]) => type === 'error' && !options)[1](event);
     return event;
+};
+
+const resourceError = async (resourceUrl, tagName = 'SCRIPT') => {
+    listeners.find(([type, , options]) => type === 'error' && options === true)[1]({
+        target: { src: resourceUrl, tagName },
+    });
+    await Promise.resolve();
 };
 
 describe('global error filtering', () => {
@@ -139,4 +150,82 @@ describe('global error filtering', () => {
         expect(reload).toHaveBeenCalledTimes(1);
         expect(sessionStorage.getItem('misub:chunk-reload')).toBe('1');
     });
+
+    it('reports a same-origin resource failure without throwing another error', async () => {
+        const resourceUrl = `${window.location.origin}/images/logo.png`;
+        await resourceError(resourceUrl, 'IMG');
+        expect(handleError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: `Resource load failed: ${resourceUrl}` }),
+            'Resource Load Error',
+            { tagName: 'IMG', src: resourceUrl }
+        );
+    });
+
+    it.each([
+        'https://misub.example.evil.test/assets/app.js',
+        'https://misub.example:8443/assets/app.js',
+        'https://third-party.test/assets/app.js',
+    ])('ignores foreign resource %s without reloading', async (resourceUrl) => {
+        const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+        await resourceError(resourceUrl);
+        expect(replace).not.toHaveBeenCalled();
+        expect(sessionStorage.getItem('misub:asset-reload')).toBeNull();
+        expect(handleError).not.toHaveBeenCalled();
+    });
+
+    it.each(['/assets/app.js?v=1#chunk', '/assets/app.css#styles'])(
+        'recovers a relative asset URL %s only once',
+        async (resourceUrl) => {
+            const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+            await resourceError(resourceUrl);
+            expect(replace).toHaveBeenCalledTimes(1);
+            expect(new URL(replace.mock.calls[0][0]).searchParams.has('__misub_reload')).toBe(true);
+            expect(sessionStorage.getItem('misub:asset-reload')).toBe('1');
+            expect(handleError).not.toHaveBeenCalled();
+
+            await resourceError(resourceUrl);
+            expect(replace).toHaveBeenCalledTimes(1);
+            expect(handleError).toHaveBeenCalledWith(expect.any(Error), 'Resource Load Error', {
+                tagName: 'SCRIPT',
+                src: resourceUrl,
+            });
+        }
+    );
+
+    it.each(['localhost', '[::1]'])(
+        'suppresses repeated local asset failures on %s while reporting other resources',
+        async (hostname) => {
+            const publicUrl = window.location.href;
+            window.happyDOM.setURL(`http://${hostname}/dashboard`);
+            vi.resetModules();
+            const registration = vi.spyOn(window, 'addEventListener');
+            let localListeners = [];
+            try {
+                await import('../../src/main.js');
+                localListeners = registration.mock.calls.slice();
+                const handler = localListeners.find(
+                    ([type, , options]) => type === 'error' && options === true
+                )[1];
+                sessionStorage.setItem('misub:asset-reload', '1');
+                const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+                handler({ target: { src: '/assets/app.js?v=1#chunk', tagName: 'SCRIPT' } });
+                await Promise.resolve();
+                expect(replace).not.toHaveBeenCalled();
+                expect(handleError).not.toHaveBeenCalled();
+
+                handler({ target: { src: '/images/logo.png', tagName: 'IMG' } });
+                await Promise.resolve();
+                expect(handleError).toHaveBeenCalledWith(expect.any(Error), 'Resource Load Error', {
+                    tagName: 'IMG',
+                    src: '/images/logo.png',
+                });
+            } finally {
+                for (const [type, callback, options] of localListeners) {
+                    window.removeEventListener(type, callback, options);
+                }
+                registration.mockRestore();
+                window.happyDOM.setURL(publicUrl);
+            }
+        }
+    );
 });

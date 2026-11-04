@@ -436,17 +436,9 @@ export function useSubscriptions(
 
     function startAutoUpdate(intervalMinutes = null) {
         // 如果传入间隔，使用传入值；否则从 settings 读取
-        let intervalMs;
-        if (intervalMinutes !== null) {
-            intervalMs = intervalMinutes * 60 * 1000;
-        } else {
-            const settings = dataStore.settings;
-            const settingsInterval = settings?.autoUpdateInterval;
-            intervalMs =
-                settingsInterval != null && settingsInterval >= 0
-                    ? settingsInterval * 60 * 1000
-                    : DEFAULT_INTERVAL_MS;
-        }
+        const interval = Number(intervalMinutes ?? dataStore.settings?.autoUpdateInterval ?? NaN);
+        const intervalMs =
+            Number.isFinite(interval) && interval >= 0 ? interval * 60 * 1000 : DEFAULT_INTERVAL_MS;
 
         // 如果间隔为0，表示禁用自动更新
         if (intervalMs === 0) {

@@ -7,6 +7,7 @@ import { handleError, setToastHandler, configureErrorMonitoring } from './utils/
 import { isAppScriptError, isForeignRejection } from './utils/error-source.js';
 import { i18n } from './i18n/index.js';
 import { useToastStore } from './stores/toast.js';
+import { isLocalHost, isSameOriginUrl } from './utils/url-origin.js';
 
 // 全局错误处理
 if (typeof window !== 'undefined') {
@@ -54,6 +55,19 @@ if (typeof window !== 'undefined') {
 
     // 处理资源加载错误（忽略第三方资源）
     const assetReloadKey = 'misub:asset-reload';
+    const currentOrigin = window.location.origin;
+    const localHost = isLocalHost(window.location.hostname);
+    const isSameOriginResource = (resourceUrl) =>
+        isSameOriginUrl(resourceUrl, currentOrigin, window.location.href);
+    const isAppAssetResource = (resourceUrl) => {
+        try {
+            return /\/assets\/.+\.(js|css)$/i.test(
+                new URL(resourceUrl, window.location.href).pathname
+            );
+        } catch {
+            return false;
+        }
+    };
     const hasAssetReloaded = () => {
         try {
             return sessionStorage.getItem(assetReloadKey) === '1';
@@ -71,9 +85,7 @@ if (typeof window !== 'undefined') {
     };
 
     const tryRecoverAssetLoad = async (resourceUrl) => {
-        if (!resourceUrl || !resourceUrl.startsWith(window.location.origin)) return false;
-        const resourcePath = resourceUrl.split('?')[0];
-        if (!/\/assets\/.+\.(js|css)$/i.test(resourcePath)) return false;
+        if (!isSameOriginResource(resourceUrl) || !isAppAssetResource(resourceUrl)) return false;
         if (hasAssetReloaded()) return false;
 
         markAssetReloaded();
@@ -99,7 +111,7 @@ if (typeof window !== 'undefined') {
                 const resourceUrl = event.target.src || event.target.href || '';
 
                 // 忽略第三方资源加载错误（如 Cloudflare Analytics、广告等）
-                const isThirdParty = resourceUrl && !resourceUrl.startsWith(window.location.origin);
+                const isThirdParty = resourceUrl && !isSameOriginResource(resourceUrl);
                 if (isThirdParty) {
                     console.debug(
                         '[Resource Load] Ignoring third-party resource error:',
@@ -129,7 +141,7 @@ if (typeof window !== 'undefined') {
 
                 tryRecoverAssetLoad(resourceUrl).then((recovered) => {
                     if (recovered) return;
-                    if (isLocalHost && /\/assets\/.+\.(js|css)$/i.test(resourceUrl)) {
+                    if (localHost && isAppAssetResource(resourceUrl)) {
                         console.debug('[Resource Load] Local asset error suppressed:', resourceUrl);
                         return;
                     }
