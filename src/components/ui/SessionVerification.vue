@@ -1,7 +1,6 @@
 <script setup>
-    import { ref, computed } from 'vue';
+    import { computed } from 'vue';
     import { useI18n } from '../../i18n/index.js';
-    import { useModalFocus } from '../../composables/useModalFocus.js';
     const props = defineProps({
         show: Boolean,
         busy: Boolean,
@@ -10,8 +9,6 @@
     });
     const emit = defineEmits(['retry']);
     const { t } = useI18n();
-    const panel = ref(null);
-    useModalFocus(panel, () => props.show, { priority: () => 2 });
     const title = computed(() =>
         t(
             props.reason === 'logout'
@@ -21,52 +18,30 @@
                   : 'session.waiting'
         )
     );
-    const blockPageShortcuts = (event) => {
-        if (!['Tab', 'Escape'].includes(event.key)) event.stopPropagation();
-    };
 </script>
 
 <template>
-    <Teleport to="body">
-        <div
-            v-if="show"
-            class="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
-            style="z-index: calc(var(--z-confirm, 100000) + 10)"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="session-verification-title"
-            data-testid="session-verification"
-            @keydown="blockPageShortcuts"
-        >
-            <section
-                ref="panel"
-                tabindex="-1"
-                class="max-w-md w-full rounded-2xl bg-white dark:bg-gray-900 p-8 shadow-xl focus:outline-none"
-            >
-                <h2
-                    id="session-verification-title"
-                    class="text-xl font-semibold text-gray-900 dark:text-white"
-                >
-                    {{ title }}
-                </h2>
-                <p class="mt-3 text-gray-600 dark:text-gray-300">
-                    {{ t('session.operationsPaused') }}
-                </p>
-                <p
-                    v-if="preserveEditing && reason !== 'logout'"
-                    class="mt-2 text-sm text-gray-500 dark:text-gray-400"
-                >
-                    {{ t('session.editsPreserved') }}
-                </p>
-                <button
-                    type="button"
-                    :disabled="busy"
-                    @click="emit('retry')"
-                    class="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white disabled:opacity-50"
-                >
-                    {{ busy ? t('session.verifying') : t('session.retry') }}
-                </button>
-            </section>
+    <section
+        v-if="show"
+        class="mb-4 flex w-full flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="session-verification"
+    >
+        <div role="status" aria-live="polite">
+            <p class="font-medium">{{ title }}</p>
+            <p class="mt-1">
+                {{ t('session.operationsPaused') }}
+            </p>
+            <p v-if="preserveEditing && reason !== 'logout'" class="mt-1 opacity-80">
+                {{ t('session.editsPreserved') }}
+            </p>
         </div>
-    </Teleport>
+        <button
+            type="button"
+            :disabled="busy"
+            @click="emit('retry')"
+            class="shrink-0 self-start rounded-lg border border-amber-300 px-3 py-2 font-medium hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:hover:bg-amber-900/50 sm:self-auto"
+        >
+            {{ busy ? t('session.verifying') : t('session.retry') }}
+        </button>
+    </section>
 </template>

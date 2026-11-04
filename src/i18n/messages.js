@@ -4,8 +4,8 @@ export const messages = {
             logoutSync: '正在同步退出状态',
             verifying: '正在验证登录状态',
             waiting: '连接中断，等待验证',
-            operationsPaused: '后台请求和提交已暂停，验证完成后才能继续操作。',
-            editsPreserved: '当前页面未保存的编辑已保留，恢复连接后不会自动覆盖或提交。',
+            operationsPaused: '后台请求和提交已暂停，验证通过后恢复。',
+            editsPreserved: '可以继续编辑，未保存内容会保留，恢复连接后不会自动提交。',
             retry: '重试验证',
         },
         app: {
@@ -1369,9 +1369,9 @@ export const messages = {
             verifying: 'Verifying your session',
             waiting: 'Connection interrupted',
             operationsPaused:
-                'Management requests and submissions are paused until verification completes.',
+                'Management requests and submissions are paused until verification succeeds.',
             editsPreserved:
-                'Unsaved edits on this page are preserved. Reconnecting will not overwrite or submit them.',
+                'You can continue editing. Unsaved changes are preserved and will not be submitted automatically when the connection returns.',
             retry: 'Retry verification',
         },
         app: {

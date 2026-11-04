@@ -95,9 +95,14 @@
         () =>
             sessionState.value === 'loading' ||
             sessionState.value === 'unverified' ||
-            isVerifyingSession.value ||
             isLoggingOut.value ||
             isRemoteLogoutPending.value
+    );
+    const showSessionVerification = computed(
+        () =>
+            sessionState.value === 'unverified' ||
+            (isSessionLocked.value &&
+                (hasMountedAuthenticatedView.value || verificationReason.value === 'connection'))
     );
     const preserveAuthenticatedView = computed(
         () =>
@@ -203,7 +208,7 @@
     const shouldCenterMain = computed(
         () =>
             isPageLoading.value ||
-            (!isLoggedIn.value && (!isPublicRoute.value || route.name === 'Entrance'))
+            (!hasAuthenticatedView.value && (!isPublicRoute.value || route.name === 'Entrance'))
     );
 
     const showSavePrompt = computed(
@@ -395,9 +400,11 @@
     };
 
     const handleSave = async () => {
+        if (isSessionLocked.value) return;
         await dataStore.saveData();
     };
     const handleDiscard = async () => {
+        if (isSessionLocked.value) return;
         if (!(await dataStore.fetchData(true))) return;
         toastStore.showToast(t('notices.discardedChanges'));
     };
@@ -411,12 +418,6 @@
 
 <template>
     <div
-        :inert="isSessionLocked && (hasMountedAuthenticatedView || sessionState === 'unverified')"
-        :aria-hidden="
-            isSessionLocked && (hasMountedAuthenticatedView || sessionState === 'unverified')
-                ? 'true'
-                : undefined
-        "
         :class="[theme, { 'app-shell-mobile-nav': showModernNavBar }]"
         :style="{ '--save-prompt-height': `${savePromptHeight}px` }"
         class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
@@ -443,8 +444,15 @@
                 },
             ]"
         >
+            <SessionVerification
+                :show="showSessionVerification"
+                :busy="isVerifyingSession || isLoggingOut || isRemoteLogoutPending"
+                :reason="isLoggingOut ? 'logout' : verificationReason"
+                :preserve-editing="hasAuthenticatedSession"
+                @retry="sessionStore.retrySession()"
+            />
             <div
-                v-if="isPageLoading"
+                v-if="isPageLoading && !showSessionVerification"
                 class="flex flex-col items-center justify-center p-8"
                 role="status"
                 aria-live="polite"
@@ -467,7 +475,7 @@
                 </div>
             </div>
 
-            <template v-else-if="hasAuthenticatedView">
+            <template v-else-if="!isPageLoading && hasAuthenticatedView">
                 <!-- Security Banner -->
                 <div
                     v-if="isDefaultPassword"
@@ -535,6 +543,7 @@
                 <SavePrompt
                     :is-dirty="showSavePrompt"
                     :save-state="saveState"
+                    :disabled="isSessionLocked"
                     :footer-offset="revealedFooterHeight"
                     @save="handleSave"
                     @discard="handleDiscard"
@@ -546,6 +555,11 @@
                         <RouteErrorBoundary :reset-key="route.fullPath">
                             <component
                                 :is="Component"
+                                v-bind="
+                                    route.name === 'Settings'
+                                        ? { sessionPaused: isSessionLocked }
+                                        : {}
+                                "
                                 @vue:mounted="handleMainContentMounted"
                                 @content-ready="handleMainContentReady"
                             />
@@ -553,11 +567,15 @@
                     </transition>
                 </router-view>
 
-                <Dashboard v-else @vue:mounted="handleMainContentMounted" />
+                <Dashboard
+                    v-else
+                    :session-paused="isSessionLocked"
+                    @vue:mounted="handleMainContentMounted"
+                />
             </template>
 
             <!-- PUBLIC ROUTE VIEW (Not logged in, but isPublic) -->
-            <template v-else-if="isPublicRoute">
+            <template v-else-if="!isPageLoading && isPublicRoute">
                 <router-view v-slot="{ Component }">
                     <transition name="fade" mode="out-in">
                         <RouteErrorBoundary :reset-key="route.fullPath">
@@ -568,7 +586,7 @@
             </template>
 
             <!-- Protected routes never redirect an unauthenticated visitor to the login entry. -->
-            <template v-else>
+            <template v-else-if="!isPageLoading">
                 <DisguiseView />
             </template>
         </main>
@@ -600,13 +618,6 @@
             :footer-offset="revealedFooterHeight"
         />
     </div>
-    <SessionVerification
-        :show="sessionState === 'unverified' || (hasMountedAuthenticatedView && isSessionLocked)"
-        :busy="isVerifyingSession || isLoggingOut || isRemoteLogoutPending"
-        :reason="isLoggingOut ? 'logout' : verificationReason"
-        :preserve-editing="hasAuthenticatedSession"
-        @retry="sessionStore.retrySession()"
-    />
 </template>
 
 <style>

@@ -62,6 +62,21 @@ async function mountDashboard({ loaded = true } = {}) {
 }
 
 describe('dashboard data failures', () => {
+    it('keeps legacy drafts and blocks saving or discarding during session verification', async () => {
+        const store = await mountDashboard();
+        store.markDirty();
+        await wrapper.setProps({ sessionPaused: true });
+        const prompt = wrapper.findComponent(SavePrompt);
+        expect(prompt.props('disabled')).toBe(true);
+        prompt.vm.$emit('save');
+        prompt.vm.$emit('discard');
+        await flushPromises();
+        expect(apiPost).not.toHaveBeenCalled();
+        expect(apiGet).not.toHaveBeenCalled();
+        expect(store.isDirty).toBe(true);
+        expect(prompt.props('saveState')).toBe('idle');
+    });
+
     it('preserves unsaved changes when initialization fails', async () => {
         apiGet.mockRejectedValue(new Error('network down'));
         useDataStore().markDirty();

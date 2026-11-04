@@ -146,7 +146,7 @@ afterEach(() => {
 });
 
 describe('authenticated dashboard first render', () => {
-    it('keeps an editor component and its unsaved input mounted while verification is paused', async () => {
+    it('allows continued editing with an inline connection notice and preserves the draft on recovery', async () => {
         const mounted = vi.fn();
         const editor = defineComponent({
             setup() {
@@ -174,13 +174,84 @@ describe('authenticated dashboard first render', () => {
         store.sessionState = 'unverified';
         await flushPromises();
         expect(wrapper.get('[data-testid="editor-draft"]').element.value).toBe('unsaved draft');
-        expect(wrapper.find('.app-shell').attributes('inert')).toBeDefined();
-        expect(document.querySelector('[data-testid="session-verification"]')).not.toBeNull();
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeUndefined();
+        expect(wrapper.find('.app-shell').attributes('aria-hidden')).toBeUndefined();
+        expect(wrapper.find('[data-testid="session-verification"]').exists()).toBe(true);
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        expect(wrapper.findComponent(SavePrompt).attributes('disabled')).toBeDefined();
+        await wrapper.get('[data-testid="editor-draft"]').setValue('continued offline draft');
         store.sessionState = 'loggedIn';
         await flushPromises();
-        expect(wrapper.get('[data-testid="editor-draft"]').element.value).toBe('unsaved draft');
+        expect(wrapper.get('[data-testid="editor-draft"]').element.value).toBe(
+            'continued offline draft'
+        );
         expect(mounted).toHaveBeenCalledTimes(1);
         expect(wrapper.find('.app-shell').attributes('inert')).toBeUndefined();
+        expect(wrapper.find('[data-testid="session-verification"]').exists()).toBe(false);
+    });
+
+    it('keeps a routine background verification silent and allows navigation', async () => {
+        const router = createRouter({
+            history: createMemoryHistory(),
+            routes: [
+                {
+                    path: '/dashboard',
+                    name: 'Dashboard',
+                    component: panel,
+                    meta: { requiresAuth: true },
+                },
+                {
+                    path: '/dashboard/groups',
+                    name: 'SubscriptionGroups',
+                    component: panel,
+                    meta: { requiresAuth: true },
+                },
+            ],
+        });
+        await router.push('/dashboard');
+        const wrapper = mountApp(router);
+        await flushPromises();
+        const store = useSessionStore(wrapper.vm.$pinia);
+        store.isVerifyingSession = true;
+        await flushPromises();
+        expect(wrapper.find('[data-testid="session-verification"]').exists()).toBe(false);
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeUndefined();
+        expect(wrapper.find('nav-bar-stub').exists()).toBe(true);
+        await router.push('/dashboard/groups');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/dashboard/groups');
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
+    });
+
+    it('keeps the retry notice available on a disconnected cold start', async () => {
+        const router = createRouter({
+            history: createMemoryHistory(),
+            routes: [
+                {
+                    path: '/dashboard',
+                    name: 'Dashboard',
+                    component: panel,
+                    meta: { requiresAuth: true },
+                },
+            ],
+        });
+        await router.push('/dashboard');
+        sessionGate.nextCheck = () => {
+            useSessionStore().sessionState = 'unverified';
+            return false;
+        };
+        const wrapper = mountApp(router);
+        await flushPromises();
+        expect(wrapper.find('[data-testid="session-verification"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
+        const store = useSessionStore(wrapper.vm.$pinia);
+        store.isVerifyingSession = true;
+        store.sessionState = 'loading';
+        await flushPromises();
+        expect(wrapper.get('[data-testid="session-verification"] button').element.disabled).toBe(
+            true
+        );
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
     });
 
     it.each(['modern', 'legacy'])(
@@ -282,7 +353,8 @@ describe('authenticated dashboard first render', () => {
         await flushPromises();
         expect(store.sessionState).toBe('loading');
         expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
-        expect(wrapper.find('.app-shell').attributes('inert')).toBeDefined();
+        expect(wrapper.find('.app-shell').attributes('inert')).toBeUndefined();
+        expect(wrapper.find('[data-testid="session-verification"]').exists()).toBe(true);
         const show = new Event('pageshow');
         Object.defineProperty(show, 'persisted', { value: true });
         window.dispatchEvent(show);

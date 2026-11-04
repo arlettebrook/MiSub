@@ -19,6 +19,8 @@
     import CustomPageSettings from '../components/settings/sections/CustomPageSettings.vue';
     import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
 
+    const props = defineProps({ sessionPaused: Boolean });
+
     // 使用 composable 获取所有设置相关的状态和函数
     const { t } = useI18n();
 
@@ -102,10 +104,19 @@
     const isBottomSaveVisible = ref(true);
     const floatingSaveHeaderBottom = ref(0);
     const isSaveDisabled = computed(
-        () => isLoading.value || isSaving.value || hasWhitespace.value || !isStorageTypeValid.value
+        () =>
+            props.sessionPaused ||
+            isLoading.value ||
+            isSaving.value ||
+            hasWhitespace.value ||
+            !isStorageTypeValid.value
     );
     const showFloatingSave = computed(
-        () => hasUnsavedChanges.value && !isLoading.value && !isBottomSaveVisible.value
+        () =>
+            !props.sessionPaused &&
+            hasUnsavedChanges.value &&
+            !isLoading.value &&
+            !isBottomSaveVisible.value
     );
     let saveVisibilityObserver;
 

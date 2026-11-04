@@ -186,6 +186,84 @@ describe('session synchronization across tabs', () => {
 });
 
 describe('session verification while disconnected', () => {
+    it('keeps a known session usable while checking it in the background', async () => {
+        const { store, data } = client();
+        data.updateSubscription('one', { name: 'draft' });
+        let finishCheck;
+        apiMocks.fetchSessionStatus.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishCheck = resolve;
+                })
+        );
+        const check = store.revalidateSession();
+        await flushPromises();
+        expect(store.isVerifyingSession).toBe(true);
+        expect(store.sessionState).toBe('loggedIn');
+        expect(store.canSendPrivateRequest()).toBe(true);
+        finishCheck({ success: true });
+        expect(await check).toBe(true);
+        expect(store.isVerifyingSession).toBe(false);
+        expect(data.subscriptions[0].name).toBe('draft');
+        expect(apiMocks.fetchInitialData).not.toHaveBeenCalled();
+    });
+
+    it('does not revalidate when the window only gains focus', async () => {
+        const { store } = client();
+        window.dispatchEvent(new Event('focus'));
+        await flushPromises();
+        expect(apiMocks.fetchSessionStatus).not.toHaveBeenCalled();
+        expect(store.canSendPrivateRequest()).toBe(true);
+    });
+
+    it('deduplicates checks when a tab becomes visible and reconnects at the same time', async () => {
+        const { store } = client();
+        let finishCheck;
+        apiMocks.fetchSessionStatus.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishCheck = resolve;
+                })
+        );
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+        expect(apiMocks.fetchSessionStatus).toHaveBeenCalledTimes(1);
+        expect(store.sessionState).toBe('loggedIn');
+        finishCheck({ success: true });
+        await flushPromises();
+    });
+
+    it('pauses private requests if a background verification finds a connection failure', async () => {
+        const { store, data } = client();
+        data.updateSubscription('one', { name: 'draft' });
+        apiMocks.fetchSessionStatus.mockResolvedValueOnce({ success: false, errorType: 'network' });
+        expect(await store.revalidateSession()).toBe(false);
+        expect(store.sessionState).toBe('unverified');
+        expect(store.canSendPrivateRequest()).toBe(false);
+        expect(data.subscriptions[0].name).toBe('draft');
+    });
+
+    it('keeps requests paused while revalidating a disconnected session', async () => {
+        const { store } = client();
+        store.reportConnectionIssue();
+        let finishCheck;
+        apiMocks.fetchSessionStatus.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishCheck = resolve;
+                })
+        );
+        const check = store.retrySession();
+        await flushPromises();
+        expect(store.sessionState).toBe('loading');
+        expect(store.verificationReason).toBe('connection');
+        expect(store.canSendPrivateRequest()).toBe(false);
+        finishCheck({ success: true });
+        expect(await check).toBe(true);
+        expect(store.canSendPrivateRequest()).toBe(true);
+    });
+
     it('bounds automatic retries while the connection remains unavailable', async () => {
         vi.useFakeTimers();
         const { store } = client();

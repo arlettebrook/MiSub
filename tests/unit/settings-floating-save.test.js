@@ -130,6 +130,26 @@ describe('settings floating save button', () => {
         expect(floatingButton().textContent).toContain('保存中');
     });
 
+    it('hides the floating action and disables saving while session verification is paused', async () => {
+        await mountPage();
+        await setBottomVisible(false);
+        controls.logic.hasUnsavedChanges.value = true;
+        await nextTick();
+        expect(floatingButton()).not.toBeNull();
+
+        await wrapper.setProps({ sessionPaused: true });
+        expect(floatingButton()).toBeNull();
+        const bottom = wrapper.find('.settings-layout-footer button');
+        expect(bottom.element.disabled).toBe(true);
+        bottom.element.click();
+        expect(controls.logic.handleSave).not.toHaveBeenCalled();
+        expect(controls.logic.hasUnsavedChanges.value).toBe(true);
+
+        await wrapper.setProps({ sessionPaused: false });
+        expect(floatingButton()).not.toBeNull();
+        expect(bottom.element.disabled).toBe(false);
+    });
+
     it('accounts for mobile navigation and refreshes observation when the viewport changes', async () => {
         const header = document.createElement('header');
         header.className = 'app-nav-bar';

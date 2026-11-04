@@ -6,6 +6,7 @@
     defineProps({
         isDirty: Boolean,
         saveState: String,
+        disabled: Boolean,
         footerOffset: { type: Number, default: 0 },
     });
 
@@ -78,13 +79,14 @@
                 <button
                     v-if="saveState !== 'success'"
                     @click="$emit('discard')"
+                    :disabled="disabled"
                     class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors hover:bg-black/5 dark:hover:bg-white/5 misub-radius-md whitespace-nowrap"
                 >
                     {{ t('actions.discard') }}
                 </button>
                 <button
                     @click.prevent="$emit('save')"
-                    :disabled="saveState !== 'idle'"
+                    :disabled="disabled || saveState !== 'idle'"
                     class="flex-1 sm:flex-none px-6 py-2 text-sm text-white font-bold misub-radius-lg flex items-center justify-center transition-all duration-300 transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
                     :class="{
                         'bg-primary-600 hover:bg-primary-500': saveState === 'idle',

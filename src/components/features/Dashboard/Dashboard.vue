@@ -46,7 +46,7 @@
     const CopyLinkModal = defineAsyncComponent(() => import('../../modals/CopyLinkModal.vue'));
 
     // --- 基礎 Props 和狀態 ---
-    const props = defineProps({ data: Object });
+    const props = defineProps({ data: Object, sessionPaused: Boolean });
     const { showToast } = useToastStore();
     const { t } = useI18n();
     const uiStore = useUIStore();
@@ -302,12 +302,14 @@
 
     // --- 其他 JS 逻辑 (省略) ---
     const handleDiscard = async () => {
+        if (props.sessionPaused) return;
         // 强制刷新数据，忽略缓存
         if (!(await dataStore.fetchData(true))) return;
         showToast(t('notices.discardedChanges'));
     };
 
     const handleSave = async () => {
+        if (props.sessionPaused) return;
         saveState.value = 'saving';
 
         try {
@@ -474,6 +476,7 @@
         <SavePrompt
             :is-dirty="isDirty"
             :save-state="saveState"
+            :disabled="sessionPaused"
             @save="handleSave"
             @discard="handleDiscard"
         />

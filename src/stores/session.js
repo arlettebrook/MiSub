@@ -203,10 +203,7 @@ export const useSessionStore = defineStore('session', () => {
     function canSendPrivateRequest() {
         sync?.consume();
         return (
-            sessionState.value === 'loggedIn' &&
-            !isLoggingOut.value &&
-            !isRemoteLogoutPending.value &&
-            !isVerifyingSession.value
+            sessionState.value === 'loggedIn' && !isLoggingOut.value && !isRemoteLogoutPending.value
         );
     }
 
@@ -292,8 +289,11 @@ export const useSessionStore = defineStore('session', () => {
         const checkId = ++sessionCheckId;
         const eventId = readSessionEvent()?.id;
         isVerifyingSession.value = true;
-        sessionState.value = 'loading';
-        verificationReason.value = 'checking';
+        // A routine check of a known session runs silently; each API still authenticates requests.
+        if (sessionState.value !== 'loggedIn') {
+            if (sessionState.value !== 'unverified') verificationReason.value = 'checking';
+            sessionState.value = 'loading';
+        }
         const pending = Promise.resolve().then(async () => {
             try {
                 const pathname = globalThis.window?.location?.pathname || '/';
@@ -349,7 +349,6 @@ export const useSessionStore = defineStore('session', () => {
         if (event?.type === 'logout-start' && Date.now() - event.time < LOGOUT_PENDING_MS)
             receiveSessionEvent(event);
         window.addEventListener('online', handleForeground);
-        window.addEventListener('focus', handleForeground);
         window.addEventListener('offline', handleOffline);
         document.addEventListener('visibilitychange', handleVisibility);
     }
@@ -364,7 +363,6 @@ export const useSessionStore = defineStore('session', () => {
         clearRetry();
         clearTimeout(pendingLogoutTimer);
         window.removeEventListener('online', handleForeground);
-        window.removeEventListener('focus', handleForeground);
         window.removeEventListener('offline', handleOffline);
         document.removeEventListener('visibilitychange', handleVisibility);
     }
