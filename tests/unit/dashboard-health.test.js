@@ -15,10 +15,10 @@ describe('dashboard health helpers', () => {
             { id: 'disabled', enabled: false, userInfo: { total: 100, upload: 99 } },
             { id: 'expired', enabled: true, userInfo: { total: 100, upload: 99, expire: 1 } },
         ];
-        const item = getDashboardHealthItems({ subscriptions }).find(
-            (item) => item.id === 'low-traffic'
+        const items = getDashboardHealthItems({ subscriptions }).filter(
+            (item) => item.titleKey === 'dashboard.healthItems.lowTraffic.title'
         );
-        expect(item.count).toBe(1);
+        expect(items.map((item) => item.subscriptionId)).toEqual(['at-limit']);
         expect(
             subscriptions
                 .filter((sub) => matchesSubscriptionStatus(sub, 'low-traffic'))
@@ -34,6 +34,9 @@ describe('dashboard health helpers', () => {
                 profiles: [{ enabled: false }],
             }),
             ...getDashboardHealthItems({
+                subscriptions: [{ enabled: true, nodeCount: 0 }],
+            }),
+            ...getDashboardHealthItems({
                 settings: { mytoken: 'auto' },
                 profiles: [{ enabled: true }],
                 totalNodesCount: 2,
@@ -45,13 +48,15 @@ describe('dashboard health helpers', () => {
                 ],
             }),
         ];
-        expect(new Set(items.map((item) => item.id)).size).toBe(11);
+        expect(new Set(items.map((item) => item.titleKey)).size).toBe(9);
         for (const locale of ['zh-CN', 'en-US']) {
             for (const item of items) {
                 const copy = resolveHealthItemCopy(item, (key, params) => t(key, params, locale));
                 for (const field of ['title', 'description', 'actionLabel']) {
                     expect(copy[field]).toBeTruthy();
-                    expect(copy[field]).not.toMatch(/dashboard\.healthItems|\{count\}/);
+                    expect(copy[field]).not.toMatch(
+                        /dashboard\.healthItems|\{(?:count|name|error)\}/
+                    );
                     if (locale === 'en-US') expect(copy[field]).not.toMatch(/[\u4e00-\u9fff]/);
                 }
             }
@@ -84,12 +89,10 @@ describe('dashboard health helpers', () => {
             totalNodesCount: 4,
         });
 
-        expect(items.map((item) => item.id)).toEqual([
-            'auto-token',
-            'subscription-errors',
-            'disabled-subscriptions',
-        ]);
-        expect(items.find((item) => item.id === 'subscription-errors').count).toBe(1);
+        expect(items.map((item) => item.id)).toEqual(['auto-token', 'subscription-errors:s3']);
+        expect(items.find((item) => item.id === 'subscription-errors:s3').subscriptionId).toBe(
+            's3'
+        );
         expect(
             shouldShowFullGuide({ subscriptions: [{ id: 's1' }], profiles: [{ id: 'p1' }] })
         ).toBe(false);
@@ -117,8 +120,8 @@ describe('dashboard health helpers', () => {
             now: now * 1000,
         });
 
-        expect(items.map((item) => item.id)).toContain('low-traffic');
-        expect(items.map((item) => item.id)).toContain('expired-subscriptions');
+        expect(items.map((item) => item.id)).toContain('low-traffic:low-traffic');
+        expect(items.map((item) => item.id)).toContain('expired-subscriptions:expired');
     });
 
     it('attaches precise dashboard navigation targets for follow-up actions', () => {
@@ -136,13 +139,54 @@ describe('dashboard health helpers', () => {
             actionRoute: '/dashboard/settings',
             actionQuery: { focus: 'mytoken' },
         });
-        expect(items.find((item) => item.id === 'subscription-errors')).toMatchObject({
+        expect(items.find((item) => item.id === 'subscription-errors:failed')).toMatchObject({
             actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'error' },
+            actionQuery: { status: 'error', subscription: 'failed' },
         });
-        expect(items.find((item) => item.id === 'disabled-subscriptions')).toMatchObject({
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'disabled' },
+        expect(items.map((item) => item.id)).not.toContain('disabled-subscriptions');
+    });
+
+    it('keeps separate issues for the same source and ignores disabled sources', () => {
+        const subscriptions = [
+            {
+                id: 'one',
+                name: 'One',
+                enabled: true,
+                nodeCount: 2,
+                lastError: 'timeout',
+                userInfo: { expire: 1 },
+            },
+            {
+                id: 'two',
+                name: 'Two',
+                enabled: true,
+                nodeCount: 2,
+                userInfo: { total: 100, upload: 90 },
+            },
+            {
+                id: 'three',
+                name: 'Three',
+                enabled: true,
+                nodeCount: 2,
+                userInfo: { total: 100, upload: 95 },
+            },
+            { id: 'off', enabled: false, lastError: 'timeout', userInfo: { expire: 1 } },
+        ];
+        const items = getDashboardHealthItems({
+            subscriptions,
+            profiles: [{ enabled: true }],
+            settings: { mytoken: 'stable' },
         });
+        expect(items.map((item) => item.id)).toEqual([
+            'subscription-errors:one',
+            'expired-subscriptions:one',
+            'low-traffic:two',
+            'low-traffic:three',
+        ]);
+        subscriptions.reverse();
+        expect(
+            getDashboardHealthItems({ subscriptions }).find((item) => item.subscriptionId === 'one')
+                .id
+        ).toBe('subscription-errors:one');
     });
 });

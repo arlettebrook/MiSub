@@ -22,7 +22,21 @@
     const route = useRoute();
     const router = useRouter();
     const activeStatusFilter = computed(() => resolveSubscriptionStatus(route.query.status));
+    const activeSubscriptionId = computed(() => {
+        const value = Array.isArray(route.query.subscription)
+            ? route.query.subscription[0]
+            : route.query.subscription;
+        return typeof value === 'string' ? value.trim() : '';
+    });
     const statusFilterLabel = computed(() => {
+        if (activeSubscriptionId.value) {
+            const sub = dataStore.subscriptions.find(
+                (sub) => String(sub.id) === activeSubscriptionId.value
+            );
+            return t('subscriptions.filterSubscription', {
+                name: sub?.name || t('subscriptions.unnamed'),
+            });
+        }
         const keys = {
             error: 'subscriptions.filterStatusError',
             disabled: 'subscriptions.filterStatusDisabled',
@@ -33,7 +47,7 @@
         return activeStatusFilter.value ? t(keys[activeStatusFilter.value]) : '';
     });
     const clearStatusFilter = () => {
-        const { status, ...query } = route.query;
+        const { status, subscription, ...query } = route.query;
         return router.replace({ query, hash: route.hash });
     };
 
@@ -58,7 +72,10 @@
         handleUpdateNodeCount,
         batchUpdateAllSubscriptions,
         reorderSubscriptions,
-    } = useSubscriptions(markDirty, { statusFilter: activeStatusFilter });
+    } = useSubscriptions(markDirty, {
+        statusFilter: activeStatusFilter,
+        subscriptionIdFilter: activeSubscriptionId,
+    });
 
     const { addNodesFromBulk } = useManualNodes(markDirty);
 
@@ -141,7 +158,7 @@
             :paginated-subscriptions="paginatedSubscriptions"
             :search-query="subscriptionSearchQuery"
             :filtered-count="filteredSubscriptions.length"
-            :status-filter="activeStatusFilter"
+            :status-filter="activeStatusFilter || (activeSubscriptionId ? 'subscription' : '')"
             :status-filter-label="statusFilterLabel"
             :current-page="subsCurrentPage"
             :total-pages="subsTotalPages"

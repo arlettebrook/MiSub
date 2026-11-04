@@ -2,6 +2,22 @@ import { getSubscriptionTrafficState as getTrafficState } from './dashboard-deep
 
 const DEFAULT_NOW = () => Date.now();
 
+function getSubscriptionHealthItem(sub, index, type, copyKey, status, tone) {
+    const subscriptionId = sub.id == null ? '' : String(sub.id);
+    const name = String(sub.name || '').trim();
+    return {
+        id: `${type}:${subscriptionId || sub.url || index}`,
+        subscriptionId,
+        titleKey: `dashboard.healthItems.${copyKey}.title`,
+        titleParams: { name },
+        descriptionKey: `dashboard.healthItems.${copyKey}.description`,
+        actionLabelKey: `dashboard.healthItems.${copyKey}.action`,
+        actionRoute: '/dashboard/groups',
+        actionQuery: { status, ...(subscriptionId ? { subscription: subscriptionId } : {}) },
+        tone,
+    };
+}
+
 function getTokenState(settings = {}) {
     const token = settings.mytoken;
     if (!token) return 'missing';
@@ -22,16 +38,15 @@ export function getDashboardHealthItems({
 } = {}) {
     const items = [];
     const enabledSubscriptions = subscriptions.filter((sub) => sub.enabled);
-    const disabledSubscriptions = subscriptions.filter((sub) => !sub.enabled);
     const activeProfiles = profiles.filter((profile) => profile.enabled !== false);
     const tokenState = getTokenState(settings);
     const resolvedTotalNodes =
         totalNodesCount ?? subscriptions.reduce((sum, sub) => sum + Number(sub.nodeCount || 0), 0);
-    const errorSubscriptions = subscriptions.filter((sub) => Boolean(sub.lastError));
-    const expiredSubscriptions = subscriptions.filter(
+    const errorSubscriptions = enabledSubscriptions.filter((sub) => Boolean(sub.lastError));
+    const expiredSubscriptions = enabledSubscriptions.filter(
         (sub) => getTrafficState(sub, now) === 'expired'
     );
-    const lowTrafficSubscriptions = subscriptions.filter(
+    const lowTrafficSubscriptions = enabledSubscriptions.filter(
         (sub) => getTrafficState(sub, now) === 'low'
     );
 
@@ -44,16 +59,6 @@ export function getDashboardHealthItems({
             actionLabelKey: 'dashboard.healthItems.missingSubscriptions.action',
             actionRoute: '/dashboard/groups',
             actionQuery: { status: 'missing' },
-        });
-    } else if (enabledSubscriptions.length === 0) {
-        items.push({
-            id: 'no-enabled-subscriptions',
-            tone: 'danger',
-            titleKey: 'dashboard.healthItems.noEnabledSubscriptions.title',
-            descriptionKey: 'dashboard.healthItems.noEnabledSubscriptions.description',
-            actionLabelKey: 'dashboard.healthItems.noEnabledSubscriptions.action',
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'disabled' },
         });
     }
 
@@ -101,7 +106,7 @@ export function getDashboardHealthItems({
         });
     }
 
-    if (subscriptions.length > 0 && resolvedTotalNodes === 0) {
+    if (enabledSubscriptions.length > 0 && resolvedTotalNodes === 0) {
         items.push({
             id: 'zero-nodes',
             tone: 'danger',
@@ -113,72 +118,60 @@ export function getDashboardHealthItems({
         });
     }
 
-    if (errorSubscriptions.length > 0) {
+    errorSubscriptions.forEach((sub, index) => {
         items.push({
-            id: 'subscription-errors',
-            tone: 'danger',
-            titleKey: 'dashboard.healthItems.subscriptionErrors.title',
-            titleParams: { count: errorSubscriptions.length },
-            descriptionKey: 'dashboard.healthItems.subscriptionErrors.description',
-            actionLabelKey: 'dashboard.healthItems.subscriptionErrors.action',
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'error' },
+            ...getSubscriptionHealthItem(
+                sub,
+                index,
+                'subscription-errors',
+                'subscriptionErrors',
+                'error',
+                'danger'
+            ),
+            descriptionParams: { error: String(sub.lastError) },
             secondaryActionLabelKey: 'dashboard.healthItems.subscriptionErrors.secondaryAction',
             secondaryAction: 'openLog',
-            count: errorSubscriptions.length,
         });
-    }
+    });
 
-    if (expiredSubscriptions.length > 0) {
-        items.push({
-            id: 'expired-subscriptions',
-            tone: 'danger',
-            titleKey: 'dashboard.healthItems.expiredSubscriptions.title',
-            titleParams: { count: expiredSubscriptions.length },
-            descriptionKey: 'dashboard.healthItems.expiredSubscriptions.description',
-            actionLabelKey: 'dashboard.healthItems.expiredSubscriptions.action',
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'expired' },
-            count: expiredSubscriptions.length,
-        });
-    }
+    expiredSubscriptions.forEach((sub, index) => {
+        items.push(
+            getSubscriptionHealthItem(
+                sub,
+                index,
+                'expired-subscriptions',
+                'expiredSubscriptions',
+                'expired',
+                'danger'
+            )
+        );
+    });
 
-    if (lowTrafficSubscriptions.length > 0) {
-        items.push({
-            id: 'low-traffic',
-            tone: 'warning',
-            titleKey: 'dashboard.healthItems.lowTraffic.title',
-            titleParams: { count: lowTrafficSubscriptions.length },
-            descriptionKey: 'dashboard.healthItems.lowTraffic.description',
-            actionLabelKey: 'dashboard.healthItems.lowTraffic.action',
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'low-traffic' },
-            count: lowTrafficSubscriptions.length,
-        });
-    }
-
-    if (disabledSubscriptions.length > 0 && enabledSubscriptions.length > 0) {
-        items.push({
-            id: 'disabled-subscriptions',
-            tone: 'info',
-            titleKey: 'dashboard.healthItems.disabledSubscriptions.title',
-            titleParams: { count: disabledSubscriptions.length },
-            descriptionKey: 'dashboard.healthItems.disabledSubscriptions.description',
-            actionLabelKey: 'dashboard.healthItems.disabledSubscriptions.action',
-            actionRoute: '/dashboard/groups',
-            actionQuery: { status: 'disabled' },
-            count: disabledSubscriptions.length,
-        });
-    }
+    lowTrafficSubscriptions.forEach((sub, index) => {
+        items.push(
+            getSubscriptionHealthItem(
+                sub,
+                index,
+                'low-traffic',
+                'lowTraffic',
+                'low-traffic',
+                'warning'
+            )
+        );
+    });
 
     return items;
 }
 
 export function resolveHealthItemCopy(item, t) {
+    const titleParams =
+        item.titleParams && 'name' in item.titleParams
+            ? { ...item.titleParams, name: item.titleParams.name || t('subscriptions.unnamed') }
+            : item.titleParams;
     return {
         ...item,
-        title: t(item.titleKey, item.titleParams),
-        description: t(item.descriptionKey),
+        title: t(item.titleKey, titleParams),
+        description: t(item.descriptionKey, item.descriptionParams),
         actionLabel: t(item.actionLabelKey),
         secondaryActionLabel: item.secondaryActionLabelKey ? t(item.secondaryActionLabelKey) : '',
     };

@@ -11,7 +11,10 @@ import { matchesSubscriptionStatus } from '../utils/dashboard-deeplink.js';
 
 const isDev = import.meta.env.DEV;
 
-export function useSubscriptions(markDirty, { statusFilter = ref('') } = {}) {
+export function useSubscriptions(
+    markDirty,
+    { statusFilter = ref(''), subscriptionIdFilter = ref('') } = {}
+) {
     const { showToast } = useToastStore();
     const dataStore = useDataStore();
     // Rename the store ref to avoid confusion, as it contains ALL items
@@ -29,6 +32,7 @@ export function useSubscriptions(markDirty, { statusFilter = ref('') } = {}) {
         const query = searchQuery.value.trim().toLowerCase();
         return subscriptions.value.filter(
             (sub) =>
+                (!subscriptionIdFilter.value || String(sub.id) === subscriptionIdFilter.value) &&
                 matchesSubscriptionStatus(sub, statusFilter.value) &&
                 (!query ||
                     [
@@ -79,7 +83,7 @@ export function useSubscriptions(markDirty, { statusFilter = ref('') } = {}) {
         return filteredSubscriptions.value.slice(start, end);
     });
 
-    watch([searchQuery, statusFilter], () => {
+    watch([searchQuery, statusFilter, subscriptionIdFilter], () => {
         subsCurrentPage.value = 1;
     });
     watch(subsTotalPages, (totalPages) => {

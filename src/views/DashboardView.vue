@@ -15,6 +15,7 @@
         clearDismissedHealthItems,
         dismissHealthItem,
         readDismissedHealthItemIds,
+        restoreHealthItem,
     } from '../utils/health-item-dismissal.js';
     import {
         getDashboardHealthItems,
@@ -87,9 +88,11 @@
     const dashboardHealthItems = computed(() =>
         allHealthItems.value.filter((item) => !dismissedHealthItemIds.value.includes(item.id))
     );
-    const dismissedHealthItemsCount = computed(
-        () => allHealthItems.value.length - dashboardHealthItems.value.length
+    const dismissedHealthItems = computed(() =>
+        allHealthItems.value.filter((item) => dismissedHealthItemIds.value.includes(item.id))
     );
+    const dismissedHealthItemsCount = computed(() => dismissedHealthItems.value.length);
+    const showDismissedHealthItems = ref(false);
 
     const hasHealthItems = computed(() => dashboardHealthItems.value.length > 0);
     const showAllHealthItems = ref(false);
@@ -183,6 +186,13 @@
     const restoreDismissedHealthItems = () => {
         clearDismissedHealthItems();
         dismissedHealthItemIds.value = readDismissedHealthItemIds();
+        showDismissedHealthItems.value = false;
+    };
+
+    const restoreHealthItemById = (id) => {
+        restoreHealthItem(id);
+        dismissedHealthItemIds.value = readDismissedHealthItemIds();
+        if (dismissedHealthItemsCount.value === 0) showDismissedHealthItems.value = false;
     };
 
     // --- QRCode Modal Logic ---
@@ -328,6 +338,8 @@
                             <div
                                 v-for="item in visibleHealthItems"
                                 :key="item.id"
+                                data-testid="health-item"
+                                :data-health-item-id="item.id"
                                 class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--misub-radius-md)] border p-3"
                                 :class="healthToneClasses[item.tone] || healthToneClasses.info"
                             >
@@ -339,8 +351,8 @@
                                         "
                                     ></span>
                                     <div class="min-w-0">
-                                        <p class="font-semibold">{{ item.title }}</p>
-                                        <p class="mt-0.5 text-sm opacity-80">
+                                        <p class="font-semibold break-words">{{ item.title }}</p>
+                                        <p class="mt-0.5 text-sm opacity-80 break-words">
                                             {{ item.description }}
                                         </p>
                                     </div>
@@ -349,6 +361,7 @@
                                     <button
                                         v-if="item.actionLabel"
                                         type="button"
+                                        data-testid="health-item-action"
                                         class="min-h-10 rounded-[var(--misub-radius-md)] border border-current/20 bg-white/60 px-3 py-2 text-sm font-semibold hover:bg-white/90 dark:bg-white/10 dark:hover:bg-white/15 transition-colors"
                                         @click="handleHealthAction(item)"
                                     >
@@ -400,19 +413,89 @@
                                 {{ t('dashboard.health.allGoodDesc') }}
                             </p>
                         </div>
-                        <button
+                        <div
                             v-if="dismissedHealthItemsCount > 0"
-                            type="button"
-                            class="justify-self-start text-sm font-medium text-gray-500 underline decoration-dotted underline-offset-4 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                            data-testid="health-items-restore"
-                            @click="restoreDismissedHealthItems"
+                            class="mt-4 border-t border-gray-200/80 pt-3 dark:border-white/10"
                         >
-                            {{
-                                t('dashboard.health.restoreDismissed', {
-                                    count: dismissedHealthItemsCount,
-                                })
-                            }}
-                        </button>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    :aria-expanded="showDismissedHealthItems"
+                                    aria-controls="dismissed-health-items"
+                                    class="min-h-10 inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                    data-testid="health-items-dismissed-toggle"
+                                    @click="showDismissedHealthItems = !showDismissedHealthItems"
+                                >
+                                    {{
+                                        t('dashboard.health.dismissedItems', {
+                                            count: dismissedHealthItemsCount,
+                                        })
+                                    }}
+                                    <svg
+                                        class="h-4 w-4 transition-transform"
+                                        :class="{ 'rotate-180': showDismissedHealthItems }"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="m6 9 6 6 6-6"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="min-h-10 text-sm font-medium text-gray-500 underline decoration-dotted underline-offset-4 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                    data-testid="health-items-restore"
+                                    @click="restoreDismissedHealthItems"
+                                >
+                                    {{ t('dashboard.health.restoreDismissed') }}
+                                </button>
+                            </div>
+                            <ul
+                                v-if="showDismissedHealthItems"
+                                id="dismissed-health-items"
+                                class="mt-2 grid gap-2"
+                            >
+                                <li
+                                    v-for="item in dismissedHealthItems"
+                                    :key="item.id"
+                                    :data-health-item-id="item.id"
+                                    data-testid="dismissed-health-item"
+                                    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--misub-radius-md)] border border-gray-200/80 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/5"
+                                >
+                                    <div class="min-w-0">
+                                        <p
+                                            class="font-medium text-gray-600 dark:text-gray-300 break-words"
+                                        >
+                                            {{ item.title }}
+                                        </p>
+                                        <p
+                                            class="mt-0.5 text-sm text-gray-500 dark:text-gray-400 break-words"
+                                        >
+                                            {{ item.description }}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        :aria-label="
+                                            t('dashboard.health.restoreItemLabel', {
+                                                title: item.title,
+                                            })
+                                        "
+                                        data-testid="health-item-restore"
+                                        class="min-h-10 shrink-0 rounded-[var(--misub-radius-md)] border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 transition-colors"
+                                        @click="restoreHealthItemById(item.id)"
+                                    >
+                                        {{ t('dashboard.health.restoreItem') }}
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                     </section>
 
                     <section
