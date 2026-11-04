@@ -9,7 +9,7 @@ export const useVersionStore = defineStore('version', () => {
     const latestRelease = ref(null);
     const showModal = ref(false);
     const showUpdateNotice = ref(false);
-    const upstreamRepo = 'imzyb/MiSub';
+    const upstreamRepo = 'arlettebrook/MiSub';
 
     // 本地更新日志 (v2.7.0)
     const localChangelog = `✨ **订阅生成链路、内置模板与安全兼容性增强**

@@ -35,9 +35,9 @@ jobs:
           git checkout main || git checkout -b main
 
           if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream https://github.com/imzyb/MiSub.git
+            git remote set-url upstream https://github.com/arlettebrook/MiSub.git
           else
-            git remote add upstream https://github.com/imzyb/MiSub.git
+            git remote add upstream https://github.com/arlettebrook/MiSub.git
           fi
 
           if [ -n "${SYNC_PAT:-}" ]; then

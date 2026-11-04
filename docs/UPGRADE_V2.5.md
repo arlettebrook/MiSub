@@ -27,7 +27,7 @@ v2.5.0 是 MiSub 的一个重大里程碑。我们不仅重构了核心节点处
 1. **备份数据**：在升级前，建议在 MiSub 后台导出一次数据备份（Settings -> Backup）。
 2. **连接上游**（如果未连接）：
    ```bash
-   git remote add upstream https://github.com/imzyb/MiSub.git
+   git remote add upstream https://github.com/arlettebrook/MiSub.git
    ```
 3. **获取更新并合并**：
    ```bash

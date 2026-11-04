@@ -6,7 +6,7 @@
     defineProps({
         href: {
             type: String,
-            default: 'https://github.com/imzyb/MiSub',
+            default: 'https://github.com/arlettebrook/MiSub',
         },
         className: {
             type: [String, Array, Object],
