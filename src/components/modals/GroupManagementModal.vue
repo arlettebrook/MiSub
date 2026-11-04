@@ -2,6 +2,9 @@
     import { ref, computed, watch } from 'vue';
     import Modal from '../forms/Modal.vue';
     import draggable from 'vuedraggable';
+    import { useI18n } from '../../i18n/index.js';
+
+    const { t } = useI18n();
 
     const props = defineProps({
         show: Boolean,
@@ -67,7 +70,14 @@
     };
 
     const handleDelete = (groupName) => {
-        if (confirm(`确定删除分组 "${groupName}" 吗？分组内的节点将移至"默认"分组。`)) {
+        if (
+            confirm(
+                t('manualNodes.deleteGroupConfirm', {
+                    name: groupName,
+                    defaultGroup: t('manualNodes.defaultGroup'),
+                })
+            )
+        ) {
             emit('delete', groupName);
             localGroups.value = localGroups.value.filter((g) => g.name !== groupName);
         }
@@ -95,7 +105,7 @@
                         d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
                     />
                 </svg>
-                <span>分组管理</span>
+                <span>{{ t('actions.manageGroups') }}</span>
             </div>
         </template>
 
@@ -119,7 +129,7 @@
                             d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                         />
                     </svg>
-                    <p>暂无分组</p>
+                    <p>{{ t('manualNodes.noGroups') }}</p>
                 </div>
 
                 <draggable
@@ -145,7 +155,8 @@
                             <button
                                 v-if="isDraggable"
                                 class="drag-handle cursor-move text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                title="拖拽排序"
+                                :title="t('common.dragToSort')"
+                                :aria-label="t('common.dragToSort')"
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -170,6 +181,7 @@
                                     @keyup.esc="cancelEdit"
                                     ref="editInput"
                                     autofocus
+                                    :aria-label="t('manualNodes.renameGroup')"
                                 />
                                 <div v-else class="flex items-center gap-2">
                                     <span
@@ -185,7 +197,8 @@
                                     <button
                                         @click="confirmEdit"
                                         class="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
-                                        title="确认"
+                                        :title="t('actions.confirm')"
+                                        :aria-label="t('actions.confirm')"
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -203,7 +216,8 @@
                                     <button
                                         @click="cancelEdit"
                                         class="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                                        title="取消"
+                                        :title="t('actions.cancel')"
+                                        :aria-label="t('actions.cancel')"
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -223,7 +237,8 @@
                                     <button
                                         @click="startEdit(index)"
                                         class="p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded-md transition-colors"
-                                        title="重命名"
+                                        :title="t('manualNodes.renameGroup')"
+                                        :aria-label="t('manualNodes.renameGroup')"
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -239,7 +254,8 @@
                                     <button
                                         @click="handleDelete(element.name)"
                                         class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                        title="删除"
+                                        :title="t('actions.delete')"
+                                        :aria-label="t('actions.delete')"
                                     >
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -274,7 +290,7 @@
                                 clip-rule="evenodd"
                             />
                         </svg>
-                        <span>拖拽分组左侧的图标可调整显示顺序</span>
+                        <span>{{ t('manualNodes.dragToReorder') }}</span>
                     </p>
                 </div>
             </div>
@@ -285,7 +301,7 @@
                 @click="handleClose"
                 class="w-full rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
-                关闭
+                {{ t('common.close') }}
             </button>
         </template>
     </Modal>

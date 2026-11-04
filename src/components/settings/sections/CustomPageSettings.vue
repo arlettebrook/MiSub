@@ -291,7 +291,7 @@
                             v-model="props.settings.customPage.content"
                             rows="12"
                             class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
-                            placeholder="支持直接粘贴整份 HTML 源码，点击「{{ t('settings.customPageNormalizeSource') }}」可自动提取 CSS。"
+                            :placeholder="t('settings.customPageSourcePlaceholder')"
                         />
                     </div>
 
@@ -304,7 +304,7 @@
                             v-model="props.settings.customPage.css"
                             rows="6"
                             class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary-500 font-mono text-sm leading-relaxed outline-none transition-all"
-                            placeholder="请输入{{ t('settings.customPageCss') }} 样式..."
+                            :placeholder="t('settings.customPageCssPlaceholder')"
                         />
                     </div>
                 </div>
