@@ -326,6 +326,7 @@ describe('dashboard action regressions', () => {
             'third',
             'failed',
         ]);
+        await remounted.get('[data-testid="health-items-dismissed-toggle"]').trigger('click');
         await remounted.get('[data-testid="health-items-restore"]').trigger('click');
         expect(remounted.findAll('[data-testid="health-item"]')).toHaveLength(3);
         expect(remounted.text()).toContain('Renamed：最近更新失败');
@@ -424,6 +425,7 @@ describe('dashboard action regressions', () => {
             '已忽略 2 项'
         );
 
+        await wrapper.get('[data-testid="health-items-dismissed-toggle"]').trigger('click');
         await wrapper.get('[data-testid="health-items-restore"]').trigger('click');
         expect(wrapper.vm.dashboardHealthItems.map((item) => item.id)).toEqual([
             'auto-token',
@@ -443,7 +445,8 @@ describe('dashboard action regressions', () => {
         const second = mountView(DashboardView);
         expect(second.vm.dashboardHealthItems).toEqual([]);
         expect(second.vm.dismissedHealthItemsCount).toBe(1);
-        expect(second.find('[data-testid="health-items-restore"]').exists()).toBe(true);
+        expect(second.find('[data-testid="health-items-dismissed-toggle"]').exists()).toBe(true);
+        expect(second.find('[data-testid="health-items-restore"]').exists()).toBe(false);
     });
 
     it('counts only dismissed issues that still exist', async () => {
@@ -517,9 +520,12 @@ describe('dashboard action regressions', () => {
             expect(wrapper.get('[data-testid="health-items-dismissed-toggle"]').text()).toBe(
                 dismissed
             );
-            expect(wrapper.get('[data-testid="health-items-restore"]').text()).toBe(restoreAll);
+            expect(wrapper.find('[data-testid="health-items-restore"]').exists()).toBe(false);
             await wrapper.get('[data-testid="health-items-dismissed-toggle"]').trigger('click');
+            expect(wrapper.get('[data-testid="health-items-restore"]').text()).toBe(restoreAll);
             expect(wrapper.get('[data-testid="health-item-restore"]').text()).toBe(restoreItem);
+            await wrapper.get('[data-testid="health-items-dismissed-toggle"]').trigger('click');
+            expect(wrapper.find('[data-testid="health-items-restore"]').exists()).toBe(false);
             expect(wrapper.text()).not.toContain('dashboard.');
         }
     );
