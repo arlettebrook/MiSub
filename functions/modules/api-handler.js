@@ -835,21 +835,34 @@ export async function handlePublicConfig(request, env) {
             isLoginPath = false;
         }
 
-        return createJsonResponse({
-            enablePublicPage: mergedSettings.enablePublicPage,
-            isLoginPath,
-            hasCustomLoginPath: configuredLoginPath !== '/login',
-            customPage: {
-                enabled: mergedSettings.customPage?.enabled || false,
-                useDefaultLayout: mergedSettings.customPage?.useDefaultLayout !== false,
-                allowExternalStylesheets:
-                    mergedSettings.customPage?.allowExternalStylesheets === true,
-                allowScripts: mergedSettings.customPage?.allowScripts === true,
-                hideBranding: mergedSettings.customPage?.hideBranding === true,
-                hideHeader: mergedSettings.customPage?.hideHeader === true,
-                hideFooter: mergedSettings.customPage?.hideFooter === true,
+        return createJsonResponse(
+            {
+                enablePublicPage: mergedSettings.enablePublicPage,
+                isLoginPath,
+                hasCustomLoginPath: configuredLoginPath !== '/login',
+                disguise: {
+                    enabled: mergedSettings.disguise?.enabled === true,
+                    pageType:
+                        mergedSettings.disguise?.pageType === 'redirect' ? 'redirect' : 'default',
+                    redirectUrl:
+                        typeof mergedSettings.disguise?.redirectUrl === 'string'
+                            ? mergedSettings.disguise.redirectUrl
+                            : '',
+                },
+                customPage: {
+                    enabled: mergedSettings.customPage?.enabled || false,
+                    useDefaultLayout: mergedSettings.customPage?.useDefaultLayout !== false,
+                    allowExternalStylesheets:
+                        mergedSettings.customPage?.allowExternalStylesheets === true,
+                    allowScripts: mergedSettings.customPage?.allowScripts === true,
+                    hideBranding: mergedSettings.customPage?.hideBranding === true,
+                    hideHeader: mergedSettings.customPage?.hideHeader === true,
+                    hideFooter: mergedSettings.customPage?.hideFooter === true,
+                },
             },
-        });
+            200,
+            { 'Cache-Control': 'no-store', Vary: 'X-MiSub-Path, Referer' }
+        );
     } catch (e) {
         console.error('[API Error /public/config]', e);
         return createErrorResponse('获取公开配置失败', 500);

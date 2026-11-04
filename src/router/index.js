@@ -9,13 +9,6 @@ const SettingsView = () => import('../views/SettingsView.vue');
 
 const HomeView = () => import('../views/HomeView.vue'); // [NEW] Wrapper View
 
-const defaultAuthContext = () => ({ state: 'loading', loginPath: '/login' });
-let authContextResolver = defaultAuthContext;
-
-export function configureAuthGuard(resolver) {
-    authContextResolver = typeof resolver === 'function' ? resolver : defaultAuthContext;
-}
-
 const routes = [
     {
         path: '/', // Root path is HomeView (Smart Wrapper)
@@ -105,17 +98,12 @@ router.onError((error) => {
     }
 });
 
-// Navigation guard
+// App renders protected routes according to the current session without revealing the login entry.
 router.beforeEach((to) => {
     // Update title
     if (typeof document !== 'undefined') {
         document.title = to.meta.title ? `${to.meta.title} - MISUB` : 'MISUB';
     }
-
-    if (!to.meta.requiresAuth) return true;
-    const context = authContextResolver() || {};
-    if (context.state === 'loading' || context.state === 'loggedIn') return true;
-    return { path: context.loginPath || '/login', query: { redirect: to.fullPath } };
 });
 
 export default router;

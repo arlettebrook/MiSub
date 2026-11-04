@@ -294,7 +294,7 @@ describe('security hardening', () => {
         expect(checkResponse.status).toBe(404);
     });
 
-    it('allows auth debug endpoints only when explicitly enabled for diagnostics', async () => {
+    it('allows auth debug endpoints only when enabled and requested by an authenticated admin', async () => {
         const env = {
             MISUB_KV: createKv(),
             COOKIE_SECRET: 'stable-cookie-secret',
@@ -302,10 +302,10 @@ describe('security hardening', () => {
             ENABLE_AUTH_DIAGNOSTICS: 'true',
         };
 
-        const response = await handleApiRequest(
-            new Request('https://example.com/api/auth_debug'),
-            env
-        );
+        const token = await createSignedToken(env.COOKIE_SECRET, String(Date.now()));
+        const request = new Request('https://example.com/api/auth_debug');
+        request.headers.set('Cookie', `auth_session=${token}`);
+        const response = await handleApiRequest(request, env);
         const body = await response.json();
 
         expect(response.status).toBe(200);

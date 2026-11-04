@@ -60,6 +60,36 @@ describe('API route access boundaries', () => {
         expect(body.config.defaultLocale).toBe('en-US');
     });
 
+    it('exposes only the public disguise settings without the custom management entry', async () => {
+        const env = {
+            MISUB_KV: createKv({
+                worker_settings_v1: JSON.stringify({
+                    customLoginPath: 'admin-secret',
+                    disguise: {
+                        enabled: true,
+                        pageType: 'redirect',
+                        redirectUrl: 'https://example.org/',
+                        privateField: 'secret',
+                    },
+                }),
+            }),
+        };
+        const response = await handleApiRequest(
+            new Request('https://example.com/api/public_config'),
+            env
+        );
+        const body = await response.json();
+        expect(body.disguise).toEqual({
+            enabled: true,
+            pageType: 'redirect',
+            redirectUrl: 'https://example.org/',
+        });
+        expect(JSON.stringify(body)).not.toContain('admin-secret');
+        expect(JSON.stringify(body)).not.toContain('privateField');
+        expect(response.headers.get('Cache-Control')).toBe('no-store');
+        expect(response.headers.get('Vary')).toContain('X-MiSub-Path');
+    });
+
     it.each([
         ['/api/public_config', {}, false],
         ['/api/config', { 'X-MiSub-Path': '/admin-login' }, true],

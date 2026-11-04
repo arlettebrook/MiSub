@@ -15,12 +15,10 @@
     import { loadLegacyDashboard } from './router/component-loaders.js';
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
-    import { configureAuthGuard } from './router/index.js';
-    import { normalizeLoginPath, isValidCustomLoginPath } from './utils/login-path.js';
+    import { normalizeLoginPath } from './utils/login-path.js';
 
     // Lazy components
-    const Login = defineAsyncComponent(() => import('./components/modals/Login.vue'));
-    const NotFound = defineAsyncComponent(() => import('./views/NotFound.vue'));
+    const DisguiseView = defineAsyncComponent(() => import('./views/DisguiseView.vue'));
     const Toast = defineAsyncComponent(() => import('./components/ui/Toast.vue'));
     const Dashboard = defineAsyncComponent(loadLegacyDashboard);
     const Header = defineAsyncComponent(() => import('./components/layout/Header.vue'));
@@ -42,7 +40,7 @@
 
     const sessionStore = useSessionStore();
     const { sessionState, isLoggingOut } = storeToRefs(sessionStore);
-    const { checkSession, login, logout } = sessionStore;
+    const { checkSession, logout } = sessionStore;
 
     const toastStore = useToastStore();
 
@@ -66,7 +64,16 @@
         () =>
             sessionStore.loginPath || normalizeLoginPath(sessionStore.publicConfig?.customLoginPath)
     );
-    configureAuthGuard(() => ({ state: sessionState.value, loginPath: loginPath.value }));
+    const isDisguiseRoute = computed(
+        () =>
+            sessionState.value === 'loggedOut' &&
+            (route.meta.requiresAuth ||
+                (['Home', 'Explore'].includes(route.name) &&
+                    sessionStore.publicConfig?.enablePublicPage === false) ||
+                (route.name === 'Entrance' &&
+                    (route.path !== loginPath.value ||
+                        sessionStore.publicConfig?.isLoginPath === false)))
+    );
     const isInitialRouteReady = ref(false);
     const authenticatedContentKey = computed(() => `${layoutMode.value}:${route.path}`);
     const readyAuthenticatedContentKey = ref(null);
@@ -74,7 +81,7 @@
         () => readyAuthenticatedContentKey.value === authenticatedContentKey.value
     );
     const isPageLoading = computed(
-        () => sessionState.value === 'loading' || !isInitialRouteReady.value
+        () => sessionState.value === 'loading' || isLoggingOut.value || !isInitialRouteReady.value
     );
 
     watch(
@@ -134,6 +141,7 @@
 
     const showLegacyHeader = computed(() => {
         if (isPageLoading.value) return false;
+        if (isDisguiseRoute.value) return false;
         if (showModernNavBar.value) return false;
         if (isLoggedIn.value) return true;
         if (!isPublicRoute.value) return false;
@@ -147,6 +155,7 @@
     const shouldShowFooter = computed(
         () =>
             !isPageLoading.value &&
+            !isDisguiseRoute.value &&
             (!isLoggedIn.value || hasAuthenticatedContentMounted.value) &&
             (!isPublicRoute.value || showPublicFooter.value)
     );
@@ -165,35 +174,10 @@
     const legacyD1Details = ref({ hasLegacySubscriptions: false, hasLegacyProfiles: false });
     const pendingVersionModal = ref(false);
 
-    // Determine which login component to show (Custom Path -> NotFound, else -> Login)
-    const loginComponent = computed(() => {
-        return sessionStore.publicConfig?.hasCustomLoginPath === true ||
-            isValidCustomLoginPath(sessionStore.publicConfig?.customLoginPath)
-            ? NotFound
-            : Login;
-    });
-
-    const redirectUnauthenticatedRoute = () => {
-        if (sessionState.value !== 'loggedOut' || isLoggingOut.value || !route.meta?.requiresAuth)
-            return;
-        return router
-            .replace({ path: loginPath.value, query: { redirect: route.fullPath } })
-            .catch(() => {});
-    };
-
     const handleUnauthorized = () => {
         if (!sessionStore.handleUnauthorized()) return;
         toastStore.showToast(t('settings.authFailedRelogin'), 'error');
-        redirectUnauthenticatedRoute();
     };
-
-    watch(
-        [sessionState, isLoggingOut, () => route.fullPath, loginPath],
-        redirectUnauthenticatedRoute,
-        {
-            immediate: true,
-        }
-    );
 
     const isDefaultPassword = computed(() => {
         return (
@@ -208,7 +192,6 @@
     const prepareSessionRoute = async () => {
         try {
             await Promise.all([checkSession(), router.isReady()]);
-            await redirectUnauthenticatedRoute();
             // Keep the existing loading screen until the actual destination is ready.
             if (
                 isLoggedIn.value &&
@@ -250,7 +233,6 @@
         window.removeEventListener('misub:unauthorized', handleUnauthorized);
         window.removeEventListener('pagehide', handlePageHide);
         window.removeEventListener('pageshow', handlePageShow);
-        configureAuthGuard(null);
     });
 
     watch(
@@ -487,9 +469,9 @@
                 </router-view>
             </template>
 
-            <!-- LOGIN VIEW (Not logged in, not public) -->
+            <!-- Protected routes never redirect an unauthenticated visitor to the login entry. -->
             <template v-else>
-                <component :is="loginComponent" :login="login" />
+                <DisguiseView />
             </template>
         </main>
 
@@ -515,7 +497,7 @@
             @visible-height="revealedFooterHeight = $event"
         />
         <ScrollToTop
-            v-if="isLoggedIn || isPublicRoute"
+            v-if="!isDisguiseRoute && (isLoggedIn || isPublicRoute)"
             :above-mobile-nav="showModernNavBar"
             :footer-offset="revealedFooterHeight"
         />

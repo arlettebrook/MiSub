@@ -20,6 +20,10 @@ vi.mock('../../src/views/NotFound.vue', () => ({
     __esModule: true,
     default: { template: '<div data-testid="not-found">404</div>' },
 }));
+vi.mock('../../src/views/DisguiseView.vue', () => ({
+    __esModule: true,
+    default: { template: '<div data-testid="disguise-page">404</div>' },
+}));
 
 let wrapper;
 let router;
@@ -40,6 +44,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 });
 
 async function openEntrance(path, sessionState = 'loggedOut') {
@@ -112,12 +117,12 @@ describe('login entry path confirmation', () => {
         await flushPromises();
         expect(apiMocks.fetchPublicConfig).toHaveBeenCalledWith('/unknown');
         expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
-        expect(wrapper.find('[data-testid="not-found"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
         await router.push('/login');
         await flushPromises();
         await vi.dynamicImportSettled();
         await flushPromises();
-        expect(wrapper.find('[data-testid="not-found"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
     });
 
     it('keeps the default login entry available when no custom path is configured', async () => {
@@ -131,19 +136,34 @@ describe('login entry path confirmation', () => {
     });
 
     it('preserves a confirmed entry when browser storage is blocked', async () => {
-        vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => {
-            throw new Error('storage blocked');
+        const storage = sessionStorage;
+        vi.stubGlobal('sessionStorage', {
+            getItem: (key) => storage.getItem(key),
+            setItem: () => {
+                throw new Error('storage blocked');
+            },
         });
         await openEntrance('/admin-login');
         expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(true);
         expect(store.loginPath).toBe('/admin-login');
     });
 
-    it('does not repeatedly request config after the initial request fails', async () => {
+    it('keeps the default entry disguised when its confirmation request fails', async () => {
         apiMocks.fetchPublicConfig.mockResolvedValue({ success: false, error: 'network down' });
         await openEntrance('/login');
         expect(apiMocks.fetchPublicConfig).toHaveBeenCalledTimes(1);
-        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
         expect(store.publicConfig.enablePublicPage).toBe(false);
+    });
+
+    it('does not trust a remembered custom entry when the server cannot confirm it', async () => {
+        sessionStorage.setItem('misub:login-path', '/admin-login');
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: false, error: 'network down' });
+        await openEntrance('/admin-login');
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
+        expect(router.currentRoute.value.path).toBe('/admin-login');
+        expect(router.currentRoute.value.query.redirect).toBeUndefined();
     });
 });

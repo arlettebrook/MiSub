@@ -194,7 +194,7 @@ export function renderDisguisePage(disguiseConfig) {
         status: 404,
         headers: {
             'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-cache',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
         },
     });
 }
@@ -206,6 +206,7 @@ export function renderDisguisePage(disguiseConfig) {
  * @returns {Response}
  */
 export function createDisguiseResponse(disguiseConfig, baseUrl) {
+    if (disguiseConfig?.enabled === false) disguiseConfig = undefined;
     if (disguiseConfig && disguiseConfig.pageType === 'redirect' && disguiseConfig.redirectUrl) {
         const redirectUrl = normalizeRedirectUrl(disguiseConfig.redirectUrl, baseUrl);
         if (redirectUrl) {

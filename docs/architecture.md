@@ -107,7 +107,7 @@ functions/modules/api-router.js
 /api/public/guestbook
 /api/telegram/webhook
 /api/system/error_report
-/api/clients/*
+/api/clients (GET)
 /api/github/release
 ```
 

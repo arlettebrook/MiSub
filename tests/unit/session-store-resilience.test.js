@@ -31,6 +31,10 @@ describe('session store resilience', () => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
         apiMocks.apiGet.mockReset();
+        apiMocks.fetchPublicConfig.mockReset().mockResolvedValue({
+            success: true,
+            data: { enablePublicPage: true, hasCustomLoginPath: false, isLoginPath: false },
+        });
         sessionStorage.clear();
         localStorage.setItem('layoutMode', 'modern');
         loaderMocks.loadLegacyDashboard.mockReset().mockResolvedValue({});
@@ -38,6 +42,31 @@ describe('session store resilience', () => {
     });
 
     afterEach(() => vi.restoreAllMocks());
+
+    it('refreshes root disguise settings after logout without returning to the remembered admin entry', async () => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        store.loginPath = '/admin-login';
+        apiMocks.apiGet.mockResolvedValue({ success: true });
+        apiMocks.fetchPublicConfig.mockResolvedValue({
+            success: true,
+            data: {
+                enablePublicPage: false,
+                hasCustomLoginPath: true,
+                isLoginPath: false,
+                disguise: {
+                    enabled: true,
+                    pageType: 'redirect',
+                    redirectUrl: 'https://example.org/',
+                },
+            },
+        });
+        expect(await store.logout()).toBe(true);
+        expect(apiMocks.fetchPublicConfig).toHaveBeenCalledWith('/');
+        expect(store.publicConfig.disguise.redirectUrl).toBe('https://example.org/');
+        expect(store.sessionState).toBe('loggedOut');
+        expect(routerMocks.push).toHaveBeenCalledExactlyOnceWith({ path: '/' });
+    });
 
     it('ignores unauthorized responses while an intentional logout is pending', async () => {
         const store = useSessionStore();

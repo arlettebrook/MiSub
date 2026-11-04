@@ -82,6 +82,29 @@ function isAuthDiagnosticsEnabled(env) {
     return String(env?.ENABLE_AUTH_DIAGNOSTICS || '').toLowerCase() === 'true';
 }
 
+const PUBLIC_API_PATHS = new Set([
+    '/login',
+    '/logout',
+    '/public_config',
+    '/config',
+    '/public/profiles',
+    '/public/preview',
+    '/public/guestbook',
+    '/system/error_report',
+    '/github/release',
+]);
+
+function preventPrivateResponseCaching(response) {
+    const headers = new Headers(response.headers);
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    headers.set('CDN-Cache-Control', 'no-store');
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+    });
+}
+
 /**
  * 处理主要的API请求
  * @param {Object} request - HTTP请求对象
@@ -92,6 +115,38 @@ export async function handleApiRequest(request, env, context = null) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api/, '');
 
+    if ((path === '/auth_debug' || path === '/auth_check') && !isAuthDiagnosticsEnabled(env)) {
+        return createErrorResponse('Not Found', 404);
+    }
+
+    // These entry points validate their own signed callback, bot secret, or bearer token.
+    const hasIndependentAuthentication =
+        path === '/external-nodes-callback' ||
+        path === '/telegram/webhook' ||
+        path.startsWith('/ext/v1');
+    const isPublic =
+        PUBLIC_API_PATHS.has(path) || (path === '/clients' && request.method === 'GET');
+    const requiresAdminSession = !isPublic && !hasIndependentAuthentication;
+
+    // All private routes, including new dispatcher branches, authenticate before parsing or dispatch.
+    if (requiresAdminSession && !(await authMiddleware(request, env))) {
+        const response =
+            path === '/data'
+                ? createJsonResponse({ authenticated: false, message: 'Not logged in' })
+                : createJsonResponse({ error: 'Unauthorized' }, 401);
+        return preventPrivateResponseCaching(response);
+    }
+
+    const response = await dispatchApiRequest(request, env, context, path);
+    return requiresAdminSession ||
+        hasIndependentAuthentication ||
+        path === '/login' ||
+        path === '/logout'
+        ? preventPrivateResponseCaching(response)
+        : response;
+}
+
+async function dispatchApiRequest(request, env, context, path) {
     if (path === '/external-nodes-callback') {
         return handleExternalNodesCallbackRequest(request, env);
     }
@@ -102,9 +157,6 @@ export async function handleApiRequest(request, env, context = null) {
 
     // [新增] 数据存储迁移接口 (KV -> D1)
     if (path === '/migrate_to_d1') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({ error: 'Unauthorized' }, 401);
-        }
         try {
             if (!env.MISUB_DB) {
                 return createJsonResponse(
@@ -143,9 +195,6 @@ export async function handleApiRequest(request, env, context = null) {
     }
 
     if (path === '/detect_legacy_d1') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({ error: 'Unauthorized' }, 401);
-        }
         try {
             const result = await DataMigrator.detectLegacyD1MainRows(env);
             return createJsonResponse({ success: true, data: result });
@@ -156,9 +205,6 @@ export async function handleApiRequest(request, env, context = null) {
     }
 
     if (path === '/migrate_legacy_d1') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({ error: 'Unauthorized' }, 401);
-        }
         try {
             const migrationResult = await DataMigrator.migrateLegacyD1MainRows(env);
             if (migrationResult.errors.length > 0) {
@@ -185,9 +231,6 @@ export async function handleApiRequest(request, env, context = null) {
 
     // [新增] 安全的、可重复执行的迁移接口
     if (path === '/migrate') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({ error: 'Unauthorized' }, 401);
-        }
         try {
             const kv = StorageFactory.resolveKV(env);
             if (!kv) {
@@ -263,20 +306,12 @@ export async function handleApiRequest(request, env, context = null) {
         return await handleErrorReportRequest(request, env);
     }
 
-    // Public GET access for clients
-    if (path.startsWith('/clients') && request.method === 'GET') {
+    // Only the published client list is an anonymous read endpoint.
+    if (path === '/clients' && request.method === 'GET') {
         return await handleClientRequest(request, env);
     }
 
-    // Special handling for /data to return 200 OK for unauthenticated requests
     if (path === '/data') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({
-                authenticated: false,
-                message: 'Not logged in',
-            });
-        }
-
         return await handleDataRequest(env, context || { env });
     }
 
@@ -317,19 +352,12 @@ export async function handleApiRequest(request, env, context = null) {
         return createJsonResponse(diagnostic, diagnostic.success ? 200 : 400);
     }
 
-    if (!(await authMiddleware(request, env))) {
-        return createJsonResponse({ error: 'Unauthorized' }, 401);
-    }
-
     // Auth-only route for client management (POST, DELETE, etc.)
     if (path.startsWith('/clients')) {
         return await handleClientRequest(request, env);
     }
 
     if (path === '/test_notification') {
-        if (!(await authMiddleware(request, env))) {
-            return createJsonResponse({ error: 'Unauthorized' }, 401);
-        }
         return await handleTestNotificationRequest(request, env);
     }
 
@@ -522,15 +550,9 @@ export async function handleApiRequest(request, env, context = null) {
             return createErrorResponse('Method Not Allowed', 405);
 
         case '/cron/status':
-            if (!(await authMiddleware(request, env))) {
-                return createJsonResponse({ error: 'Unauthorized' }, 401);
-            }
             return await handleCronStatusRequest(env);
 
         case '/cron/trigger':
-            if (!(await authMiddleware(request, env))) {
-                return createJsonResponse({ error: 'Unauthorized' }, 401);
-            }
             return await handleCronTriggerRequest(env);
 
         default:

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createDisguiseResponse, renderDisguisePage } from '../../functions/modules/disguise-page.js';
+import {
+    createDisguiseResponse,
+    renderDisguisePage,
+} from '../../functions/modules/disguise-page.js';
 
 /**
  * 伪装页加固测试：
@@ -27,6 +30,17 @@ describe('createDisguiseResponse', () => {
         expect(res.headers.get('Cache-Control')).toContain('no-store');
     });
 
+    it('does not cache a rendered 404 disguise or use a disabled redirect', () => {
+        const res = createDisguiseResponse({
+            enabled: false,
+            pageType: 'redirect',
+            redirectUrl: 'https://example.org/',
+        });
+        expect(res.status).toBe(404);
+        expect(res.headers.get('Location')).toBeNull();
+        expect(res.headers.get('Cache-Control')).toContain('no-store');
+    });
+
     it('falls back to a 404 page when redirect is not configured', () => {
         const res = createDisguiseResponse({ enabled: true, pageType: 'page' });
         expect(res.status).toBe(404);
@@ -46,7 +60,11 @@ describe('createDisguiseResponse', () => {
     });
 
     it('omits the home link when no off-site target is available', async () => {
-        const res = renderDisguisePage({ enabled: true, pageType: 'redirect', redirectUrl: '/local' });
+        const res = renderDisguisePage({
+            enabled: true,
+            pageType: 'redirect',
+            redirectUrl: '/local',
+        });
         const html = await res.text();
         expect(html).not.toContain('href="/"');
         // 仅样式表里保留 .home-link 类定义，不应渲染出实际的链接元素

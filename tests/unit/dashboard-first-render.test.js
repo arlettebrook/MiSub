@@ -32,6 +32,15 @@ vi.mock('../../src/components/ui/SavePrompt.vue', () => ({
     default: { name: 'SavePrompt', template: '<div />' },
 }));
 
+vi.mock('../../src/views/DisguiseView.vue', () => ({
+    __esModule: true,
+    default: { template: '<section data-testid="disguise-page">404</section>' },
+}));
+vi.mock('../../src/views/PublicProfilesView.vue', () => ({
+    __esModule: true,
+    default: { template: '<section data-testid="public-page">Public page</section>' },
+}));
+
 vi.mock('../../src/stores/session.js', async () => {
     const { defineStore } = await import('pinia');
     const { ref } = await import('vue');
@@ -114,6 +123,66 @@ afterEach(() => {
 });
 
 describe('authenticated dashboard first render', () => {
+    it.each(['modern', 'legacy'])(
+        'disguises protected routes without mounting their page or login form in %s layout',
+        async (layoutMode) => {
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [
+                    {
+                        path: '/dashboard/settings',
+                        name: 'Settings',
+                        component: panel,
+                        meta: { requiresAuth: true },
+                    },
+                ],
+            });
+            await router.push('/dashboard/settings?tab=security');
+            sessionGate.nextCheck = () => {
+                useSessionStore().sessionState = 'loggedOut';
+                return false;
+            };
+            const wrapper = mountApp(router, layoutMode, '/admin-login');
+            await flushPromises();
+            await vi.dynamicImportSettled();
+            await flushPromises();
+            expect(router.currentRoute.value.fullPath).toBe('/dashboard/settings?tab=security');
+            expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
+            expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
+            expect(wrapper.find('form').exists()).toBe(false);
+            expect(wrapper.find('header-stub').exists()).toBe(false);
+            expect(wrapper.find('footer').exists()).toBe(false);
+        }
+    );
+
+    it.each([true, false])(
+        'shows the root public page or disguise according to enablePublicPage=%s',
+        async (enabled) => {
+            const router = createRouter({
+                history: createMemoryHistory(),
+                routes: [
+                    { path: '/', name: 'Home', component: HomeView, meta: { isPublic: true } },
+                ],
+            });
+            await router.push('/');
+            sessionGate.nextCheck = () => {
+                const store = useSessionStore();
+                store.publicConfig = { enablePublicPage: enabled };
+                store.sessionState = 'loggedOut';
+                return false;
+            };
+            const wrapper = mountApp(router);
+            await flushPromises();
+            await vi.dynamicImportSettled();
+            await flushPromises();
+            expect(router.currentRoute.value.path).toBe('/');
+            expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(!enabled);
+            expect(wrapper.find('[data-testid="public-page"]').exists()).toBe(enabled);
+            expect(wrapper.find('form').exists()).toBe(false);
+            if (!enabled) expect(wrapper.find('footer').exists()).toBe(false);
+        }
+    );
+
     it('revalidates a cached dashboard before resuming it after logout in another document', async () => {
         const router = createRouter({
             history: createMemoryHistory(),
@@ -162,8 +231,10 @@ describe('authenticated dashboard first render', () => {
         window.dispatchEvent(new CustomEvent('misub:unauthorized'));
         finishSession();
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/admin-login');
-        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(true);
+        expect(router.currentRoute.value.path).toBe('/dashboard');
+        expect(router.currentRoute.value.query.redirect).toBeUndefined();
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="login-entry"]').exists()).toBe(false);
         expect(useToastStore(wrapper.vm.$pinia).toasts).toHaveLength(0);
     });
 
@@ -205,7 +276,7 @@ describe('authenticated dashboard first render', () => {
         }
     );
 
-    it('redirects an expired session to its confirmed login entry with one notification', async () => {
+    it('disguises an expired session at its current address with one notification', async () => {
         const router = createRouter({
             history: createMemoryHistory(),
             routes: [
@@ -231,8 +302,9 @@ describe('authenticated dashboard first render', () => {
         window.dispatchEvent(new CustomEvent('misub:unauthorized'));
         window.dispatchEvent(new CustomEvent('misub:unauthorized'));
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/admin-login');
-        expect(router.currentRoute.value.query.redirect).toBe('/dashboard?filter=enabled');
+        expect(router.currentRoute.value.fullPath).toBe('/dashboard?filter=enabled');
+        expect(router.currentRoute.value.query.redirect).toBeUndefined();
+        expect(wrapper.find('[data-testid="disguise-page"]').exists()).toBe(true);
         expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
         expect(toast).toHaveBeenCalledTimes(1);
         toast.mockRestore();

@@ -22,6 +22,7 @@ export const useSessionStore = defineStore('session', () => {
         isLoginPath: false,
         hasCustomLoginPath: false,
         customLoginPath: 'login',
+        disguise: { enabled: false, pageType: 'default', redirectUrl: '' },
         customPage: {
             enabled: false,
             useDefaultLayout: true,
@@ -84,7 +85,7 @@ export const useSessionStore = defineStore('session', () => {
             if (result.cancelled) return false;
             updatePublicConfig(result, pathname);
         }
-        if (!result.success) return pathname === loginPath.value;
+        if (!result.success) return false;
         if (typeof result.data?.isLoginPath === 'boolean') return result.data.isLoginPath;
         // Support a cached response from an older server during a deployment.
         return pathname === normalizeLoginPath(result.data?.customLoginPath);
@@ -220,11 +221,14 @@ export const useSessionStore = defineStore('session', () => {
                     return false;
                 }
             }
+            // Refresh root-page visibility and disguise settings before revealing the logged-out page.
+            const configResult = await fetchPublicConfig('/');
+            if (!configResult.cancelled) updatePublicConfig(configResult, '/');
             sessionCheckId++;
             sessionState.value = 'loggedOut';
             clearSessionData();
 
-            // 跳转到首页（公开页）
+            // Root shows the public page or the configured disguise.
             await router.push({ path: '/' });
             return true;
         } finally {

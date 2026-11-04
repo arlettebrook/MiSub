@@ -15,6 +15,7 @@
     // Lazy load components
     const Login = defineAsyncComponent(() => import('../components/modals/Login.vue'));
     const NotFound = defineAsyncComponent(() => import('./NotFound.vue'));
+    const DisguiseView = defineAsyncComponent(() => import('./DisguiseView.vue'));
 
     const route = useRoute();
     const router = useRouter();
@@ -45,8 +46,9 @@
             activeComponent.value = markRaw(Login);
             componentProps.value = { login: sessionStore.login };
         } else {
-            // 不匹配任何登录路径 → 显示 404
-            activeComponent.value = markRaw(NotFound);
+            activeComponent.value = markRaw(
+                sessionStore.sessionState === 'loggedIn' ? NotFound : DisguiseView
+            );
         }
     }
 

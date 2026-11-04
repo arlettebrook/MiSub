@@ -7,6 +7,7 @@
     // Lazy load components
     const PublicProfilesView = defineAsyncComponent(() => import('./PublicProfilesView.vue'));
     const NotFoundView = defineAsyncComponent(() => import('./NotFound.vue'));
+    const DisguiseView = defineAsyncComponent(() => import('./DisguiseView.vue'));
 
     // 使用 render 占位，避免严格 CSP 拦截运行时模板编译。
     const RedirectPlaceholder = { render: () => h('div') };
@@ -31,7 +32,7 @@
         // 1. 明确的 /explore 路由，显示公开页
         if (isExploreRoute.value) {
             if (publicConfig.value && !publicConfig.value.enablePublicPage) {
-                return NotFoundView;
+                return sessionState.value === 'loggedIn' ? NotFoundView : DisguiseView;
             }
             return PublicProfilesView;
         }
@@ -48,7 +49,7 @@
             publicConfig.value &&
             !publicConfig.value.enablePublicPage
         ) {
-            return NotFoundView;
+            return DisguiseView;
         }
 
         // 其他情况（未登录 + 公开页开启）：显示公开页
