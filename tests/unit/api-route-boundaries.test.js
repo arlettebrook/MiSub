@@ -60,6 +60,34 @@ describe('API route access boundaries', () => {
         expect(body.config.defaultLocale).toBe('en-US');
     });
 
+    it.each([
+        ['/api/public_config', {}, false],
+        ['/api/config', { 'X-MiSub-Path': '/admin-login' }, true],
+        ['/api/public_config', { 'X-MiSub-Path': '/unknown' }, false],
+        ['/api/public_config', { Referer: 'https://example.com/admin-login' }, true],
+        ['/api/public_config', { Referer: 'https://foreign.test/admin-login' }, false],
+        ['/api/public_config', { 'X-MiSub-Path': 'https://[invalid-host' }, false],
+    ])(
+        'keeps the configured login address private for %s with %j',
+        async (path, headers, match) => {
+            const env = {
+                MISUB_KV: createKv({
+                    worker_settings_v1: JSON.stringify({ customLoginPath: ' /admin-login ' }),
+                }),
+            };
+            const request = new Request(`https://example.com${path}`);
+            // happy-dom strips Referer in the browser Request constructor; model an incoming request.
+            for (const [key, value] of Object.entries(headers)) request.headers.set(key, value);
+            const response = await handleApiRequest(request, env);
+            const body = await response.json();
+            expect(response.status).toBe(200);
+            expect(body).not.toHaveProperty('customLoginPath');
+            expect(JSON.stringify(body)).not.toContain('admin-login');
+            expect(body.isLoginPath).toBe(match);
+            expect(body.hasCustomLoginPath).toBe(true);
+        }
+    );
+
     it('falls back to the default locale when the setting is absent', async () => {
         const env = { MISUB_KV: createKv() };
 

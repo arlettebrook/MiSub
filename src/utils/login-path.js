@@ -7,3 +7,16 @@ export function isValidCustomLoginPath(raw) {
     const normalized = raw.trim().replace(/^\/+/, '');
     return normalized.length > 0 && normalized !== 'login';
 }
+
+export function normalizeLoginPath(raw) {
+    return isValidCustomLoginPath(raw) ? `/${raw.trim().replace(/^\/+/, '')}` : '/login';
+}
+
+export function readRememberedLoginPath() {
+    try {
+        const path = sessionStorage.getItem('misub:login-path');
+        return path && /^\/(?!\/)[^\\?#]+$/.test(path) ? path : '/login';
+    } catch {
+        return '/login';
+    }
+}

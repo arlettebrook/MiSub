@@ -9,6 +9,13 @@ const SettingsView = () => import('../views/SettingsView.vue');
 
 const HomeView = () => import('../views/HomeView.vue'); // [NEW] Wrapper View
 
+const defaultAuthContext = () => ({ state: 'loading', loginPath: '/login' });
+let authContextResolver = defaultAuthContext;
+
+export function configureAuthGuard(resolver) {
+    authContextResolver = typeof resolver === 'function' ? resolver : defaultAuthContext;
+}
+
 const routes = [
     {
         path: '/', // Root path is HomeView (Smart Wrapper)
@@ -26,31 +33,31 @@ const routes = [
         path: '/dashboard',
         name: 'Dashboard',
         component: DashboardView,
-        meta: { title: '仪表盘' },
+        meta: { title: '仪表盘', requiresAuth: true },
     },
     {
         path: '/dashboard/groups',
         name: 'SubscriptionGroups',
         component: SubscriptionGroupsView,
-        meta: { title: '订阅组' },
+        meta: { title: '订阅组', requiresAuth: true },
     },
     {
         path: '/dashboard/nodes',
         name: 'ManualNodes',
         component: ManualNodesView,
-        meta: { title: '手动节点' },
+        meta: { title: '手动节点', requiresAuth: true },
     },
     {
         path: '/dashboard/subscriptions',
         name: 'MySubscriptions',
         component: MySubscriptionsView,
-        meta: { title: '我的订阅' },
+        meta: { title: '我的订阅', requiresAuth: true },
     },
     {
         path: '/dashboard/settings',
         name: 'Settings',
         component: SettingsView,
-        meta: { title: '设置' },
+        meta: { title: '设置', requiresAuth: true },
     },
     /* 
     // [REMOVED] Static /login route. 
@@ -99,34 +106,16 @@ router.onError((error) => {
 });
 
 // Navigation guard
-router.beforeEach(async (to, from, next) => {
+router.beforeEach((to) => {
     // Update title
     if (typeof document !== 'undefined') {
         document.title = to.meta.title ? `${to.meta.title} - MISUB` : 'MISUB';
     }
 
-    // Simple auth check: check if the user is visiting a protected route
-    // We rely on the session store state or a quick check.
-    // However, pinia stores are only available after app is mounted or inside guards if pinia instance is passed?
-    // Pinia is installed in main.js, so using it inside router.beforeEach (which is imported by main.js) might be tricky if called before app mount.
-    // BUT, router.beforeEach is called on navigation.
-
-    // Better approach: Check if we are on the login page. If not, and we don't have a flagged session, maybe redirect?
-    // Actually, the sessionStore handles the initial check.
-    // Let's just rely on the API 401 response to kick the user out (handled in api.js -> sessionStore).
-    // BUT the user wants to populate the "enter operation interface" issue.
-    // The most reliable way is: if "not logged in" state is known, block access.
-
-    // Ideally, we'd import the session store here, but circular dependencies might occur.
-    // Let's keep it simple: if the session check fails (which happens in App.vue or main.js), it redirects.
-    // But to prevent "flash of content", we can add a simple check if we are SURE we aren't logged in.
-
-    // For now, let's stick to the title update as the primary router responsibility,
-    // and rely on the Backend Redirect (implemented in Step 1) and API 401 handling for security.
-    // The backend redirect covers the "refresh/direct link" case.
-    // The API 401 covers the "token expired while using" case.
-
-    next();
+    if (!to.meta.requiresAuth) return true;
+    const context = authContextResolver() || {};
+    if (context.state === 'loading' || context.state === 'loggedIn') return true;
+    return { path: context.loginPath || '/login', query: { redirect: to.fullPath } };
 });
 
 export default router;

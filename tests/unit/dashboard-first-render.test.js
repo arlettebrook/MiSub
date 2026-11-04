@@ -11,6 +11,7 @@ import { useDataStore } from '../../src/stores/useDataStore.js';
 import { useToastStore } from '../../src/stores/toast.js';
 import SavePrompt from '../../src/components/ui/SavePrompt.vue';
 import { loadLegacyDashboard } from '../../src/router/component-loaders.js';
+import { useSessionStore } from '../../src/stores/session.js';
 
 const legacyGate = vi.hoisted(() => {
     let resolve;
@@ -38,12 +39,18 @@ vi.mock('../../src/stores/session.js', async () => {
             return {
                 sessionState,
                 publicConfig: ref({ enablePublicPage: true }),
+                loginPath: ref('/login'),
                 subscriptionConfig: ref({}),
                 checkSession: async () => {
                     sessionState.value = 'loggedIn';
                 },
                 login: vi.fn(),
                 logout: vi.fn(),
+                handleUnauthorized: () => {
+                    if (sessionState.value !== 'loggedIn') return false;
+                    sessionState.value = 'loggedOut';
+                    return true;
+                },
             };
         }),
     };
@@ -92,6 +99,38 @@ const mountApp = (router, layoutMode = 'modern') => {
 afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
 
 describe('authenticated dashboard first render', () => {
+    it('redirects an expired session to its confirmed login entry with one notification', async () => {
+        const router = createRouter({
+            history: createMemoryHistory(),
+            routes: [
+                {
+                    path: '/dashboard',
+                    name: 'Dashboard',
+                    component: panel,
+                    meta: { requiresAuth: true },
+                },
+                {
+                    path: '/admin-login',
+                    name: 'Entrance',
+                    component: { template: '<div>Login</div>' },
+                    meta: { isPublic: true },
+                },
+            ],
+        });
+        await router.push('/dashboard?filter=enabled');
+        const wrapper = mountApp(router);
+        await flushPromises();
+        useSessionStore(wrapper.vm.$pinia).loginPath = '/admin-login';
+        const toast = vi.spyOn(useToastStore(wrapper.vm.$pinia), 'showToast');
+        window.dispatchEvent(new CustomEvent('misub:unauthorized'));
+        window.dispatchEvent(new CustomEvent('misub:unauthorized'));
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/admin-login');
+        expect(router.currentRoute.value.query.redirect).toBe('/dashboard?filter=enabled');
+        expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(false);
+        expect(toast).toHaveBeenCalledTimes(1);
+        toast.mockRestore();
+    });
     it.each([false, true])(
         'announces discarded changes only after a successful reload (%s)',
         async (success) => {

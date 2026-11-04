@@ -2,6 +2,7 @@
     import { computed } from 'vue';
     import { useSessionStore } from '../../stores/session.js';
     import { useI18n } from '../../i18n/index.js';
+    import { normalizeLoginPath } from '../../utils/login-path.js';
 
     const props = defineProps({
         to: {
@@ -17,10 +18,9 @@
         if (props.to) {
             return props.to;
         }
-        const rawPath = sessionStore.publicConfig?.customLoginPath;
-        const normalizedPath =
-            rawPath && typeof rawPath === 'string' ? rawPath.trim().replace(/^\/+/, '') : '';
-        return normalizedPath ? `/${normalizedPath}` : '/login';
+        return (
+            sessionStore.loginPath || normalizeLoginPath(sessionStore.publicConfig?.customLoginPath)
+        );
     });
 </script>
 

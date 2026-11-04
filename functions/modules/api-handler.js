@@ -36,6 +36,12 @@ import { listRuleTemplates } from './rule-template-handler.js';
 
 const PROFILE_DOWNLOAD_COUNT_PREFIX = 'misub_profile_download_count_';
 
+function normalizeLoginPath(customLoginPath) {
+    if (typeof customLoginPath !== 'string') return '/login';
+    const normalized = customLoginPath.trim().replace(/^\/+/, '');
+    return normalized ? `/${normalized}` : '/login';
+}
+
 function normalizeProfile(profile = {}) {
     const normalized = { ...profile };
     normalized.subscriptions = Array.isArray(profile.subscriptions) ? profile.subscriptions : [];
@@ -803,20 +809,36 @@ export async function handlePublicProfilesRequest(env) {
 
 /**
  * 处理公开配置获取API
+ * @param {Request} request - 当前请求，包含待确认的页面路径
  * @param {Object} env - Cloudflare环境对象
  * @returns {Promise<Response>} HTTP响应
  */
-export async function handlePublicConfig(env) {
+export async function handlePublicConfig(request, env) {
     try {
         const storageAdapter = await getStorageAdapter(env);
         const settings = (await storageAdapter.get(KV_KEY_SETTINGS)) || {};
 
         // Merge with default settings to ensure enablePublicPage exists
         const mergedSettings = { ...defaultSettings, ...settings };
+        const configuredLoginPath = normalizeLoginPath(mergedSettings.customLoginPath);
+        let isLoginPath = configuredLoginPath === '/login';
+        try {
+            const sourcePath =
+                request.headers.get('X-MiSub-Path') || request.headers.get('Referer');
+            if (sourcePath) {
+                const sourceUrl = new URL(sourcePath, request.url);
+                isLoginPath =
+                    sourceUrl.origin === new URL(request.url).origin &&
+                    sourceUrl.pathname === configuredLoginPath;
+            }
+        } catch {
+            isLoginPath = false;
+        }
 
         return createJsonResponse({
             enablePublicPage: mergedSettings.enablePublicPage,
-            customLoginPath: mergedSettings.customLoginPath,
+            isLoginPath,
+            hasCustomLoginPath: configuredLoginPath !== '/login',
             customPage: {
                 enabled: mergedSettings.customPage?.enabled || false,
                 useDefaultLayout: mergedSettings.customPage?.useDefaultLayout !== false,

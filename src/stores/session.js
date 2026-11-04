@@ -8,6 +8,7 @@ import { useDataStore } from './useDataStore';
 import { useUIStore } from './ui.js';
 import { loadLegacyDashboard } from '../router/component-loaders.js';
 import { t } from '../i18n/index.js';
+import { normalizeLoginPath, readRememberedLoginPath } from '../utils/login-path.js';
 
 export const useSessionStore = defineStore('session', () => {
     const sessionState = ref('loading'); // loading, loggedIn, loggedOut
@@ -16,6 +17,8 @@ export const useSessionStore = defineStore('session', () => {
     const securityWarning = ref(null);
     const defaultPublicConfig = Object.freeze({
         enablePublicPage: true,
+        isLoginPath: false,
+        hasCustomLoginPath: false,
         customLoginPath: 'login',
         customPage: {
             enabled: false,
@@ -37,32 +40,90 @@ export const useSessionStore = defineStore('session', () => {
         ...defaultPublicConfig,
         customPage: { ...defaultPublicConfig.customPage },
     }); // Default true until fetched
+    const hasLoadedPublicConfig = ref(false);
+    const publicConfigPath = ref('');
+    const loginPath = ref(readRememberedLoginPath());
 
-    async function checkSession(navigationReady) {
-        // Parallel fetch of initial data (auth check) and public config
-        const [dataResult, pConfigResult] = await Promise.all([
-            fetchInitialData(),
-            fetchPublicConfig(),
-            navigationReady,
-        ]);
+    function rememberLoginPath(path) {
+        loginPath.value = normalizeLoginPath(path);
+        try {
+            sessionStorage.setItem('misub:login-path', loginPath.value);
+        } catch {
+            // The confirmed entry remains available for this page when storage is blocked.
+        }
+    }
 
-        if (dataResult.cancelled || pConfigResult.cancelled) return;
-
-        // Update public config
-        if (pConfigResult.success) {
-            publicConfig.value = pConfigResult.data;
-        } else {
-            // Fallback to default if fetch fails
+    function updatePublicConfig(result, pathname) {
+        if (result.success) {
+            publicConfig.value = result.data;
+            hasLoadedPublicConfig.value = true;
+            publicConfigPath.value = pathname;
+            if (typeof result.data?.customLoginPath === 'string') {
+                rememberLoginPath(result.data.customLoginPath);
+            } else if (result.data?.hasCustomLoginPath === false) {
+                rememberLoginPath('/login');
+            } else if (result.data?.isLoginPath === true && pathname) {
+                rememberLoginPath(pathname);
+            }
+        } else if (!hasLoadedPublicConfig.value) {
             publicConfig.value = {
                 ...disabledPublicConfig,
                 customPage: { ...disabledPublicConfig.customPage },
             };
         }
+    }
+
+    async function checkLoginPath(pathname) {
+        let result;
+        if (hasLoadedPublicConfig.value && publicConfigPath.value === pathname) {
+            result = { success: true, data: publicConfig.value };
+        } else {
+            result = await fetchPublicConfig(pathname);
+            if (result.cancelled) return false;
+            updatePublicConfig(result, pathname);
+        }
+        if (!result.success) return pathname === loginPath.value;
+        if (typeof result.data?.isLoginPath === 'boolean') return result.data.isLoginPath;
+        // Support a cached response from an older server during a deployment.
+        return pathname === normalizeLoginPath(result.data?.customLoginPath);
+    }
+
+    function clearSessionData() {
+        initialData.value = null;
+        subscriptionConfig.value = {};
+        securityWarning.value = null;
+        useDataStore().clearCachedData();
+    }
+
+    function handleUnauthorized() {
+        if (sessionState.value !== 'loggedIn') return false;
+        sessionState.value = 'loggedOut';
+        clearSessionData();
+        return true;
+    }
+
+    async function checkSession(navigationReady) {
+        const pathname = globalThis.window?.location?.pathname || '/login';
+        // Parallel fetch of initial data (auth check) and public config
+        const [dataResult, pConfigResult] = await Promise.all([
+            fetchInitialData(),
+            fetchPublicConfig(pathname),
+        ]);
+
+        if (dataResult.cancelled || pConfigResult.cancelled) return false;
+
+        // Update public config
+        updatePublicConfig(pConfigResult, pathname);
 
         if (dataResult.success) {
+            // Confirm authentication before navigating, and reveal the page only when it is ready.
+            await (typeof navigationReady === 'function' ? navigationReady() : navigationReady);
             initialData.value = dataResult.data;
             if (dataResult.data.config) {
                 subscriptionConfig.value = dataResult.data.config;
+                if (typeof dataResult.data.config.customLoginPath === 'string') {
+                    rememberLoginPath(dataResult.data.config.customLoginPath);
+                }
             }
 
             // 直接注入数据到 dataStore，避免 Dashboard 重复请求
@@ -70,7 +131,9 @@ export const useSessionStore = defineStore('session', () => {
             dataStore.hydrateFromData(dataResult.data);
 
             sessionState.value = 'loggedIn';
+            return true;
         } else {
+            clearSessionData();
             // Auth failed or other error
             if (dataResult.errorType === 'auth') {
                 sessionState.value = 'loggedOut';
@@ -86,6 +149,7 @@ export const useSessionStore = defineStore('session', () => {
                 );
                 sessionState.value = 'loggedOut';
             }
+            return false;
         }
     }
 
@@ -96,12 +160,17 @@ export const useSessionStore = defineStore('session', () => {
             securityWarning.value = result.data?.securityWarning || null;
             sessionState.value = 'loading';
             try {
-                // Fetch session data and the dashboard chunk together, then reveal the page.
-                const navigationReady = Promise.all([
-                    router.push({ path: '/dashboard' }),
+                const legacyReady = Promise.allSettled([
                     useUIStore().layoutMode === 'legacy' ? loadLegacyDashboard() : undefined,
                 ]);
-                await checkSession(navigationReady);
+                const authenticated = await checkSession(async () => {
+                    const [, [legacyResult]] = await Promise.all([
+                        router.push({ path: '/dashboard' }),
+                        legacyReady,
+                    ]);
+                    if (legacyResult.status === 'rejected') throw legacyResult.reason;
+                });
+                if (!authenticated) throw new Error(t('settings.sessionCheckFailed'));
             } catch (error) {
                 sessionState.value = 'loggedOut';
                 throw error;
@@ -112,30 +181,41 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     async function logout() {
+        let logoutConfirmed = false;
         try {
             await api.get('/api/logout');
+            logoutConfirmed = true;
         } catch (error) {
+            if (error.cancelled) return false;
             console.warn('Logout request failed:', error);
         }
+        if (!logoutConfirmed) {
+            const sessionCheck = await fetchInitialData();
+            if (sessionCheck.success || sessionCheck.errorType !== 'auth') {
+                handleError(new Error(t('settings.logoutFailed')), t('settings.logoutContext'), {
+                    errorType: 'logout_failed',
+                });
+                return false;
+            }
+        }
         sessionState.value = 'loggedOut';
-        initialData.value = null;
-        securityWarning.value = null;
-
-        // 清除缓存数据
-        const dataStore = useDataStore();
-        dataStore.clearCachedData();
+        clearSessionData();
 
         // 跳转到首页（公开页）
-        router.push({ path: '/' });
+        await router.push({ path: '/' });
+        return true;
     }
 
     return {
         sessionState,
         initialData,
         publicConfig,
+        loginPath,
         subscriptionConfig,
         securityWarning,
         checkSession,
+        checkLoginPath,
+        handleUnauthorized,
         login,
         logout,
     };

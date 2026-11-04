@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { isValidCustomLoginPath } from '../../src/utils/login-path.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+    isValidCustomLoginPath,
+    normalizeLoginPath,
+    readRememberedLoginPath,
+} from '../../src/utils/login-path.js';
+
+afterEach(() => {
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+});
 
 describe('isValidCustomLoginPath', () => {
     it('treats login as the default path instead of a custom-only route', () => {
@@ -17,5 +26,30 @@ describe('isValidCustomLoginPath', () => {
     it('accepts non-login custom paths', () => {
         expect(isValidCustomLoginPath('admin-login')).toBe(true);
         expect(isValidCustomLoginPath('/admin-login')).toBe(true);
+    });
+
+    it('normalizes custom and default entries consistently', () => {
+        expect(normalizeLoginPath(' /admin-login ')).toBe('/admin-login');
+        expect(normalizeLoginPath('///')).toBe('/login');
+        expect(normalizeLoginPath(null)).toBe('/login');
+    });
+
+    it.each([
+        '//foreign.test',
+        '/\\foreign.test',
+        '/admin-login?redirect=evil',
+        'https://foreign.test',
+    ])('rejects unsafe remembered entry %s', (path) => {
+        sessionStorage.setItem('misub:login-path', path);
+        expect(readRememberedLoginPath()).toBe('/login');
+    });
+
+    it('restores a confirmed local entry and handles blocked storage', () => {
+        sessionStorage.setItem('misub:login-path', '/admin-login');
+        expect(readRememberedLoginPath()).toBe('/admin-login');
+        vi.spyOn(sessionStorage, 'getItem').mockImplementation(() => {
+            throw new Error('storage blocked');
+        });
+        expect(readRememberedLoginPath()).toBe('/login');
     });
 });

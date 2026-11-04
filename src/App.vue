@@ -1,5 +1,5 @@
 <script setup>
-    import { defineAsyncComponent, onMounted, watch, computed, ref } from 'vue';
+    import { defineAsyncComponent, onMounted, onUnmounted, watch, computed, ref } from 'vue';
     import RouteErrorBoundary from './components/ui/RouteErrorBoundary.vue';
     import { useRoute, useRouter } from 'vue-router';
     import { useThemeStore } from './stores/theme';
@@ -14,6 +14,8 @@
     import { loadLegacyDashboard } from './router/component-loaders.js';
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
+    import { configureAuthGuard } from './router/index.js';
+    import { normalizeLoginPath, isValidCustomLoginPath } from './utils/login-path.js';
 
     // Lazy components
     const Login = defineAsyncComponent(() => import('./components/modals/Login.vue'));
@@ -59,6 +61,11 @@
 
     const isLoggedIn = computed(() => sessionState.value === 'loggedIn');
     const isPublicRoute = computed(() => route.meta.isPublic);
+    const loginPath = computed(
+        () =>
+            sessionStore.loginPath || normalizeLoginPath(sessionStore.publicConfig?.customLoginPath)
+    );
+    configureAuthGuard(() => ({ state: sessionState.value, loginPath: loginPath.value }));
     const isInitialRouteReady = ref(false);
     const authenticatedContentKey = computed(() => `${layoutMode.value}:${route.path}`);
     const readyAuthenticatedContentKey = ref(null);
@@ -159,11 +166,27 @@
 
     // Determine which login component to show (Custom Path -> NotFound, else -> Login)
     const loginComponent = computed(() => {
-        const rawPath = sessionStore.publicConfig?.customLoginPath;
-        const normalizedPath =
-            rawPath && typeof rawPath === 'string' ? rawPath.trim().replace(/^\/+/, '') : '';
-        // 只有当存在有效的自定义路径（非空且不等于默认 'login'）时才显示 NotFound
-        return normalizedPath && normalizedPath !== 'login' ? NotFound : Login;
+        return sessionStore.publicConfig?.hasCustomLoginPath === true ||
+            isValidCustomLoginPath(sessionStore.publicConfig?.customLoginPath)
+            ? NotFound
+            : Login;
+    });
+
+    const redirectUnauthenticatedRoute = () => {
+        if (sessionState.value !== 'loggedOut' || !route.meta?.requiresAuth) return;
+        router
+            .replace({ path: loginPath.value, query: { redirect: route.fullPath } })
+            .catch(() => {});
+    };
+
+    const handleUnauthorized = () => {
+        if (!sessionStore.handleUnauthorized()) return;
+        toastStore.showToast(t('settings.authFailedRelogin'), 'error');
+        redirectUnauthenticatedRoute();
+    };
+
+    watch([sessionState, () => route.fullPath, loginPath], redirectUnauthenticatedRoute, {
+        immediate: true,
     });
 
     const isDefaultPassword = computed(() => {
@@ -177,6 +200,7 @@
     );
 
     onMounted(async () => {
+        window.addEventListener('misub:unauthorized', handleUnauthorized);
         initTheme();
         try {
             await Promise.all([checkSession(), router.isReady()]);
@@ -190,6 +214,11 @@
         } finally {
             isInitialRouteReady.value = true;
         }
+    });
+
+    onUnmounted(() => {
+        window.removeEventListener('misub:unauthorized', handleUnauthorized);
+        configureAuthGuard(null);
     });
 
     watch(

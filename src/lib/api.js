@@ -186,9 +186,12 @@ export async function fetchSettings() {
     }
 }
 
-export async function fetchPublicConfig() {
+export async function fetchPublicConfig(pathname = globalThis.window?.location?.pathname) {
     try {
-        const data = await api.get('/api/public_config');
+        const data = await api.get('/api/public_config', {
+            timeoutMs: 8000,
+            headers: pathname ? { 'X-MiSub-Path': pathname } : undefined,
+        });
         return { success: true, data };
     } catch (error) {
         return handleApiError(error, 'fetchPublicConfig');

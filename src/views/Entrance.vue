@@ -7,72 +7,36 @@
 </template>
 
 <script setup>
-    import { ref, computed, onMounted, defineAsyncComponent, watch, markRaw } from 'vue';
-    import { useRoute, useRouter } from 'vue-router';
+    import { ref, defineAsyncComponent, watch, markRaw } from 'vue';
+    import { useRoute } from 'vue-router';
     import { useSessionStore } from '../stores/session';
     import { storeToRefs } from 'pinia';
-    import { isValidCustomLoginPath } from '../utils/login-path.js';
 
     // Lazy load components
     const Login = defineAsyncComponent(() => import('../components/modals/Login.vue'));
     const NotFound = defineAsyncComponent(() => import('./NotFound.vue'));
 
     const route = useRoute();
-    const router = useRouter();
     const sessionStore = useSessionStore();
-    const { publicConfig, initialData } = storeToRefs(sessionStore); // Ensure publicConfig contains settings or we need to access settings differently
+    const { publicConfig } = storeToRefs(sessionStore);
 
     const activeComponent = ref(null);
     const componentProps = ref({});
 
-    onMounted(async () => {
-        checkPath();
-    });
-
-    // Watch for path changes if component is reused
-    watch(
-        () => route.path,
-        () => {
-            checkPath();
-        }
-    );
-
-    // Watch for config loaded
-    watch(publicConfig, () => {
-        checkPath();
-    });
-
-    // Watch for session state changes (loading -> loggedIn/loggedOut)
-    // so we re-check once publicConfig is actually fetched
-    watch(
-        () => sessionStore.sessionState,
-        () => {
-            checkPath();
-        }
-    );
-
-    function checkPath() {
+    let pathCheckId = 0;
+    async function checkPath() {
+        const checkId = ++pathCheckId;
         // 在 session 还在 loading 时，publicConfig 尚未从 API 加载，不做判断
         if (sessionStore.sessionState === 'loading') {
             activeComponent.value = null;
             return;
         }
 
-        const config = publicConfig.value || {};
         const currentPath = route.path;
-
-        // 判断是否存在有效的自定义登录路径
-        const hasCustomPath = isValidCustomLoginPath(config.customLoginPath);
-        const configuredPath = hasCustomPath
-            ? '/' + config.customLoginPath.trim().replace(/^\/+/, '')
-            : '/login';
-
-        if (currentPath === configuredPath) {
-            // 匹配到配置的登录路径（自定义或默认 /login）
-            activeComponent.value = markRaw(Login);
-            componentProps.value = { login: sessionStore.login };
-        } else if (currentPath === '/login' && !hasCustomPath) {
-            // 没有自定义路径时，/login 也是有效的登录入口
+        activeComponent.value = null;
+        const isLoginPath = await sessionStore.checkLoginPath(currentPath);
+        if (checkId !== pathCheckId || currentPath !== route.path) return;
+        if (isLoginPath) {
             activeComponent.value = markRaw(Login);
             componentProps.value = { login: sessionStore.login };
         } else {
@@ -80,6 +44,18 @@
             activeComponent.value = markRaw(NotFound);
         }
     }
+
+    watch(
+        [
+            () => route.path,
+            () => sessionStore.sessionState,
+            () => publicConfig.value?.isLoginPath,
+            () => publicConfig.value?.hasCustomLoginPath,
+            () => publicConfig.value?.customLoginPath,
+        ],
+        checkPath,
+        { immediate: true }
+    );
 </script>
 
 <style scoped>

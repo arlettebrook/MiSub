@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useSessionStore } from '../../src/stores/session.js';
+import { useDataStore } from '../../src/stores/useDataStore.js';
 
 const apiMocks = vi.hoisted(() => ({
     fetchInitialData: vi.fn(),
     fetchPublicConfig: vi.fn(),
     login: vi.fn(),
+    apiGet: vi.fn(),
 }));
 const routerMocks = vi.hoisted(() => ({ push: vi.fn() }));
 const loaderMocks = vi.hoisted(() => ({ loadLegacyDashboard: vi.fn() }));
@@ -13,7 +15,7 @@ vi.mock('../../src/router/component-loaders.js', () => loaderMocks);
 
 vi.mock('../../src/lib/api', () => apiMocks);
 vi.mock('../../src/lib/http.js', () => ({
-    api: { get: vi.fn() },
+    api: { get: apiMocks.apiGet },
 }));
 vi.mock('../../src/router', () => ({
     default: routerMocks,
@@ -26,9 +28,110 @@ describe('session store resilience', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        apiMocks.apiGet.mockReset();
+        sessionStorage.clear();
         localStorage.setItem('layoutMode', 'modern');
         loaderMocks.loadLegacyDashboard.mockReset().mockResolvedValue({});
         routerMocks.push.mockReset().mockResolvedValue(undefined);
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('clears an expired session only once while preserving the confirmed login entry', () => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        store.initialData = { misubs: [{ id: 'private-sub' }] };
+        store.subscriptionConfig = { customLoginPath: 'admin-login' };
+        store.securityWarning = { type: 'default_admin_password' };
+        store.loginPath = '/admin-login';
+        const clearCache = vi.spyOn(useDataStore(), 'clearCachedData');
+        expect(store.handleUnauthorized()).toBe(true);
+        expect(store.handleUnauthorized()).toBe(false);
+        expect(store.sessionState).toBe('loggedOut');
+        expect(store.initialData).toBeNull();
+        expect(store.subscriptionConfig).toEqual({});
+        expect(store.securityWarning).toBeNull();
+        expect(store.loginPath).toBe('/admin-login');
+        expect(clearCache).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([true, false])(
+        'clears the session when logout is confirmed (%s)',
+        async (logoutSuccess) => {
+            const store = useSessionStore();
+            store.sessionState = 'loggedIn';
+            store.initialData = { misubs: [{ id: 'private-sub' }] };
+            if (logoutSuccess) apiMocks.apiGet.mockResolvedValue({ success: true });
+            else {
+                apiMocks.apiGet.mockRejectedValue(new Error('network down'));
+                apiMocks.fetchInitialData.mockResolvedValue({ success: false, errorType: 'auth' });
+                vi.spyOn(console, 'warn').mockImplementation(() => {});
+            }
+            await expect(store.logout()).resolves.toBe(true);
+            expect(store.sessionState).toBe('loggedOut');
+            expect(store.initialData).toBeNull();
+            expect(routerMocks.push).toHaveBeenCalledWith({ path: '/' });
+        }
+    );
+
+    it('preserves a known public configuration when a later request fails', async () => {
+        const store = useSessionStore();
+        apiMocks.fetchInitialData.mockResolvedValue({ success: false, errorType: 'auth' });
+        apiMocks.fetchPublicConfig.mockResolvedValueOnce({
+            success: true,
+            data: { enablePublicPage: true, hasCustomLoginPath: true, isLoginPath: false },
+        });
+        await store.checkSession();
+        const knownConfig = store.publicConfig;
+        apiMocks.fetchPublicConfig.mockResolvedValueOnce({ success: false, error: 'network down' });
+        await store.checkSession();
+        expect(store.publicConfig).toEqual(knownConfig);
+    });
+
+    it.each([
+        { success: true, data: {} },
+        { success: false, errorType: 'network', error: 'network down' },
+        { success: false, cancelled: true },
+    ])('preserves session data when logout cannot be confirmed (%j)', async (sessionCheck) => {
+        const store = useSessionStore();
+        store.sessionState = 'loggedIn';
+        store.initialData = { misubs: [{ id: 'private-sub' }] };
+        apiMocks.apiGet.mockRejectedValue(new Error('network down'));
+        apiMocks.fetchInitialData.mockResolvedValue(sessionCheck);
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await expect(store.logout()).resolves.toBe(false);
+        expect(store.sessionState).toBe('loggedIn');
+        expect(store.initialData).toEqual({ misubs: [{ id: 'private-sub' }] });
+        expect(routerMocks.push).not.toHaveBeenCalled();
+    });
+
+    it('does not navigate to the dashboard before session confirmation succeeds', async () => {
+        const store = useSessionStore();
+        let finishSession;
+        apiMocks.fetchInitialData.mockReturnValue(
+            new Promise((resolve) => {
+                finishSession = resolve;
+            })
+        );
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: true, data: {} });
+        apiMocks.login.mockResolvedValue({ success: true, data: {} });
+        const login = store.login('password');
+        await vi.waitFor(() => expect(apiMocks.fetchInitialData).toHaveBeenCalled());
+        expect(routerMocks.push).not.toHaveBeenCalled();
+        finishSession({ success: true, data: {} });
+        await login;
+        expect(store.sessionState).toBe('loggedIn');
+        expect(routerMocks.push).toHaveBeenCalledWith({ path: '/dashboard' });
+    });
+
+    it('rejects a login that cannot establish an authenticated session', async () => {
+        const store = useSessionStore();
+        apiMocks.login.mockResolvedValue({ success: true, data: {} });
+        apiMocks.fetchInitialData.mockResolvedValue({ success: false, errorType: 'auth' });
+        apiMocks.fetchPublicConfig.mockResolvedValue({ success: true, data: {} });
+        await expect(store.login('password')).rejects.toThrow();
+        expect(routerMocks.push).not.toHaveBeenCalled();
+        expect(store.sessionState).toBe('loggedOut');
     });
 
     it('falls back to the default login entry when public config cannot be fetched', async () => {

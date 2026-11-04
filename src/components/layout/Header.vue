@@ -5,6 +5,7 @@
     import BrandLogo from './BrandLogo.vue';
     import NavActionGroup from './NavActionGroup.vue';
     import { useI18n } from '../../i18n/index.js';
+    import { isValidCustomLoginPath } from '../../utils/login-path.js';
 
     const uiStore = useUIStore();
     const sessionStore = useSessionStore();
@@ -15,17 +16,10 @@
             return true;
         }
 
-        const rawPath = sessionStore.publicConfig?.customLoginPath;
-        if (!rawPath || typeof rawPath !== 'string') {
-            return false;
-        }
-
-        const normalizedPath = rawPath.trim().replace(/^\/+/, '');
-        if (!normalizedPath || normalizedPath === 'login') {
-            return false;
-        }
-
-        return true;
+        return (
+            sessionStore.publicConfig?.hasCustomLoginPath === true ||
+            isValidCustomLoginPath(sessionStore.publicConfig?.customLoginPath)
+        );
     });
 
     const props = defineProps({

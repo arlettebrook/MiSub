@@ -8,6 +8,7 @@ import { isAppScriptError, isForeignRejection } from './utils/error-source.js';
 import { i18n } from './i18n/index.js';
 import { useToastStore } from './stores/toast.js';
 import { isLocalHost, isSameOriginUrl } from './utils/url-origin.js';
+import { configureUnauthorizedHandler } from './lib/http.js';
 
 // 全局错误处理
 if (typeof window !== 'undefined') {
@@ -162,6 +163,10 @@ if (typeof window !== 'undefined') {
 
 const pinia = createPinia();
 const app = createApp(App);
+
+configureUnauthorizedHandler(({ url }) => {
+    window.dispatchEvent(new CustomEvent('misub:unauthorized', { detail: { url } }));
+});
 
 // 全局错误处理插件
 app.config.errorHandler = (error, instance, info) => {
