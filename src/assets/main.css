@@ -85,6 +85,7 @@
   --z-modal: 1000000;
   --z-modal-popover: 1100000;
   --z-confirm: 1200000;
+  --z-session: 1300000;
 }
 
 @media (width >= 48rem) {

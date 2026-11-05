@@ -420,6 +420,8 @@
     <div
         :class="[theme, { 'app-shell-mobile-nav': showModernNavBar }]"
         :style="{ '--save-prompt-height': `${savePromptHeight}px` }"
+        :inert="showSessionVerification"
+        :aria-hidden="showSessionVerification ? 'true' : undefined"
         class="app-shell flex flex-col text-gray-800 dark:text-gray-200 transition-colors duration-300 bg-gray-100 dark:bg-[var(--bg-page-dark)]"
     >
         <!-- Navigation -->
@@ -444,13 +446,6 @@
                 },
             ]"
         >
-            <SessionVerification
-                :show="showSessionVerification"
-                :busy="isVerifyingSession || isLoggingOut || isRemoteLogoutPending"
-                :reason="isLoggingOut ? 'logout' : verificationReason"
-                :preserve-editing="hasAuthenticatedSession"
-                @retry="sessionStore.retrySession()"
-            />
             <div
                 v-if="isPageLoading && !showSessionVerification"
                 class="flex flex-col items-center justify-center p-8"
@@ -618,6 +613,12 @@
             :footer-offset="revealedFooterHeight"
         />
     </div>
+    <SessionVerification
+        :show="showSessionVerification"
+        :busy="isVerifyingSession || isLoggingOut || isRemoteLogoutPending"
+        :reason="isLoggingOut ? 'logout' : verificationReason"
+        @retry="sessionStore.retrySession()"
+    />
 </template>
 
 <style>

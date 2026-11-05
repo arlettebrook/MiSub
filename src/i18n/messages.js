@@ -4,8 +4,7 @@ export const messages = {
             logoutSync: '正在同步退出状态',
             verifying: '正在验证登录状态',
             waiting: '连接中断，等待验证',
-            operationsPaused: '后台请求和提交已暂停，验证通过后恢复。',
-            editsPreserved: '可以继续编辑，未保存内容会保留，恢复连接后不会自动提交。',
+            operationsPaused: '页面操作已暂停，请检查网络连接。验证成功后才能继续使用。',
             retry: '重试验证',
         },
         app: {
@@ -1369,9 +1368,7 @@ export const messages = {
             verifying: 'Verifying your session',
             waiting: 'Connection interrupted',
             operationsPaused:
-                'Management requests and submissions are paused until verification succeeds.',
-            editsPreserved:
-                'You can continue editing. Unsaved changes are preserved and will not be submitted automatically when the connection returns.',
+                'Page interactions are paused. Please check your network connection. You can continue using the page once verification succeeds.',
             retry: 'Retry verification',
         },
         app: {
