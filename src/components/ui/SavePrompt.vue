@@ -40,16 +40,16 @@
         <div
             ref="prompt"
             v-if="isDirty || saveState === 'success'"
-            class="save-prompt fixed -translate-x-1/2 z-[70] max-w-2xl px-4 py-3 rounded-2xl flex flex-col sm:flex-row items-center justify-between transition-all duration-300 gap-3 shadow-2xl backdrop-blur-xl border border-white/20 dark:border-white/10"
+            class="save-prompt fixed -translate-x-1/2 z-[70] max-w-2xl px-4 py-3 rounded-2xl flex flex-col md:flex-row items-center justify-between transition-all duration-300 gap-3 shadow-2xl backdrop-blur-xl border border-white/20 dark:border-white/10"
             :style="{ '--footer-offset': `${footerOffset}px` }"
             :class="
                 saveState === 'success'
-                    ? 'bg-teal-50 dark:bg-teal-900/30 ring-1 ring-teal-500/20'
+                    ? 'bg-teal-50/95 dark:bg-teal-950/95 ring-1 ring-teal-500/20'
                     : 'bg-white/95 dark:bg-gray-900/95 ring-1 ring-gray-200/50 dark:ring-white/10 shadow-primary-500/10'
             "
         >
-            <div class="flex items-center gap-3">
-                <span class="flex h-3 w-3 relative">
+            <div class="flex min-w-0 items-center gap-3">
+                <span class="flex h-3 w-3 relative shrink-0">
                     <span
                         class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
                         :class="saveState === 'success' ? 'bg-teal-400' : 'bg-orange-400'"
@@ -60,7 +60,7 @@
                     ></span>
                 </span>
                 <p
-                    class="text-sm font-semibold transition-colors duration-300"
+                    class="min-w-0 text-sm font-semibold break-words transition-colors duration-300"
                     :class="
                         saveState === 'success'
                             ? 'text-teal-700 dark:text-teal-300'
@@ -75,19 +75,19 @@
                 </p>
             </div>
 
-            <div class="flex items-center gap-3 w-full sm:w-auto">
+            <div class="flex items-center gap-3 w-full md:w-auto md:shrink-0">
                 <button
                     v-if="saveState !== 'success'"
                     @click="$emit('discard')"
                     :disabled="disabled"
-                    class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors hover:bg-black/5 dark:hover:bg-white/5 misub-radius-md whitespace-nowrap"
+                    class="flex-1 md:flex-none px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors hover:bg-black/5 dark:hover:bg-white/5 misub-radius-md whitespace-nowrap"
                 >
                     {{ t('actions.discard') }}
                 </button>
                 <button
                     @click.prevent="$emit('save')"
                     :disabled="disabled || saveState !== 'idle'"
-                    class="flex-1 sm:flex-none px-6 py-2 text-sm text-white font-bold misub-radius-lg flex items-center justify-center transition-all duration-300 transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
+                    class="flex-1 md:flex-none px-6 py-2 text-sm text-white font-bold misub-radius-lg flex items-center justify-center transition-all duration-300 transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
                     :class="{
                         'bg-primary-600 hover:bg-primary-500': saveState === 'idle',
                         'bg-gray-500': saveState === 'saving',
@@ -123,17 +123,29 @@
 
 <style scoped>
     .save-prompt {
-        left: calc(
-            (100% - var(--floating-controls-button-size) - var(--floating-controls-gap)) / 2
+        --prompt-side-gap: max(
+            var(--floating-controls-side-gap),
+            env(safe-area-inset-left, 0px),
+            env(safe-area-inset-right, 0px)
         );
-        width: calc(
-            100% - 2 * var(--floating-controls-side-gap) - var(--floating-controls-button-size) -
-                var(--floating-controls-gap)
-        );
+        left: 50%;
+        width: calc(100% - 2 * var(--prompt-side-gap));
         bottom: calc(
             var(--floating-controls-base-bottom) + var(--floating-controls-gap) +
                 var(--footer-offset, 0px)
         );
+    }
+
+    @media (width >= 48rem) {
+        .save-prompt {
+            left: calc(
+                (100% - var(--floating-controls-button-size) - var(--floating-controls-gap)) / 2
+            );
+            width: calc(
+                100% - 2 * var(--prompt-side-gap) - var(--floating-controls-button-size) -
+                    var(--floating-controls-gap)
+            );
+        }
     }
 
     .slide-fade-enter-active,

@@ -47,6 +47,7 @@
 
     // --- 基礎 Props 和狀態 ---
     const props = defineProps({ data: Object, sessionPaused: Boolean });
+    defineEmits(['save-prompt-height']);
     const { showToast } = useToastStore();
     const { t } = useI18n();
     const uiStore = useUIStore();
@@ -479,6 +480,7 @@
             :disabled="sessionPaused"
             @save="handleSave"
             @discard="handleDiscard"
+            @visible-height="$emit('save-prompt-height', $event)"
         />
 
         <!-- Main Grid -->

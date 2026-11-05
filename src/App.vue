@@ -536,6 +536,7 @@
                 </div>
 
                 <SavePrompt
+                    v-if="layoutMode === 'modern'"
                     :is-dirty="showSavePrompt"
                     :save-state="saveState"
                     :disabled="isSessionLocked"
@@ -565,6 +566,7 @@
                 <Dashboard
                     v-else
                     :session-paused="isSessionLocked"
+                    @save-prompt-height="savePromptHeight = $event"
                     @vue:mounted="handleMainContentMounted"
                 />
             </template>
@@ -643,6 +645,11 @@
         /* Reserve space once, after the footer, for the fixed bottom navigation. */
         .app-shell-mobile-nav {
             --floating-controls-base-bottom: var(--mobile-nav-height);
+            --floating-controls-space: calc(
+                var(--save-prompt-height, 0px) + var(--floating-controls-button-size) + 2 *
+                    var(--floating-controls-gap) +
+                    min(var(--save-prompt-height, 0px), var(--floating-controls-gap))
+            );
             padding-bottom: var(--mobile-nav-height);
         }
 

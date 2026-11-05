@@ -62,9 +62,19 @@
     }
 
     @media (width < 48rem) {
+        .scroll-top-button {
+            bottom: calc(
+                var(--floating-controls-base-bottom) + var(--floating-controls-gap) +
+                    var(--footer-offset, 0px) + var(--save-prompt-height, 0px) +
+                    min(var(--save-prompt-height, 0px), var(--floating-controls-gap))
+            );
+        }
+
         .scroll-top-above-nav {
             bottom: calc(
-                var(--mobile-nav-height) + var(--floating-controls-gap) + var(--footer-offset, 0px)
+                var(--mobile-nav-height) + var(--floating-controls-gap) +
+                    var(--footer-offset, 0px) + var(--save-prompt-height, 0px) +
+                    min(var(--save-prompt-height, 0px), var(--floating-controls-gap))
             );
         }
     }
