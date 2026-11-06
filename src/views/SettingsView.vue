@@ -18,6 +18,7 @@
     import ClientSettings from '../components/settings/sections/ClientSettings.vue';
     import CustomPageSettings from '../components/settings/sections/CustomPageSettings.vue';
     import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
+    import { createFloatingSavePosition } from '../utils/floating-save-position.js';
 
     const props = defineProps({ sessionPaused: Boolean });
 
@@ -123,9 +124,9 @@
     let saveVisibilityRootMargin;
     let saveVisualViewport;
     let saveViewportFrame = null;
-    let mobileSaveHeaderHeight = 0;
+    const floatingSavePosition = createFloatingSavePosition();
 
-    const observeBottomSave = () => {
+    const observeBottomSave = (timestamp) => {
         const button = bottomSaveAction.value;
         if (!button) return;
 
@@ -141,20 +142,30 @@
         );
         const headerBottom = Math.max(viewportTop, ...headerRects.map((rect) => rect.bottom));
         const isMobile = window.matchMedia('(width < 48rem)').matches;
-        if (isMobile) {
-            const headerHeight = Math.max(0, ...headerRects.map((rect) => rect.height));
-            if (headerHeight > 0) mobileSaveHeaderHeight = headerHeight;
-        }
         const mobileNavRect = document.querySelector('.mobile-nav-glass')?.getBoundingClientRect();
         const visibleBottom =
             mobileNavRect?.height > 0
                 ? Math.min(viewportBottom, mobileNavRect.top)
                 : viewportBottom;
         const bottomInset = Math.max(0, window.innerHeight - visibleBottom);
-        // Reserve the mobile header's space even while it scrolls out of the visual viewport.
-        // Panning then changes only the compositor translation, rather than the button's top edge.
-        floatingSaveHeaderBottom.value = isMobile ? mobileSaveHeaderHeight : headerBottom;
-        floatingSaveViewportTop.value = isMobile ? viewportTop : 0;
+        if (isMobile) {
+            const position = floatingSavePosition.update({
+                headerHeight: headerBottom - viewportTop,
+                viewportTop,
+                timestamp,
+                devicePixelRatio: window.devicePixelRatio,
+                animate:
+                    Number.isFinite(timestamp) &&
+                    showFloatingSave.value &&
+                    !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+            });
+            floatingSaveHeaderBottom.value = position.headerOffset;
+            floatingSaveViewportTop.value = position.viewportTop;
+            if (position.needsAnimation) scheduleSaveViewportUpdate();
+        } else {
+            floatingSaveHeaderBottom.value = headerBottom;
+            floatingSaveViewportTop.value = 0;
+        }
         const rootMargin = `-${headerBottom}px 0px -${bottomInset}px 0px`;
         if (saveVisibilityObserver && saveVisibilityRootMargin === rootMargin) return;
 
@@ -181,9 +192,9 @@
 
     const scheduleSaveViewportUpdate = () => {
         if (saveViewportFrame !== null) return;
-        saveViewportFrame = window.requestAnimationFrame(() => {
+        saveViewportFrame = window.requestAnimationFrame((timestamp) => {
             saveViewportFrame = null;
-            observeBottomSave();
+            observeBottomSave(timestamp);
         });
     };
 
@@ -379,18 +390,31 @@
 <style scoped>
     .settings-floating-save {
         position: fixed;
-        top: calc(var(--settings-header-bottom, 0px) + 1.5rem);
+        top: 1.5rem;
         right: max(1rem, env(safe-area-inset-right, 0px));
-        transform: translate3d(0, var(--settings-viewport-top, 0px), 0);
+        transform: translate3d(
+            0,
+            calc(var(--settings-viewport-top, 0px) + var(--settings-header-bottom, 0px)),
+            0
+        );
         z-index: 30;
         box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
         transition-property: background-color, box-shadow, scale, opacity;
+        transition-duration: 160ms;
+        transition-timing-function: ease-out;
     }
 
     @media (width >= 48rem) {
         .settings-floating-save {
             top: calc(var(--settings-header-bottom, 0px) + 1.75rem);
             right: max(1.5rem, calc((100vw - 80rem) / 2 + 2rem));
+            transform: none;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .settings-floating-save {
+            transition-duration: 0ms;
         }
     }
 

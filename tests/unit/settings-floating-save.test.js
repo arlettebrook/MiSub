@@ -17,6 +17,7 @@ describe('settings floating save button', () => {
     let wrapper;
     let observers;
     let animationFrames;
+    let frameTime;
     const floatingButton = () => document.querySelector('.settings-floating-save');
     const setBottomVisible = async (visible) => {
         observers.at(-1).callback([{ isIntersecting: visible }]);
@@ -25,13 +26,21 @@ describe('settings floating save button', () => {
     const flushViewportFrame = async () => {
         const callbacks = [...animationFrames.values()];
         animationFrames.clear();
-        callbacks.forEach((callback) => callback());
+        frameTime += 1000 / 60;
+        callbacks.forEach((callback) => callback(frameTime));
         await nextTick();
+    };
+    const settleViewportFrames = async () => {
+        for (let frame = 0; animationFrames.size && frame < 60; frame++) {
+            await flushViewportFrame();
+        }
+        expect(animationFrames.size).toBe(0);
     };
 
     beforeEach(() => {
         observers = [];
         animationFrames = new Map();
+        frameTime = 0;
         let frameId = 0;
         vi.stubGlobal(
             'matchMedia',
@@ -204,7 +213,7 @@ describe('settings floating save button', () => {
         vi.stubGlobal('innerHeight', 800);
         vi.stubGlobal(
             'matchMedia',
-            vi.fn(() => ({ matches: true }))
+            vi.fn((query) => ({ matches: query === '(width < 48rem)' }))
         );
         const viewport = new EventTarget();
         Object.assign(viewport, { offsetTop: 0, height: 800 });
@@ -229,14 +238,14 @@ describe('settings floating save button', () => {
         viewport.dispatchEvent(new Event('resize'));
         await flushViewportFrame();
         expect(floatingButton()).not.toBeNull();
-        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('52px');
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('0px');
         expect(floatingButton().style.getPropertyValue('--settings-viewport-top')).toBe('160px');
         expect(observers.at(-1).options.rootMargin).toBe('-160px 0px -340px 0px');
 
         viewport.offsetTop = 220;
         viewport.dispatchEvent(new Event('scroll'));
         await flushViewportFrame();
-        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('52px');
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('0px');
         expect(floatingButton().style.getPropertyValue('--settings-viewport-top')).toBe('220px');
         expect(observers.at(-1).options.rootMargin).toBe('-220px 0px -280px 0px');
         const observerCount = observers.length;
@@ -278,10 +287,10 @@ describe('settings floating save button', () => {
         expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('52px');
     });
 
-    it('keeps a stable mobile gap as the header disappears and reappears during keyboard scrolling', async () => {
+    it('reclaims the mobile header space as it disappears and restores only its visible portion', async () => {
         vi.stubGlobal(
             'matchMedia',
-            vi.fn(() => ({ matches: true }))
+            vi.fn((query) => ({ matches: query === '(width < 48rem)' }))
         );
         const viewport = new EventTarget();
         Object.assign(viewport, { offsetTop: 0, height: 300 });
@@ -296,22 +305,22 @@ describe('settings floating save button', () => {
         controls.logic.hasUnsavedChanges.value = true;
         await setBottomVisible(false);
 
-        for (const [offsetTop, bottom, height] of [
-            [25, 32, 52],
-            [80, -10, 52],
-            [120, 0, 0],
-            [10, 52, 52],
-            [0, 52, 52],
+        for (const [offsetTop, bottom, height, visibleHeaderHeight] of [
+            [25, 32, 52, 7],
+            [80, -10, 52, 0],
+            [120, 0, 0, 0],
+            [10, 52, 52, 42],
+            [0, 52, 52, 52],
         ]) {
             viewport.offsetTop = offsetTop;
             headerBottom = bottom;
             headerHeight = height;
             window.dispatchEvent(new Event('scroll'));
             viewport.dispatchEvent(new Event('scroll'));
-            await flushViewportFrame();
+            await settleViewportFrames();
             expect(floatingButton()).not.toBeNull();
             expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe(
-                '52px'
+                `${visibleHeaderHeight}px`
             );
             expect(floatingButton().style.getPropertyValue('--settings-viewport-top')).toBe(
                 `${offsetTop}px`
