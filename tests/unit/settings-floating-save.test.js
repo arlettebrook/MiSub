@@ -156,11 +156,16 @@ describe('settings floating save button', () => {
         header.getBoundingClientRect = () => ({ bottom: 52 });
         const nav = document.createElement('nav');
         nav.className = 'mobile-nav-glass';
-        nav.getBoundingClientRect = () => ({ height: 65 });
+        let navHeight = 65;
+        nav.getBoundingClientRect = () => ({
+            height: navHeight,
+            top: window.innerHeight - navHeight,
+        });
         document.body.append(header, nav);
         await mountPage();
         expect(observers.at(-1).options.rootMargin).toBe('-52px 0px -65px 0px');
         const oldObserver = observers.at(-1);
+        navHeight = 80;
         window.dispatchEvent(new Event('resize'));
         expect(oldObserver.disconnect).toHaveBeenCalled();
         expect(observers.at(-1)).not.toBe(oldObserver);
@@ -168,5 +173,76 @@ describe('settings floating save button', () => {
         wrapper.unmount();
         wrapper = null;
         expect(finalObserver.disconnect).toHaveBeenCalled();
+    });
+
+    it('follows keyboard viewport panning and excludes actions hidden behind the keyboard', async () => {
+        vi.stubGlobal('innerHeight', 800);
+        const viewport = new EventTarget();
+        Object.assign(viewport, { offsetTop: 0, height: 800 });
+        vi.stubGlobal('visualViewport', viewport);
+        const removeListener = vi.spyOn(viewport, 'removeEventListener');
+        const header = document.createElement('header');
+        header.className = 'app-nav-bar';
+        header.getBoundingClientRect = () => ({ bottom: 52 });
+        const nav = document.createElement('nav');
+        nav.className = 'mobile-nav-glass';
+        nav.getBoundingClientRect = () => ({ height: 65, top: 735 });
+        document.body.append(header, nav);
+        await mountPage();
+        controls.logic.hasUnsavedChanges.value = true;
+        const bottom = wrapper.find('.settings-layout-footer button').element.parentElement;
+        bottom.getBoundingClientRect = () => ({ width: 140, height: 44, top: 600, bottom: 644 });
+        await setBottomVisible(true);
+        expect(floatingButton()).toBeNull();
+
+        // Only the visual viewport changes when the keyboard covers the bottom action.
+        Object.assign(viewport, { offsetTop: 160, height: 300 });
+        viewport.dispatchEvent(new Event('resize'));
+        await nextTick();
+        expect(floatingButton()).not.toBeNull();
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('160px');
+        expect(observers.at(-1).options.rootMargin).toBe('-160px 0px -340px 0px');
+
+        viewport.offsetTop = 220;
+        viewport.dispatchEvent(new Event('scroll'));
+        await nextTick();
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('220px');
+        expect(observers.at(-1).options.rootMargin).toBe('-220px 0px -280px 0px');
+        const observerCount = observers.length;
+        viewport.dispatchEvent(new Event('scroll'));
+        expect(observers).toHaveLength(observerCount);
+
+        Object.assign(viewport, { offsetTop: 0, height: 800 });
+        viewport.dispatchEvent(new Event('resize'));
+        await nextTick();
+        expect(floatingButton()).toBeNull();
+        expect(observers.at(-1).options.rootMargin).toBe('-52px 0px -65px 0px');
+
+        const finalObserver = observers.at(-1);
+        wrapper.unmount();
+        wrapper = null;
+        expect(finalObserver.disconnect).toHaveBeenCalled();
+        expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
+        expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+        viewport.offsetTop = 100;
+        viewport.dispatchEvent(new Event('scroll'));
+        expect(observers.at(-1)).toBe(finalObserver);
+    });
+
+    it('updates its position when document scrolling moves the header', async () => {
+        const header = document.createElement('header');
+        header.className = 'app-nav-bar';
+        let headerBottom = 80;
+        header.getBoundingClientRect = () => ({ bottom: headerBottom });
+        document.body.append(header);
+        await mountPage();
+        controls.logic.hasUnsavedChanges.value = true;
+        await setBottomVisible(false);
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('80px');
+
+        headerBottom = 52;
+        window.dispatchEvent(new Event('scroll'));
+        await nextTick();
+        expect(floatingButton().style.getPropertyValue('--settings-header-bottom')).toBe('52px');
     });
 });

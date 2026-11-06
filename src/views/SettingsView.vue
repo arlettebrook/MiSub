@@ -119,39 +119,64 @@
             !isBottomSaveVisible.value
     );
     let saveVisibilityObserver;
+    let saveVisibilityRootMargin;
+    let saveVisualViewport;
 
     const observeBottomSave = () => {
-        saveVisibilityObserver?.disconnect();
         const button = bottomSaveAction.value;
         if (!button) return;
 
+        // A mobile keyboard can resize and pan the visual viewport without resizing the window.
+        const viewport = window.visualViewport;
+        const viewportTop = viewport?.offsetTop || 0;
+        const viewportBottom = Math.min(
+            window.innerHeight,
+            viewportTop + (viewport?.height || window.innerHeight)
+        );
         const headerBottom = Math.max(
-            0,
+            viewportTop,
             ...Array.from(document.querySelectorAll('.app-nav-bar')).map(
                 (header) => header.getBoundingClientRect().bottom
             )
         );
-        const mobileNavHeight =
-            document.querySelector('.mobile-nav-glass')?.getBoundingClientRect().height || 0;
+        const mobileNavRect = document.querySelector('.mobile-nav-glass')?.getBoundingClientRect();
+        const visibleBottom =
+            mobileNavRect?.height > 0
+                ? Math.min(viewportBottom, mobileNavRect.top)
+                : viewportBottom;
+        const bottomInset = Math.max(0, window.innerHeight - visibleBottom);
         floatingSaveHeaderBottom.value = headerBottom;
+        const rootMargin = `-${headerBottom}px 0px -${bottomInset}px 0px`;
+        if (saveVisibilityObserver && saveVisibilityRootMargin === rootMargin) return;
+
+        saveVisibilityObserver?.disconnect();
         const rect = button.getBoundingClientRect();
         isBottomSaveVisible.value =
             rect.width > 0 &&
             rect.height > 0 &&
             rect.bottom > headerBottom &&
-            rect.top < window.innerHeight - mobileNavHeight;
+            rect.top < visibleBottom;
 
         if (typeof IntersectionObserver === 'undefined') return;
+        saveVisibilityRootMargin = rootMargin;
         saveVisibilityObserver = new IntersectionObserver(
             ([entry]) => {
                 isBottomSaveVisible.value = entry.isIntersecting;
             },
-            { rootMargin: `-${headerBottom}px 0px -${mobileNavHeight}px 0px` }
+            { rootMargin }
         );
         saveVisibilityObserver.observe(button);
     };
 
-    watch(bottomSaveAction, observeBottomSave, { flush: 'post' });
+    watch(
+        bottomSaveAction,
+        () => {
+            saveVisibilityObserver?.disconnect();
+            saveVisibilityObserver = undefined;
+            observeBottomSave();
+        },
+        { flush: 'post' }
+    );
 
     const loadPageSettings = async () => {
         await loadSettings();
@@ -190,11 +215,18 @@
     onMounted(() => {
         loadPageSettings();
         window.addEventListener('resize', observeBottomSave);
+        window.addEventListener('scroll', observeBottomSave, { passive: true });
+        saveVisualViewport = window.visualViewport;
+        saveVisualViewport?.addEventListener('resize', observeBottomSave);
+        saveVisualViewport?.addEventListener('scroll', observeBottomSave, { passive: true });
     });
 
     onBeforeUnmount(() => {
         saveVisibilityObserver?.disconnect();
         window.removeEventListener('resize', observeBottomSave);
+        window.removeEventListener('scroll', observeBottomSave);
+        saveVisualViewport?.removeEventListener('resize', observeBottomSave);
+        saveVisualViewport?.removeEventListener('scroll', observeBottomSave);
     });
 
     onActivated(() => {
@@ -325,6 +357,7 @@
         right: max(1rem, env(safe-area-inset-right, 0px));
         z-index: 30;
         box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+        transition-property: background-color, box-shadow, transform, opacity;
     }
 
     @media (width >= 48rem) {
