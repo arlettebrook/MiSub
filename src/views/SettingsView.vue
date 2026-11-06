@@ -103,6 +103,7 @@
     const bottomSaveAction = ref(null);
     const isBottomSaveVisible = ref(true);
     const floatingSaveHeaderBottom = ref(0);
+    const floatingSaveViewportTop = ref(0);
     const isSaveDisabled = computed(
         () =>
             props.sessionPaused ||
@@ -121,6 +122,8 @@
     let saveVisibilityObserver;
     let saveVisibilityRootMargin;
     let saveVisualViewport;
+    let saveViewportFrame = null;
+    let mobileSaveHeaderHeight = 0;
 
     const observeBottomSave = () => {
         const button = bottomSaveAction.value;
@@ -133,19 +136,25 @@
             window.innerHeight,
             viewportTop + (viewport?.height || window.innerHeight)
         );
-        const headerBottom = Math.max(
-            viewportTop,
-            ...Array.from(document.querySelectorAll('.app-nav-bar')).map(
-                (header) => header.getBoundingClientRect().bottom
-            )
+        const headerRects = Array.from(document.querySelectorAll('.app-nav-bar')).map((header) =>
+            header.getBoundingClientRect()
         );
+        const headerBottom = Math.max(viewportTop, ...headerRects.map((rect) => rect.bottom));
+        const isMobile = window.matchMedia('(width < 48rem)').matches;
+        if (isMobile) {
+            const headerHeight = Math.max(0, ...headerRects.map((rect) => rect.height));
+            if (headerHeight > 0) mobileSaveHeaderHeight = headerHeight;
+        }
         const mobileNavRect = document.querySelector('.mobile-nav-glass')?.getBoundingClientRect();
         const visibleBottom =
             mobileNavRect?.height > 0
                 ? Math.min(viewportBottom, mobileNavRect.top)
                 : viewportBottom;
         const bottomInset = Math.max(0, window.innerHeight - visibleBottom);
-        floatingSaveHeaderBottom.value = headerBottom;
+        // Reserve the mobile header's space even while it scrolls out of the visual viewport.
+        // Panning then changes only the compositor translation, rather than the button's top edge.
+        floatingSaveHeaderBottom.value = isMobile ? mobileSaveHeaderHeight : headerBottom;
+        floatingSaveViewportTop.value = isMobile ? viewportTop : 0;
         const rootMargin = `-${headerBottom}px 0px -${bottomInset}px 0px`;
         if (saveVisibilityObserver && saveVisibilityRootMargin === rootMargin) return;
 
@@ -159,13 +168,23 @@
 
         if (typeof IntersectionObserver === 'undefined') return;
         saveVisibilityRootMargin = rootMargin;
-        saveVisibilityObserver = new IntersectionObserver(
+        const observer = new IntersectionObserver(
             ([entry]) => {
+                if (saveVisibilityObserver !== observer) return;
                 isBottomSaveVisible.value = entry.isIntersecting;
             },
             { rootMargin }
         );
+        saveVisibilityObserver = observer;
         saveVisibilityObserver.observe(button);
+    };
+
+    const scheduleSaveViewportUpdate = () => {
+        if (saveViewportFrame !== null) return;
+        saveViewportFrame = window.requestAnimationFrame(() => {
+            saveViewportFrame = null;
+            observeBottomSave();
+        });
     };
 
     watch(
@@ -214,19 +233,23 @@
 
     onMounted(() => {
         loadPageSettings();
-        window.addEventListener('resize', observeBottomSave);
-        window.addEventListener('scroll', observeBottomSave, { passive: true });
+        window.addEventListener('resize', scheduleSaveViewportUpdate);
+        window.addEventListener('scroll', scheduleSaveViewportUpdate, { passive: true });
         saveVisualViewport = window.visualViewport;
-        saveVisualViewport?.addEventListener('resize', observeBottomSave);
-        saveVisualViewport?.addEventListener('scroll', observeBottomSave, { passive: true });
+        saveVisualViewport?.addEventListener('resize', scheduleSaveViewportUpdate);
+        saveVisualViewport?.addEventListener('scroll', scheduleSaveViewportUpdate, {
+            passive: true,
+        });
     });
 
     onBeforeUnmount(() => {
         saveVisibilityObserver?.disconnect();
-        window.removeEventListener('resize', observeBottomSave);
-        window.removeEventListener('scroll', observeBottomSave);
-        saveVisualViewport?.removeEventListener('resize', observeBottomSave);
-        saveVisualViewport?.removeEventListener('scroll', observeBottomSave);
+        saveVisibilityObserver = undefined;
+        if (saveViewportFrame !== null) window.cancelAnimationFrame(saveViewportFrame);
+        window.removeEventListener('resize', scheduleSaveViewportUpdate);
+        window.removeEventListener('scroll', scheduleSaveViewportUpdate);
+        saveVisualViewport?.removeEventListener('resize', scheduleSaveViewportUpdate);
+        saveVisualViewport?.removeEventListener('scroll', scheduleSaveViewportUpdate);
     });
 
     onActivated(() => {
@@ -338,7 +361,10 @@
             <SettingsSaveButton
                 v-if="showFloatingSave"
                 class="settings-floating-save"
-                :style="{ '--settings-header-bottom': `${floatingSaveHeaderBottom}px` }"
+                :style="{
+                    '--settings-header-bottom': `${floatingSaveHeaderBottom}px`,
+                    '--settings-viewport-top': `${floatingSaveViewportTop}px`,
+                }"
                 :is-saving="isSaving"
                 :disabled="isSaveDisabled"
                 @save="handleSave"
@@ -355,9 +381,10 @@
         position: fixed;
         top: calc(var(--settings-header-bottom, 0px) + 1.5rem);
         right: max(1rem, env(safe-area-inset-right, 0px));
+        transform: translate3d(0, var(--settings-viewport-top, 0px), 0);
         z-index: 30;
         box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
-        transition-property: background-color, box-shadow, transform, opacity;
+        transition-property: background-color, box-shadow, scale, opacity;
     }
 
     @media (width >= 48rem) {
