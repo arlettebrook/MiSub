@@ -85,6 +85,21 @@
 
     const isLinkValid = computed(() => isStableToken(requiredToken.value.value));
 
+    const qrTitle = computed(() => {
+        if (selectedId.value === 'default') {
+            const name = props.config?.FileName;
+            return (
+                (typeof name === 'string' && name.trim()) ||
+                t('dashboard.linkCard.defaultSubscription')
+            );
+        }
+        const profile = (props.profiles || []).find(
+            (item) => (item.customId || item.id) === selectedId.value
+        );
+        const name = profile?.name;
+        return (typeof name === 'string' && name.trim()) || t('profiles.qrCodeTitle');
+    });
+
     const subLink = computed(() => {
         if (!isLinkValid.value) {
             return t('dashboard.linkCard.configureTokenFirst', { name: requiredToken.value.name });
@@ -218,7 +233,7 @@
                 />
                 <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <button
-                        @click="$emit('qrcode', subLink, t('dashboard.linkCard.qrTitle'))"
+                        @click="emit('qrcode', subLink, qrTitle)"
                         :disabled="!isLinkValid"
                         class="flex h-11 w-11 items-center justify-center misub-radius-md text-gray-500 dark:text-gray-400 transition-colors duration-200"
                         :class="

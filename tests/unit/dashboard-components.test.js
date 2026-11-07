@@ -90,6 +90,72 @@ describe('dashboard UI components', () => {
         expect(wrapper.find('input').element.value).not.toContain('?base64');
     });
 
+    it.each([
+        { id: 'p1', customId: 'daily', name: '日常使用' },
+        { id: 'p2', name: '家庭订阅' },
+    ])('uses the selected profile name for its QR title: $name', async (profile) => {
+        const wrapper = mountRightPanel({
+            config: { mytoken: 'stable-token', profileToken: 'share-token' },
+            profiles: [profile],
+        });
+        await wrapper.get('select').setValue(profile.customId || profile.id);
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text() === 'Clash')
+            .trigger('click');
+        await wrapper.get('button[aria-label="显示二维码"]').trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)).toEqual([
+            `${window.location.origin}/share-token/${profile.customId || profile.id}?clash`,
+            profile.name,
+        ]);
+        wrapper.unmount();
+    });
+
+    it('uses the configured subscription name for the default QR and reacts to changes', async () => {
+        const wrapper = mountRightPanel({
+            config: { FileName: '我的节点', mytoken: 'stable-token', profileToken: 'share-token' },
+            profiles: [{ id: 'p1', name: '日常使用' }],
+        });
+        const qrButton = wrapper.get('button[aria-label="显示二维码"]');
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)).toEqual([
+            `${window.location.origin}/stable-token`,
+            '我的节点',
+        ]);
+        await wrapper.get('select').setValue('p1');
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)[1]).toBe('日常使用');
+        await wrapper.setProps({ profiles: [{ id: 'p1', name: '新名称' }] });
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)[1]).toBe('新名称');
+        await wrapper.get('select').setValue('default');
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)[1]).toBe('我的节点');
+        wrapper.unmount();
+    });
+
+    it.each(['zh-CN', 'en-US'])('uses translated fallback QR titles in %s', async (locale) => {
+        const appI18n = createI18n({ initialLocale: locale });
+        const wrapper = mountRightPanel(
+            {
+                config: { FileName: '', mytoken: 'stable-token', profileToken: 'share-token' },
+                profiles: [{ id: 'p1', name: '' }],
+            },
+            locale
+        );
+        const qrButton = wrapper.get(
+            `button[aria-label="${appI18n.t('dashboard.linkCard.showQrCode')}"]`
+        );
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)[1]).toBe(
+            appI18n.t('dashboard.linkCard.defaultSubscription')
+        );
+        await wrapper.get('select').setValue('p1');
+        await qrButton.trigger('click');
+        expect(wrapper.emitted('qrcode').at(-1)[1]).toBe(appI18n.t('profiles.qrCodeTitle'));
+        wrapper.unmount();
+    });
+
     it('does not generate copyable subscription links for invalid token characters', () => {
         const wrapper = mountRightPanel({
             config: { mytoken: ':', profileToken: 'share-token' },
