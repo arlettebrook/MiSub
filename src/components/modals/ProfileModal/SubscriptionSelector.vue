@@ -83,8 +83,8 @@
                 </button>
             </div>
         </div>
-        <!-- 占位区域，与右侧分组筛选高度一致 -->
-        <div class="h-[42px]"></div>
+        <!-- 双列布局下对齐右侧分组筛选；移动端单列无需占位。 -->
+        <div class="hidden h-[42px] md:block" aria-hidden="true"></div>
         <div class="relative mb-2">
             <input
                 type="text"
