@@ -95,7 +95,11 @@
                         {{ t('settings.announcementEnableDesc') }}
                     </p>
                 </div>
-                <Switch v-model="announcement.enabled" @change="handleContentUpdate" />
+                <Switch
+                    v-model="announcement.enabled"
+                    :aria-label="t('settings.announcementEnable')"
+                    @change="handleContentUpdate"
+                />
             </div>
         </div>
 
@@ -116,7 +120,7 @@
                         v-model="announcement.title"
                         @input="handleContentUpdate"
                         :placeholder="t('settings.announcementTitlePlaceholder')"
-                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors"
+                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus-visible:ring-1 focus-visible:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors"
                     />
                 </div>
 
@@ -129,7 +133,7 @@
                     <select
                         v-model="announcement.type"
                         @change="handleContentUpdate"
-                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors"
+                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus-visible:ring-1 focus-visible:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors"
                     >
                         <option value="info">{{ t('settings.announcementInfo') }}</option>
                         <option value="success">{{ t('settings.announcementSuccess') }}</option>
@@ -150,9 +154,9 @@
                         @input="handleContentUpdate"
                         rows="6"
                         :placeholder="t('settings.announcementContentPlaceholder')"
-                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors font-mono"
+                        class="block w-full px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 misub-radius-lg shadow-xs focus-visible:ring-1 focus-visible:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:text-white transition-colors font-mono"
                     ></textarea>
-                    <div class="absolute bottom-2 right-2 text-xs text-gray-400">
+                    <div class="absolute bottom-2 right-2 text-xs text-gray-500 dark:text-gray-400">
                         {{ t('settings.announcementHtmlSupported') }}
                     </div>
                 </div>
@@ -168,7 +172,7 @@
                         type="checkbox"
                         v-model="announcement.dismissible"
                         @change="handleContentUpdate"
-                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus-visible:ring focus-visible:ring-indigo-200 focus-visible:ring-opacity-50"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300">{{
                         t('settings.announcementDismissible')

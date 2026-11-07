@@ -66,7 +66,9 @@
     <div
         class="relative mb-4 min-w-0 rounded-xl border border-gray-100/80 bg-white/85 p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/70"
     >
-        <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div
+            class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+        >
             <div class="flex min-w-0 flex-wrap items-center gap-3">
                 <div class="flex w-full min-w-0 items-center gap-3 pr-12 sm:w-auto sm:pr-0">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
@@ -147,10 +149,11 @@
                         type="text"
                         v-model="searchModel"
                         :placeholder="t('manualNodes.searchPlaceholder')"
-                        class="h-11 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm shadow-xs focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-white/10 dark:bg-white/5 sm:h-auto"
+                        class="h-11 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm shadow-xs focus:border-indigo-500 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/5 sm:h-auto"
+                        :aria-label="t('manualNodes.searchLabel')"
                     />
                     <svg
-                        class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+                        class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
@@ -169,12 +172,13 @@
                 >
                     <button
                         @click="emit('update:viewMode', 'card')"
-                        class="view-mode-toggle flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
+                        class="view-mode-toggle touch-target flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
                         :class="
                             viewMode === 'card'
                                 ? 'bg-white dark:bg-gray-900 text-indigo-600'
                                 : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'
                         "
+                        :aria-label="t('common.cardView')"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -189,12 +193,13 @@
                     </button>
                     <button
                         @click="emit('update:viewMode', 'list')"
-                        class="view-mode-toggle flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
+                        class="view-mode-toggle touch-target flex h-10 w-9 items-center justify-center p-1.5 misub-radius-sm transition-colors sm:h-auto sm:w-auto"
                         :class="
                             viewMode === 'list'
                                 ? 'bg-white dark:bg-gray-900 text-indigo-600'
                                 : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'
                         "
+                        :aria-label="t('common.listView')"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -234,13 +239,19 @@
                                     close();
                                 "
                                 class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium"
-                                :class="isSelectionMode ? 'text-indigo-600 dark:text-indigo-400' : ''"
+                                :class="
+                                    isSelectionMode ? 'text-indigo-600 dark:text-indigo-400' : ''
+                                "
                             >
                                 {{
-                                    isSelectionMode ? t('actions.exitBatch') : t('actions.bulkActions')
+                                    isSelectionMode
+                                        ? t('actions.exitBatch')
+                                        : t('actions.bulkActions')
                                 }}
                             </button>
-                            <div class="border-t border-gray-100 dark:border-gray-700/50 my-1"></div>
+                            <div
+                                class="border-t border-gray-100 dark:border-gray-700/50 my-1"
+                            ></div>
                             <button
                                 @click="
                                     emit('import');

@@ -1,4 +1,13 @@
 <script setup>
+    import { useAttrs } from 'vue';
+
+    defineOptions({ inheritAttrs: false });
+    const attrs = useAttrs();
+    const inputAttrs = () => {
+        const { class: className, style, ...rest } = attrs;
+        return rest;
+    };
+
     const props = defineProps({
         modelValue: {
             type: Boolean,
@@ -26,10 +35,12 @@
 
 <template>
     <label
-        class="relative inline-flex items-center cursor-pointer tap-effect select-none"
-        :class="{ 'opacity-50 cursor-not-allowed': disabled }"
+        class="relative inline-flex items-center cursor-pointer tap-effect select-none touch-target"
+        :class="[attrs.class, { 'opacity-50 cursor-not-allowed': disabled }]"
+        :style="attrs.style"
     >
         <input
+            v-bind="inputAttrs()"
             type="checkbox"
             class="sr-only peer"
             :checked="modelValue"
@@ -37,7 +48,7 @@
             @change="toggle"
         />
         <div
-            class="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md after:shadow-black/10 peer-checked:after:translate-x-full peer-checked:bg-primary-600 dark:peer-checked:bg-primary-500 transition-all duration-300"
+            class="relative shrink-0 w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2 dark:peer-focus-visible:ring-offset-gray-900 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md after:shadow-black/10 peer-checked:after:translate-x-full peer-checked:bg-primary-600 dark:peer-checked:bg-primary-500 transition-all duration-300"
         ></div>
         <span v-if="label" class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
             {{ label }}

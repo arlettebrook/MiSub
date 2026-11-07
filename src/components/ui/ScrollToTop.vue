@@ -1,5 +1,8 @@
 <script setup>
     import { ref, onMounted, onUnmounted } from 'vue';
+    import { useI18n } from '../../i18n/index.js';
+
+    const { t } = useI18n();
 
     defineProps({
         aboveMobileNav: Boolean,
@@ -37,7 +40,7 @@
             class="scroll-top-button fixed z-50 p-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white misub-radius-lg shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40 transition-all duration-300 hover:scale-110 active:scale-95 backdrop-blur-sm border border-white/20"
             :class="{ 'scroll-top-above-nav': aboveMobileNav }"
             :style="{ '--footer-offset': `${footerOffset}px` }"
-            aria-label="滚动到顶部"
+            :aria-label="t('common.scrollToTop')"
         >
             <svg
                 xmlns="http://www.w3.org/2000/svg"

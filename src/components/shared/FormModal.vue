@@ -227,7 +227,7 @@
                                 v-if="closable"
                                 type="button"
                                 :disabled="disabled || loading"
-                                class="touch-target rounded-[var(--misub-radius-md)] bg-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-2 transition-colors duration-150"
+                                class="touch-target rounded-[var(--misub-radius-md)] bg-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed p-2 transition-colors duration-150"
                                 @click="handleClose"
                             >
                                 <span class="sr-only">{{ t('common.close') }}</span>

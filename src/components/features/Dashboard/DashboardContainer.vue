@@ -292,7 +292,7 @@
                 </h3>
             </template>
             <template #body>
-                <p class="text-sm text-gray-400">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
                     {{ t('subscriptions.deleteAllConfirmBody') }}
                 </p>
             </template>
@@ -309,7 +309,7 @@
                 </h3>
             </template>
             <template #body>
-                <p class="text-sm text-gray-400">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
                     {{ t('manualNodes.deleteAllConfirmBody') }}
                 </p>
             </template>
@@ -322,11 +322,11 @@
         >
             <template #title>
                 <h3 class="text-lg font-bold text-red-500">
-                    {{ t('subscriptions.deleteAllConfirmTitle') }}组
+                    {{ t('profiles.deleteAllConfirmTitle') }}
                 </h3>
             </template>
             <template #body>
-                <p class="text-sm text-gray-400">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
                     {{ t('profiles.deleteAllConfirmBody') }}
                 </p>
             </template>

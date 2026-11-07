@@ -144,7 +144,10 @@
                     <p class="text-sm text-gray-500">{{ t('settings.customPageDesc') }}</p>
                 </div>
                 <div class="flex items-center self-start sm:self-center gap-2">
-                    <Switch v-model="props.settings.customPage.enabled" />
+                    <Switch
+                        v-model="props.settings.customPage.enabled"
+                        :aria-label="t('settings.customPageTitle')"
+                    />
                 </div>
             </div>
 
@@ -178,7 +181,10 @@
                                 {{ t('settings.customPageUseDefaultLayoutDesc') }}
                             </p>
                         </div>
-                        <Switch v-model="props.settings.customPage.useDefaultLayout" />
+                        <Switch
+                            v-model="props.settings.customPage.useDefaultLayout"
+                            :aria-label="t('settings.customPageUseDefaultLayout')"
+                        />
                     </div>
 
                     <div
@@ -192,7 +198,10 @@
                                 {{ t('settings.customPageHideBrandingDesc') }}
                             </p>
                         </div>
-                        <Switch v-model="props.settings.customPage.hideBranding" />
+                        <Switch
+                            v-model="props.settings.customPage.hideBranding"
+                            :aria-label="t('settings.customPageHideBranding')"
+                        />
                     </div>
 
                     <div
@@ -206,7 +215,10 @@
                                 {{ t('settings.customPageHideHeaderDesc') }}
                             </p>
                         </div>
-                        <Switch v-model="props.settings.customPage.hideHeader" />
+                        <Switch
+                            v-model="props.settings.customPage.hideHeader"
+                            :aria-label="t('settings.customPageHideHeader')"
+                        />
                     </div>
 
                     <div
@@ -220,7 +232,10 @@
                                 {{ t('settings.customPageHideFooterDesc') }}
                             </p>
                         </div>
-                        <Switch v-model="props.settings.customPage.hideFooter" />
+                        <Switch
+                            v-model="props.settings.customPage.hideFooter"
+                            :aria-label="t('settings.customPageHideFooter')"
+                        />
                     </div>
 
                     <div

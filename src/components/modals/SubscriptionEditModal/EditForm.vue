@@ -97,7 +97,7 @@
                 }}</span>
                 <p class="text-xs text-gray-500 mt-0.5">{{ t('subscriptions.fetchProxyDesc') }}</p>
             </div>
-            <Switch v-model="useFetchProxy" />
+            <Switch v-model="useFetchProxy" :aria-label="t('subscriptions.fetchProxyTitle')" />
         </div>
 
         <!-- 代理输入框 (动画展开) -->
@@ -106,7 +106,7 @@
                 <Input
                     id="sub-edit-proxy"
                     v-model="editingSubscription.fetchProxy"
-                    placeholder="例如: https://my-proxy.vercel.app/api?url="
+                    :placeholder="t('subscriptions.proxyPlaceholder')"
                     class="font-mono text-sm flex-1"
                 />
                 <button

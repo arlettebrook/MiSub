@@ -597,7 +597,9 @@
                 {{ t('subscriptions.deleteAllConfirmTitle') }}
             </h3> </template
         ><template #body>
-            <p class="text-sm text-gray-400">{{ t('subscriptions.deleteAllConfirmBody') }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ t('subscriptions.deleteAllConfirmBody') }}
+            </p>
         </template></Modal
     >
     <Modal
@@ -609,7 +611,9 @@
                 {{ t('manualNodes.deleteAllConfirmTitle') }}
             </h3> </template
         ><template #body>
-            <p class="text-sm text-gray-400">{{ t('manualNodes.deleteAllConfirmBody') }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ t('manualNodes.deleteAllConfirmBody') }}
+            </p>
         </template></Modal
     >
     <Modal
@@ -637,7 +641,9 @@
                 {{ t('profiles.deleteAllConfirmTitle') }}
             </h3> </template
         ><template #body>
-            <p class="text-sm text-gray-400">{{ t('profiles.deleteAllConfirmBody') }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ t('profiles.deleteAllConfirmBody') }}
+            </p>
         </template></Modal
     >
 

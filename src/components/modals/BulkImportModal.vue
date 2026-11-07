@@ -63,19 +63,19 @@
         isProcessing.value = true;
         errorMessage.value = '';
         successMessage.value = '';
-        parseStatus.value = '正在读取文件...';
+        parseStatus.value = t('importNodes.readingFile');
 
         try {
             const { text, fileCount } = await readFilesAsText(fileList);
             if (!text.trim()) {
-                throw new Error('文件内容为空，未找到可导入的内容。');
+                throw new Error(t('importNodes.emptyFile'));
             }
 
-            parseStatus.value = `正在解析 ${fileCount} 个文件的内容...`;
+            parseStatus.value = t('importNodes.parsingFiles', { count: fileCount });
             const parseResult = await api.post('/api/parse_subscription', { content: text });
 
             if (!parseResult.success) {
-                throw new Error(parseResult.error || '解析文件失败');
+                throw new Error(parseResult.error || t('importNodes.parseFileFailed'));
             }
 
             const nodes = (parseResult.data?.nodes || []).map((node) => ({
@@ -90,9 +90,7 @@
 
             if (nodes.length === 0) {
                 parseStatus.value = '';
-                throw new Error(
-                    '未能从文件中解析出任何有效节点。请确认文件包含受支持的节点链接、Clash/Surge 配置或 Base64 订阅内容。'
-                );
+                throw new Error(t('importNodes.noValidNodesFromFile'));
             }
 
             const uniqueNodes = nodes.filter(
@@ -104,9 +102,13 @@
             emit('files-imported', uniqueNodes, selectedGroup.value);
 
             const msg =
-                `成功添加 ${uniqueNodes.length} 个节点` +
-                (selectedGroup.value ? ` 到分组 "${selectedGroup.value}"` : '') +
-                (duplicateCount > 0 ? `（去重 ${duplicateCount} 个重复节点）` : '');
+                t('importNodes.addedNodes', { count: uniqueNodes.length }) +
+                (selectedGroup.value
+                    ? t('importNodes.addedToGroup', { group: selectedGroup.value })
+                    : '') +
+                (duplicateCount > 0
+                    ? t('importNodes.dedupedSuffix', { count: duplicateCount })
+                    : '');
             successMessage.value = msg;
             toastStore.showToast(msg, 'success');
 
@@ -116,8 +118,11 @@
         } catch (error) {
             console.error('批量文件导入失败:', error);
             parseStatus.value = '';
-            errorMessage.value = error.message || '导入失败';
-            toastStore.showToast(`导入失败: ${error.message}`, 'error');
+            errorMessage.value = error.message || t('importNodes.failed');
+            toastStore.showToast(
+                t('importNodes.failedWithMessage', { message: error.message }),
+                'error'
+            );
         } finally {
             isProcessing.value = false;
         }
@@ -190,7 +195,7 @@
                         "
                         @click="activeTab = 'text'"
                     >
-                        粘贴文本
+                        {{ t('importNodes.tabPaste') }}
                     </button>
                     <button
                         type="button"
@@ -202,7 +207,7 @@
                         "
                         @click="activeTab = 'file'"
                     >
-                        上传文件
+                        {{ t('importNodes.tabFile') }}
                     </button>
                 </div>
 
@@ -218,7 +223,7 @@
                         <GroupSelector
                             v-model="selectedGroup"
                             :groups="manualNodeGroups"
-                            :placeholder="t('ui.groupSelector.placeholder')"
+                            :placeholder="t('manualNodes.groupPlaceholder')"
                         />
                     </div>
                 </div>
@@ -234,7 +239,7 @@
                     >
                         <div class="flex h-full">
                             <div
-                                class="py-3 pl-3 flex items-start text-gray-400 group-focus-within:text-primary-500 transition-colors pointer-events-none"
+                                class="py-3 pl-3 flex items-start text-gray-500 dark:text-gray-400 group-focus-within:text-primary-500 transition-colors pointer-events-none"
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -256,7 +261,7 @@
                                 rows="8"
                                 @focus="urlFocused = true"
                                 @blur="urlFocused = false"
-                                class="flex-1 w-full bg-transparent border-0 focus:ring-0 dark:text-white placeholder-gray-400 text-sm font-mono resize-none py-3 px-3 min-h-[160px]"
+                                class="flex-1 w-full bg-transparent border-0 focus-visible:ring-0 dark:text-white placeholder-gray-400 text-sm font-mono resize-none py-3 px-3 min-h-[160px]"
                                 placeholder="http://...&#10;https://...&#10;vmess://...&#10;vless://...&#10;trojan://..."
                             ></textarea>
                         </div>

@@ -9,6 +9,7 @@ MiSub 仓库文档索引。工程知识体系以本地思源笔记本 `MiSub 文
 - [DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md) — 前后端开发规范（风格、目录、测试、提交约定）。
 - [architecture.md](architecture.md) — 总体架构说明（跟随本地 architecture/ 页面）。
 - [data-model.md](data-model.md) — 数据模型说明（跟随本地 data-model 页面）。
+- [ui-accessibility.md](ui-accessibility.md) — 无障碍、触控目标与多语言增强说明。
 
 ## API / 外部管理
 

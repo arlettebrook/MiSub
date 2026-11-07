@@ -173,7 +173,7 @@
                 >
                     <button
                         @click.stop="emit('preview')"
-                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
+                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
                         :title="t('actions.previewNodes')"
                         :aria-label="t('actions.previewNodes')"
                     >
@@ -199,7 +199,7 @@
                     </button>
                     <button
                         @click.stop="emit('qrcode')"
-                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
+                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
                         :title="t('actions.showQrCode')"
                         :aria-label="t('actions.showQrCode')"
                     >
@@ -225,7 +225,7 @@
                     </button>
                     <button
                         @click.stop="emit('edit')"
-                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
+                        class="p-2.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
                         :title="t('actions.edit')"
                         :aria-label="t('actions.edit')"
                     >
@@ -246,7 +246,7 @@
                     </button>
                     <button
                         @click.stop="emit('delete')"
-                        class="p-2.5 rounded-full hover:bg-red-50 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
+                        class="p-2.5 rounded-full hover:bg-red-50 dark:hover:bg-red-500/20 text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors min-w-[44px] min-h-[44px] lg:min-w-0 lg:min-h-0 flex items-center justify-center"
                         :title="t('actions.delete')"
                         :aria-label="t('actions.delete')"
                     >
@@ -272,7 +272,7 @@
             <div class="relative mb-4">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg
-                        class="h-3.5 w-3.5 text-gray-400"
+                        class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -289,7 +289,8 @@
                     type="text"
                     :value="misub.url"
                     readonly
-                    class="w-full rounded-lg border border-gray-100 bg-gray-50/80 py-2 pl-9 pr-3 font-mono text-xs text-gray-500 transition-all focus:border-primary-500/30 focus:bg-white focus:outline-none dark:border-white/5 dark:bg-black/20 dark:text-gray-400 dark:focus:bg-black/40"
+                    class="w-full rounded-lg border border-gray-100 bg-gray-50/80 py-2 pl-9 pr-3 font-mono text-xs text-gray-500 transition-all focus:border-primary-500/30 focus:bg-white focus-visible:outline-none dark:border-white/5 dark:bg-black/20 dark:text-gray-400 dark:focus:bg-black/40"
+                    :aria-label="t('subscriptions.urlLabel')"
                 />
             </div>
 
@@ -304,7 +305,9 @@
                                 trafficInfo.used
                             }}</span></span
                         >
-                        <span class="text-gray-400">{{ trafficInfo.total }}</span>
+                        <span class="text-gray-500 dark:text-gray-400">{{
+                            trafficInfo.total
+                        }}</span>
                     </div>
                     <div
                         class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/10"
@@ -315,7 +318,7 @@
                         ></div>
                     </div>
                 </div>
-                <div v-else class="text-xs text-gray-400">
+                <div v-else class="text-xs text-gray-500 dark:text-gray-400">
                     {{ t('subscriptions.noTrafficData') }}
                 </div>
                 <div class="flex items-center justify-between text-xs">
@@ -336,14 +339,23 @@
             <div
                 class="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-white/10"
             >
-                <Switch v-model="misub.enabled" @change="emit('change')" />
+                <Switch
+                    v-model="misub.enabled"
+                    :aria-label="t('subscriptions.enableSource')"
+                    @change="emit('change')"
+                />
 
                 <div class="flex items-center gap-3">
                     <button
                         @click.stop="emit('update')"
                         :disabled="misub.isUpdating"
-                        class="p-1.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-400 hover:text-primary-500 transition-colors disabled:opacity-50"
+                        class="p-1.5 rounded-full hover:bg-primary-50 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors disabled:opacity-50 touch-target"
                         :title="
+                            misub.isUpdating
+                                ? t('subscriptions.updating')
+                                : t('subscriptions.updateNodeInfo')
+                        "
+                        :aria-label="
                             misub.isUpdating
                                 ? t('subscriptions.updating')
                                 : t('subscriptions.updateNodeInfo')
@@ -370,7 +382,7 @@
             <div
                 v-if="hasFooterMeta"
                 data-testid="subscription-footer-meta"
-                class="mt-3 flex items-center gap-1 truncate text-[10px] text-gray-400"
+                class="mt-3 flex items-center gap-1 truncate text-[10px] text-gray-500 dark:text-gray-400"
             >
                 <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

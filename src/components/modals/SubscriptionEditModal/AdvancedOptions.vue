@@ -86,7 +86,10 @@
                     {{ t('subscriptions.nodeCacheDesc') }}
                 </p>
             </div>
-            <Switch v-model="editingSubscription.enableNodeCache" />
+            <Switch
+                v-model="editingSubscription.enableNodeCache"
+                :aria-label="t('subscriptions.nodeCacheTitle')"
+            />
         </div>
 
         <div class="flex items-center justify-between gap-4">
@@ -98,7 +101,10 @@
                     {{ t('subscriptions.plusAsSpaceDesc') }}
                 </p>
             </div>
-            <Switch v-model="editingSubscription.plusAsSpace" />
+            <Switch
+                v-model="editingSubscription.plusAsSpace"
+                :aria-label="t('subscriptions.plusAsSpaceTitle')"
+            />
         </div>
 
         <div class="flex items-center justify-between gap-4">
@@ -110,7 +116,10 @@
                     {{ t('subscriptions.excludeTrafficDesc') }}
                 </p>
             </div>
-            <Switch v-model="editingSubscription.excludeTraffic" />
+            <Switch
+                v-model="editingSubscription.excludeTraffic"
+                :aria-label="t('subscriptions.excludeTrafficTitle')"
+            />
         </div>
     </div>
 </template>

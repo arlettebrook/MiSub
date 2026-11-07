@@ -23,7 +23,7 @@ describe('MiSub visual system regression', () => {
         expect(css).toContain('--misub-radius-md: 0.5rem');
         expect(css).toContain('--misub-radius-lg: 0.75rem');
         expect(css).toContain('font-family: var(--font-body)');
-        expect(css).toContain('font-feature-settings: "cv01", "ss03"');
+        expect(css).toMatch(/font-feature-settings: ["']cv01["'], ["']ss03["']/);
         expect(css).toContain('scroll-behavior: auto');
         expect(css).not.toMatch(/html\s*\{[^}]*scroll-behavior:\s*smooth/s);
         expect(css).not.toContain('COSMIC GLASS DESIGN SYSTEM');
@@ -55,7 +55,7 @@ describe('MiSub visual system regression', () => {
         const inputClasses = input.find('input').classes().join(' ');
         expect(inputClasses).toContain('dark:bg-white/[0.035]');
         expect(inputClasses).toContain('dark:border-white/10');
-        expect(inputClasses).toContain('focus:ring-primary-500/30');
+        expect(inputClasses).toContain('focus-visible:ring-primary-500/30');
 
         const modal = mount(FormModal, {
             props: { show: true, title: '编辑订阅' },

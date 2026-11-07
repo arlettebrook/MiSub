@@ -1,5 +1,12 @@
 <script setup>
-    import { computed } from 'vue';
+    import { computed, useAttrs } from 'vue';
+
+    defineOptions({ inheritAttrs: false });
+    const attrs = useAttrs();
+    const inputAttrs = () => {
+        const { class: className, style, ...rest } = attrs;
+        return rest;
+    };
 
     const props = defineProps({
         modelValue: {
@@ -85,7 +92,7 @@
 </script>
 
 <template>
-    <div class="w-full">
+    <div class="w-full" :class="attrs.class" :style="attrs.style">
         <label
             v-if="label"
             :for="id"
@@ -98,7 +105,7 @@
             <!-- Icon Slot/Prop -->
             <div
                 v-if="hasIcon"
-                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary-500 transition-colors"
+                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500 dark:text-gray-400 group-focus-within:text-primary-500 transition-colors"
             >
                 <slot name="icon">
                     <svg
@@ -133,6 +140,7 @@
             </div>
 
             <input
+                v-bind="inputAttrs()"
                 :id="id"
                 :name="name"
                 :autocomplete="autocomplete"
@@ -141,11 +149,19 @@
                 :type="type"
                 :placeholder="placeholder"
                 :disabled="disabled"
-                class="w-full bg-white dark:bg-white/[0.035] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-[var(--text-primary-dark)] placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500/70 dark:focus:border-primary-400/60 focus:outline-none transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                :aria-invalid="Boolean(error) || attrs['aria-invalid'] || false"
+                :aria-describedby="
+                    [attrs['aria-describedby'], error ? `${id}-error` : null]
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                "
+                class="w-full bg-white dark:bg-white/[0.035] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-[var(--text-primary-dark)] placeholder-gray-400 dark:placeholder-gray-500 focus-visible:ring-2 focus-visible:ring-primary-500/30 focus:border-primary-500/70 dark:focus:border-primary-400/60 focus-visible:outline-none transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                 :class="[
                     currentSize.input,
                     hasIcon || hasPrefix ? 'pl-9' : '',
-                    error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' : '',
+                    error
+                        ? 'border-red-500 focus:border-red-500 focus-visible:ring-red-500/50'
+                        : '',
                 ]"
             />
 
@@ -155,7 +171,7 @@
             ></div>
         </div>
 
-        <p v-if="error" class="mt-1 text-xs text-red-500 ml-1">
+        <p v-if="error" :id="`${id}-error`" class="mt-1 text-xs text-red-500 ml-1">
             {{ error }}
         </p>
     </div>
