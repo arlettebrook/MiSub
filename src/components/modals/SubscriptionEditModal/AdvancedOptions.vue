@@ -26,10 +26,10 @@
         >
             <option value="">{{ t('subscriptions.defaultUa') }}</option>
             <option value="MiSub">MiSub</option>
-            <option value="clash-verge/v2.4.3">Clash Verge</option>
-            <option value="clash.meta">Clash Meta</option>
-            <option value="v2rayN/7.23">v2rayN</option>
-            <option value="Shadowrocket/1.9.0">Shadowrocket</option>
+            <option value="clash-verge/v2.5.10">Clash Verge</option>
+            <option value="clash.meta/v1.19.33">Clash Meta</option>
+            <option value="v2rayN/7.25.6">v2rayN</option>
+            <option value="Shadowrocket/2.2.93">Shadowrocket</option>
             <option value="Mozilla/5.0">Mozilla</option>
         </select>
         <p

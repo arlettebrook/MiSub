@@ -236,6 +236,7 @@ HTTP 订阅源定义为 URL 以 `http` 开头的订阅项。
 1. User-Agent：
    - 优先使用订阅项 `customUserAgent`。
    - 否则由 `getProcessedUserAgent(userAgent, sub.url)` 生成。
+   - 默认统一使用 `clash-verge/v2.5.10`，普通源和带 `clash` 参数的源保持一致。
 2. 拉取代理：
    - 如果订阅项配置 `fetchProxy`，通过 `buildFetchProxyUrl()` 包装原始订阅地址。
 3. 发起 fetch，并跟随重定向。

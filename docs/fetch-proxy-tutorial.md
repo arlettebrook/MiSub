@@ -98,7 +98,7 @@ E:\proxy
 推荐使用这个增强版代码：
 
 ```javascript
-const DEFAULT_USER_AGENT = 'clash-verge/v2.4.3';
+const DEFAULT_USER_AGENT = 'clash-verge/v2.5.10';
 
 // MiSub 需要这些响应头来读取流量、到期时间、文件名等信息
 const PASS_THROUGH_RESPONSE_HEADERS = [
@@ -133,7 +133,7 @@ function sanitizeHeaderValue(value) {
 
 function getUpstreamUserAgent(req, requestUrl) {
   // 优先使用 MiSub 自动拼接到代理前缀里的 ua 参数：
-  //   /api?ua=clash-verge%2Fv2.4.3&url=<encoded-subscription-url>
+  //   /api?ua=clash-verge%2Fv2.5.10&url=<encoded-subscription-url>
   // 其次兼容手动传入的 x-user-agent 请求头，最后使用默认 Clash Verge UA。
   return sanitizeHeaderValue(
     requestUrl.searchParams.get('ua') ||
@@ -283,7 +283,7 @@ https://misub-proxy.vercel.app/api?url=
 - 必须包含 `/api?url=`
 - 最后的 `=` 不能省略
 - MiSub 会自动把原始订阅链接拼接到后面
-- 如果订阅源配置了“自定义 User-Agent”，新版 MiSub 会自动把 UA 拼到代理地址上，例如 `?ua=clash-verge%2Fv2.4.3&url=`，确保 Fetch Proxy 访问机场源站时也使用相同 UA
+- 如果订阅源配置了“自定义 User-Agent”，新版 MiSub 会自动把 UA 拼到代理地址上，例如 `?ua=clash-verge%2Fv2.5.10&url=`，确保 Fetch Proxy 访问机场源站时也使用相同 UA
 
 例如 MiSub 实际请求会变成：
 
@@ -294,7 +294,7 @@ https://misub-proxy.vercel.app/api?url=https%3A%2F%2Fexample.com%2Fsub%2Fxxxx
 如果该订阅设置了 `Clash Verge` UA，实际请求会变成：
 
 ```text
-https://misub-proxy.vercel.app/api?ua=clash-verge%2Fv2.4.3&url=https%3A%2F%2Fexample.com%2Fsub%2Fxxxx
+https://misub-proxy.vercel.app/api?ua=clash-verge%2Fv2.5.10&url=https%3A%2F%2Fexample.com%2Fsub%2Fxxxx
 ```
 
 这是为了避免“MiSub 请求代理时用了正确 UA，但代理请求机场源站时又换成默认 UA”的问题。
@@ -352,7 +352,7 @@ npx vercel --prod
 部署后再次验证：
 
 ```bash
-curl -I "https://你的代理域名.vercel.app/api?ua=clash-verge%2Fv2.4.3&url=http%3A%2F%2F47.242.55.240%2Flink%2FVyB3JGVTdxskaBk9%3Fclash%3D2"
+curl -I "https://你的代理域名.vercel.app/api?ua=clash-verge%2Fv2.5.10&url=http%3A%2F%2F47.242.55.240%2Flink%2FVyB3JGVTdxskaBk9%3Fclash%3D2"
 ```
 
 正常情况下应该返回 `HTTP 200`，并且能看到 `subscription-userinfo`。
@@ -372,7 +372,7 @@ export const config = { runtime: 'edge' };
 export default async function handler(req) {
   const url = new URL(req.url).searchParams.get('url');
   if (!url) return new Response('Miss URL', { status: 400 });
-  return fetch(url, { headers: { 'User-Agent': 'v2rayN/7.23' }});
+  return fetch(url, { headers: { 'User-Agent': 'clash-verge/v2.5.10' }});
 }
 ```
 
@@ -397,19 +397,19 @@ export default async function handler(req) {
 本文默认使用：
 
 ```text
-clash-verge/v2.4.3
+clash-verge/v2.5.10
 ```
 
 如果某个机场对这个 UA 不兼容，可以临时通过 `ua` 参数覆盖：
 
 ```text
-https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.23&url=
+https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.25.6&url=
 ```
 
 在 MiSub 的 Fetch Proxy 中也可以填这个完整前缀：
 
 ```text
-https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.23&url=
+https://misub-proxy.vercel.app/api?ua=v2rayN%2F7.25.6&url=
 ```
 
 注意最后仍然要以 `url=` 结尾。

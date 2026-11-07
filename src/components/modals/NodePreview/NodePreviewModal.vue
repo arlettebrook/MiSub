@@ -248,7 +248,7 @@
 
         try {
             const requestData = {
-                userAgent: 'v2rayN/7.23',
+                userAgent: 'clash-verge/v2.5.10',
             };
 
             if (props.profileId) {

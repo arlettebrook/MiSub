@@ -121,7 +121,7 @@ async function getSubscriptionsToSync(env) {
  * 同步单个订阅
  */
 async function syncSingleSubscription(subscription, env) {
-    const { url, userAgent = 'clash-meta/2.5.0', timeout = 30000 } = subscription;
+    const { url, userAgent = 'clash-verge/v2.5.10', timeout = 30000 } = subscription;
 
     console.log(`[Cron Sync] Syncing subscription: ${subscription.name}`);
 

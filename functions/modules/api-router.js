@@ -736,7 +736,7 @@ export async function handleExternalFetchRequest(request, env) {
         const response = await safeFetchPublicUrl(urlValidation.url.toString(), {
             method: 'GET',
             headers: {
-                'User-Agent': 'v2rayN/7.23',
+                'User-Agent': 'clash-verge/v2.5.10',
                 Accept: '*/*',
                 'Cache-Control': 'no-cache',
             },

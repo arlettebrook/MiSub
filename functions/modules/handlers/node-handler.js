@@ -107,7 +107,7 @@ export async function handleNodeCountRequest(request, env) {
         const requestedUserAgent =
             typeof customUserAgent === 'string' ? customUserAgent.trim() : '';
         const processedUserAgent =
-            requestedUserAgent || getProcessedUserAgent('v2rayN/7.23', subUrl);
+            requestedUserAgent || getProcessedUserAgent('clash-verge/v2.5.10', subUrl);
         if (fetchProxy && typeof fetchProxy === 'string' && fetchProxy.trim()) {
             requestUrl = buildFetchProxyUrl(fetchProxy, subUrl, processedUserAgent);
         }
@@ -119,7 +119,7 @@ export async function handleNodeCountRequest(request, env) {
                 redirect: 'follow',
             };
             const trafficFetchOptions = {
-                headers: { 'User-Agent': 'clash-verge/v2.4.3' },
+                headers: { 'User-Agent': 'clash-verge/v2.5.10' },
                 redirect: 'follow',
             };
 

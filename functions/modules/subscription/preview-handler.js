@@ -38,7 +38,7 @@ export async function handlePublicPreviewRequest(request, env) {
 
     try {
         const requestData = await readJsonWithLimit(request, JSON_BODY_LIMITS.normal);
-        const { profileId, userAgent = 'MiSub-Public-Preview/1.0' } = requestData;
+        const { profileId, userAgent = 'clash-verge/v2.5.10' } = requestData;
 
         if (!profileId) {
             return createJsonResponse({ error: 'Missing profile ID' }, 400);
@@ -101,7 +101,7 @@ export async function handleSubscriptionNodesRequest(request, env) {
             url: subscriptionUrl,
             subscriptionId,
             profileId,
-            userAgent = 'MiSub-Node-Preview/1.0',
+            userAgent = 'clash-verge/v2.5.10',
             applyTransform = false, // 管理后台默认不应用转换，由前端控制
             skipCertVerify = false,
             plusAsSpace = false,

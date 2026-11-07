@@ -1486,7 +1486,7 @@ async function handleImportCommand(chatId, userId, args, env) {
                 const response = await fetch(input, {
                     method: 'GET',
                     headers: {
-                        'User-Agent': 'v2rayN/7.23',
+                        'User-Agent': 'clash-verge/v2.5.10',
                         Accept: '*/*',
                     },
                 });

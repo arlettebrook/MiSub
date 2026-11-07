@@ -41,7 +41,7 @@ export const DEFAULT_SETTINGS = {
     enableTemplateEngine: true, // 启用模板引擎
     enableEnhancedLogging: true, // 启用增强日志
     maxSubscriptionConcurrency: 3, // 最大订阅并发数
-    defaultUserAgent: 'clash-meta/2.5.0', // 默认User-Agent
+    defaultUserAgent: 'clash-verge/v2.5.10', // 默认User-Agent
     defaultPrefixSettings: {
         enableManualNodes: true,
         enableSubscriptions: true,
@@ -181,6 +181,6 @@ export const DEFAULT_SETTINGS = {
 // System constants
 export const SYSTEM_CONSTANTS = {
     VERSION: '2.7.0',
-    // Use v2rayN UA to fetch subscriptions reliably.
-    FETCHER_USER_AGENT: 'v2rayN/7.23',
+    // Use Clash Verge UA to fetch subscriptions reliably.
+    FETCHER_USER_AGENT: 'clash-verge/v2.5.10',
 };

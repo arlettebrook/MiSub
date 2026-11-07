@@ -71,7 +71,7 @@ export function isValidBase64(str) {
 
 /**
  * 根据客户端类型确定合适的用户代理
- * 参考CF-Workers-SUB的优雅策略：统一使用v2rayN UA获取订阅，简单而有效
+ * 保留原有 URL 判断和空值处理，默认使用 Clash Verge UA 获取订阅
  * @param {string} originalUserAgent - 原始用户代理字符串
  * @param {string} url - 请求URL（可选）
  * @returns {string} - 处理后的用户代理字符串
@@ -84,18 +84,18 @@ export function getProcessedUserAgent(originalUserAgent, url = '') {
         const parsedUrl = new URL(rawUrl);
         const params = parsedUrl.searchParams;
         if (params.has('clash') || params.get('target')?.toLowerCase() === 'clash') {
-            return 'clash-verge/v2.4.3';
+            return 'clash-verge/v2.5.10';
         }
     } catch {
         if (/[?&](?:clash(?:=|&|$)|target=clash(?:&|$))/i.test(rawUrl)) {
-            return 'clash-verge/v2.4.3';
+            return 'clash-verge/v2.5.10';
         }
     }
 
     // CF-Workers-SUB的精华策略：
-    // 默认使用 v2rayN UA 获取订阅，绕过多数机场过滤同时保证获取完整节点。
+    // 默认使用 Clash Verge UA 获取订阅。
     // 个别 Clash 专用链接（如 ?clash=2）会严格校验 UA，需要保留 Clash UA。
-    return 'v2rayN/7.23';
+    return 'clash-verge/v2.5.10';
 }
 
 /**

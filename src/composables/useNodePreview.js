@@ -109,7 +109,7 @@ export function useNodePreview(props) {
 
         try {
             const requestData = {
-                userAgent: 'MiSub-Node-Preview/1.0',
+                userAgent: 'clash-verge/v2.5.10',
             };
 
             if (props.profileId) {

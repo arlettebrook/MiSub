@@ -154,7 +154,7 @@ export async function handleCronTrigger(env) {
 
             const [trafficResult, nodeCountResult] = await Promise.allSettled([
                 fetchWithTimeout(sub.url, {
-                    headers: { 'User-Agent': 'clash-verge/v2.4.3' },
+                    headers: { 'User-Agent': 'clash-verge/v2.5.10' },
                     redirect: 'follow',
                     cf: { insecureSkipVerify: true },
                 }),

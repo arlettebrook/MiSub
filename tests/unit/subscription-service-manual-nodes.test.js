@@ -129,7 +129,7 @@ describe('subscription-service 手动节点健壮性', () => {
             'fetch',
             vi.fn(async (request) => {
                 const ua = request.headers.get('user-agent');
-                if (ua === 'clash-verge/v2.4.3') {
+                if (ua === 'clash-verge/v2.5.10') {
                     return new Response(clashYaml, { status: 200 });
                 }
                 return new Response('<html>504 Gateway Time-out</html>', { status: 504 });
@@ -156,6 +156,43 @@ describe('subscription-service 手动节点健壮性', () => {
         expect(result).toContain('trojan://');
         expect(globalThis.fetch).toHaveBeenCalled();
     });
+
+    it.each([null, 'https://fetchproxy.example/api?url='])(
+        '普通订阅源应使用最新默认 UA，并传给 Fetch Proxy (%s)',
+        async (fetchProxy) => {
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => new Response('trojan://pass@example.com:443#ok'))
+            );
+
+            const result = await generateCombinedNodeList(
+                {},
+                { enableAccessLog: false },
+                'v2rayN/7.25.6',
+                [
+                    {
+                        id: 'default-ua-sub',
+                        name: '机场',
+                        url: 'https://example.com/sub',
+                        customUserAgent: '   ',
+                        fetchProxy,
+                        enabled: true,
+                    },
+                ],
+                '',
+                { enableSubscriptions: true }
+            );
+
+            expect(result).toContain('trojan://');
+            const request = globalThis.fetch.mock.calls[0][0];
+            expect(request.headers.get('User-Agent')).toBe('clash-verge/v2.5.10');
+            if (fetchProxy) {
+                const requestUrl = new URL(request.url);
+                expect(requestUrl.searchParams.get('ua')).toBe('clash-verge/v2.5.10');
+                expect(requestUrl.searchParams.get('url')).toBe('https://example.com/sub');
+            }
+        }
+    );
 
     it('HTTP 订阅源返回 SSR 节点时，添加订阅名前缀和国旗后仍应保持可解析', async () => {
         const ssrUrl = convertClashProxyToUrl({

@@ -89,7 +89,7 @@ describe('handleBatchUpdateNodesRequest', () => {
             'fetch',
             vi.fn(async (request) => {
                 const requestUrl = new URL(request.url);
-                if (requestUrl.searchParams.get('ua') === 'clash-verge/v2.4.3') {
+                if (requestUrl.searchParams.get('ua') === 'clash-verge/v2.5.10') {
                     return new Response(clashYaml, { status: 200 });
                 }
                 return new Response('<html>504 Gateway Time-out</html>', { status: 504 });
@@ -110,7 +110,7 @@ describe('handleBatchUpdateNodesRequest', () => {
             expect(data.success).toBe(true);
             expect(data.results[0].success).toBe(true);
             expect(data.results[0].nodeCount).toBe(1);
-            expect(calledUrl.searchParams.get('ua')).toBe('clash-verge/v2.4.3');
+            expect(calledUrl.searchParams.get('ua')).toBe('clash-verge/v2.5.10');
             expect(calledUrl.searchParams.get('url')).toBe('http://example.com/link/token?clash=2');
             expect(logSpy).toHaveBeenCalledWith('[Storage] Auto-detected KV in env: KV');
         } finally {
@@ -180,7 +180,7 @@ describe('handleBatchUpdateNodesRequest', () => {
             'fetch',
             vi.fn(async (request) => {
                 const ua = request.headers.get('user-agent');
-                if (ua === 'clash-verge/v2.4.3') {
+                if (ua === 'clash-verge/v2.5.10') {
                     return new Response(clashYaml, { status: 200 });
                 }
                 return new Response('<html>504 Gateway Time-out</html>', { status: 504 });
