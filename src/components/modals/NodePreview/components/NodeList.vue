@@ -1,6 +1,4 @@
 <script setup>
-    import { computed } from 'vue';
-    import { useVirtualScroll } from '@/composables/useVirtualScroll.js';
     import { useI18n } from '../../../../i18n/index.js';
 
     const { t } = useI18n();
@@ -35,17 +33,6 @@
 
     const emit = defineEmits(['copy', 'toggle-select']);
 
-    const nodesRef = computed(() => props.nodes);
-    const containerHeight = 500;
-    const itemHeight = 52;
-
-    const { containerRef, visibleItems, totalHeight, offsetY } = useVirtualScroll({
-        items: nodesRef,
-        itemHeight,
-        containerHeight,
-        overscan: 10,
-    });
-
     const handleRowClick = (node) => {
         if (props.selectionMode) {
             emit('toggle-select', node.url);
@@ -57,7 +44,7 @@
     <div
         class="hidden lg:flex flex-1 overflow-hidden rounded-xl border border-gray-200/70 bg-white shadow-sm dark:border-white/10 dark:bg-white/5"
     >
-        <div ref="containerRef" class="h-full overflow-y-auto w-full">
+        <div class="w-full">
             <div class="w-full px-4 py-3">
                 <div
                     class="w-full overflow-hidden rounded-xl border border-gray-200/70 dark:border-white/10"
@@ -86,15 +73,12 @@
                         </div>
                     </div>
 
-                    <!-- 数据行 - 虚拟滚动 -->
-                    <div
-                        class="bg-white dark:bg-gray-800"
-                        :style="{ height: totalHeight + 'px', position: 'relative' }"
-                    >
-                        <div :style="{ transform: `translateY(${offsetY}px)` }">
+                    <!-- 每页节点由弹窗主体统一滚动，避免嵌套滚动容器阻断滚轮。 -->
+                    <div class="bg-white dark:bg-gray-800">
+                        <div>
                             <div
-                                v-for="node in visibleItems.items"
-                                :key="`${node.url}_${node._virtualIndex}`"
+                                v-for="(node, index) in nodes"
+                                :key="`${node.url}_${index}`"
                                 @click="handleRowClick(node)"
                                 class="group border-b border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-indigo-500/5 transition-all"
                                 :class="{

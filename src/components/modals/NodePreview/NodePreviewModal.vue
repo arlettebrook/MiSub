@@ -792,12 +792,8 @@
             />
 
             <!-- 节点列表 -->
-            <div
-                class="flex-1 overflow-hidden bg-white dark:bg-gray-800"
-                :class="{ 'pb-24 sm:pb-28': pickingMode }"
-                style="min-height: 0"
-            >
-                <div class="h-full overflow-y-auto px-4 py-4 sm:px-6">
+            <div class="bg-white dark:bg-gray-800" :class="{ 'pb-24 sm:pb-28': pickingMode }">
+                <div class="px-4 py-4 sm:px-6">
                     <!-- 加载状态 -->
                     <div v-if="loading" class="flex h-64 items-center justify-center">
                         <div
@@ -868,7 +864,7 @@
                     </div>
 
                     <!-- 节点列表/卡片视图 -->
-                    <div v-else class="flex h-full flex-col">
+                    <div v-else class="flex flex-col">
                         <!-- 简洁列表视图 (仅大屏桌面端) -->
                         <NodeList
                             v-if="effectiveViewMode === 'list'"
