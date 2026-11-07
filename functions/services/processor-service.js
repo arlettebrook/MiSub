@@ -213,6 +213,7 @@ export class ProcessorService {
 
             if (templateText && isIniTemplate) {
                 const renderParams = {
+                    manualNodeUrls: builtinOptions.manualNodeUrls,
                     nodeList: combinedNodeList,
                     fileName: subName,
                     targetFormat,

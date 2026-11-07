@@ -276,14 +276,14 @@ export function generateBuiltinClashConfig(nodeList, options = {}) {
  * @param {string} nodeList - 节点列表
  * @returns {string} 仅包含 proxies 部分的 YAML
  */
-export function generateProxiesOnly(nodeList) {
+export function generateProxiesOnly(nodeList, options = {}) {
     const cleanedNodeList = cleanControlChars(nodeList);
     const nodeUrls = cleanedNodeList
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line && !line.startsWith('#'));
 
-    let proxies = urlsToClashProxies(nodeUrls);
+    let proxies = urlsToClashProxies(nodeUrls, options);
 
     // 清理控制字符
     proxies = deepCleanControlChars(proxies);

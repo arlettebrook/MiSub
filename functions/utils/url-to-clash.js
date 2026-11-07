@@ -26,6 +26,21 @@ function isVirtualInfoProxy(proxy) {
     );
 }
 
+// 用连接配置识别手动节点，避免前缀、重命名或缓存改变名称后丢失放行资格。
+function getProxyIdentity(proxy) {
+    const { name, metadata, ...connection } = proxy;
+    const sortKeys = (value) => {
+        if (Array.isArray(value)) return value.map(sortKeys);
+        if (!value || typeof value !== 'object') return value;
+        return Object.fromEntries(
+            Object.keys(value)
+                .sort()
+                .map((key) => [key, sortKeys(value[key])])
+        );
+    };
+    return JSON.stringify(sortKeys(connection));
+}
+
 /**
  * 解析 URL 查询参数
  * @param {string} url - 节点 URL
@@ -1481,16 +1496,31 @@ export function urlToClashProxy(url) {
 /**
  * 批量将节点 URL 转换为 Clash 代理列表
  * @param {string[]} urls - 节点 URL 数组
- * @param {Object} options - 参数增强选项 (tfo, udp, scv 等)
+ * @param {Object} options - 参数增强选项 (tfo, udp, scv 等)，manualNodeUrls 为当前选中的手动节点链接
  * @returns {Object[]} Clash 代理对象数组
  */
 export function urlsToClashProxies(urls, options = {}) {
     if (!Array.isArray(urls)) return [];
 
+    const manualProxyIdentities = new Set(
+        (Array.isArray(options.manualNodeUrls) ? options.manualNodeUrls : [])
+            .filter((url) => typeof url === 'string')
+            .map((url) => urlToClashProxy(url))
+            .filter((proxy) => proxy && isLocalProxyEndpoint(proxy))
+            .map(getProxyIdentity)
+    );
+
     return urls
         .map((url) => {
             const proxy = urlToClashProxy(url);
             if (!proxy) return null;
+            if (
+                isLocalProxyEndpoint(proxy) &&
+                !isVirtualInfoProxy(proxy) &&
+                !manualProxyIdentities.has(getProxyIdentity(proxy))
+            ) {
+                return null;
+            }
 
             // [URL 参数覆盖] 补全对 TFO/UDP/SCV 的映射
             if (options.enableTfo !== undefined) proxy.tfo = options.enableTfo;
@@ -1527,9 +1557,7 @@ export function urlsToClashProxies(urls, options = {}) {
 
             return proxy;
         })
-        .filter(
-            (proxy) => proxy !== null && (isVirtualInfoProxy(proxy) || !isLocalProxyEndpoint(proxy))
-        );
+        .filter((proxy) => proxy !== null);
 }
 
 /**

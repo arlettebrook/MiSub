@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import yaml from 'js-yaml';
 import {
     ProcessorService,
     isClashYamlProfileTemplate,
@@ -75,6 +76,57 @@ MATCH,MyGroup
         expect(result.contentType).toBe('application/x-yaml; charset=utf-8');
         expect(result.content).toContain('proxies:');
         expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(['clash', 'singbox', 'surge', 'loon', 'quanx', 'egern'])(
+        'preserves manual local nodes in %s builtin and ini template output',
+        async (targetFormat) => {
+            const manual = 'trojan://manual@127.0.0.1:22222#ManualLocal';
+            const combinedNodeList = [
+                manual.replace('#ManualLocal', '#RenamedLocal'),
+                'trojan://upstream@127.0.0.1:22222#UpstreamLocal',
+                NODE_LIST,
+            ].join('\n');
+
+            for (const templateSource of [
+                { kind: 'none', value: '' },
+                { kind: 'remote', value: 'https://example.com/template.ini' },
+            ]) {
+                const result = await ProcessorService.renderOutput({
+                    targetFormat,
+                    combinedNodeList,
+                    config: {},
+                    builtinOptions: { manualNodeUrls: [manual], ruleLevel: 'base' },
+                    templateSource,
+                    storageAdapter,
+                });
+
+                expect(result.content).toContain('RenamedLocal');
+                expect(result.content).not.toContain('UpstreamLocal');
+                expect(result.content).not.toContain('manualNodeUrls');
+            }
+        }
+    );
+
+    it('preserves manual local nodes when injecting a Clash YAML profile template', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => new Response('proxy-groups: []\nrules: []\n', { status: 200 }))
+        );
+        const manual = 'trojan://manual@127.0.0.1:22222#ManualLocal';
+        const result = await ProcessorService.renderOutput({
+            targetFormat: 'clash',
+            combinedNodeList: manual + '\ntrojan://upstream@127.0.0.1:22222#UpstreamLocal',
+            config: {},
+            builtinOptions: { manualNodeUrls: [manual] },
+            templateSource: { kind: 'remote', value: 'https://example.com/profile.yaml' },
+            storageAdapter,
+        });
+
+        expect(result.headers['X-MiSub-Template-Mode']).toBe('clash-yaml-profile');
+        expect(yaml.load(result.content).proxies).toEqual([
+            expect.objectContaining({ server: '127.0.0.1', port: 22222, password: 'manual' }),
+        ]);
     });
 
     it('renders remote Clash YAML profile templates by injecting MiSub nodes locally', async () => {

@@ -59,6 +59,65 @@ describe('node-utils', () => {
         expect(proxies.map((proxy) => proxy.server)).toEqual(['example.com']);
     });
 
+    it('应仅放行选中的手动本机节点，并忽略名称变化', () => {
+        const manual =
+            'vless://11111111-1111-1111-1111-111111111111@127.0.0.1:22222/?type=ws&security=tls&host=edge.example.com&path=%2Fproxyip%3Dproxy.example.com&sni=edge.example.com#Original';
+        const renamed = manual.split('#')[0] + '#手动节点 - 自定义名称';
+        const proxies = urlsToClashProxies(
+            [
+                renamed,
+                manual.replace('11111111-1111-1111-1111-111111111111', 'upstream'),
+                manual.replace('22222', '22223'),
+                manual.replace('edge.example.com', 'other.example.com'),
+                'trojan://real@example.com:443#真实节点',
+            ],
+            { manualNodeUrls: [manual], enableUdp: false, skipCertVerify: true }
+        );
+
+        expect(proxies).toHaveLength(2);
+        expect(proxies[0]).toMatchObject({
+            name: expect.stringContaining('手动节点 - 自定义名称'),
+            server: '127.0.0.1',
+            port: 22222,
+            network: 'ws',
+            udp: false,
+            'skip-cert-verify': true,
+            'ws-opts': {
+                path: '/proxyip=proxy.example.com',
+                headers: { Host: 'edge.example.com' },
+            },
+        });
+        expect(proxies[1].server).toBe('example.com');
+        expect(proxies[0]).not.toHaveProperty('isManualNode');
+    });
+
+    it.each(['127.0.0.1', 'localhost', '::1', '0.0.0.0'])(
+        '应在 VMess 名称改变后仍保留手动节点 %s',
+        (server) => {
+            const manual =
+                'vmess://' +
+                btoa(
+                    JSON.stringify({
+                        v: '2',
+                        ps: 'Original',
+                        add: server,
+                        port: '22222',
+                        id: 'manual',
+                        net: 'tcp',
+                    })
+                );
+            const renamed = prependNodeName(manual, 'Manual');
+
+            expect(urlsToClashProxies([renamed])).toHaveLength(0);
+            expect(urlsToClashProxies([renamed], { manualNodeUrls: [manual] })).toEqual([
+                expect.objectContaining({
+                    name: expect.stringContaining('Manual - Original'),
+                    server,
+                }),
+            ]);
+        }
+    );
+
     it('TUIC 节点密码包含 URL 保留字符时应保持可回环解析', () => {
         const proxy = {
             name: 'TUIC Special',

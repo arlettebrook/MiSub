@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import yaml from 'js-yaml';
 
 const createAdapter = vi.fn();
 const getStorageType = vi.fn();
@@ -49,6 +50,112 @@ describe('handleMisubRequest regression coverage', () => {
         vi.unstubAllGlobals();
         vi.restoreAllMocks();
     });
+
+    it.each([
+        ['stable-token', 'clash'],
+        ['stable-token', 'singbox'],
+        ['profiles/group-a', 'clash'],
+        ['profiles/group-a', 'singbox'],
+    ])(
+        'keeps selected manual local nodes for %s in %s on fresh and cached requests',
+        async (path, target) => {
+            const manualUrl =
+                'vless://11111111-1111-1111-1111-111111111111@127.0.0.1:22222/?type=ws&security=tls&host=edge.example.com&path=%2Fws&sni=edge.example.com#Original';
+            const subscriptions = [
+                { id: 'manual', name: 'ManualLocal', url: manualUrl, enabled: true },
+                {
+                    id: 'disabled',
+                    name: 'DisabledLocal',
+                    url: 'trojan://disabled@127.0.0.1:33333#Disabled',
+                    enabled: false,
+                },
+                { id: 'sub-a', name: 'Airport', url: 'https://airport.example/sub', enabled: true },
+                ...(path.startsWith('profiles')
+                    ? [
+                          {
+                              id: 'unselected',
+                              name: 'UnselectedLocal',
+                              url: 'trojan://unselected@127.0.0.1:44444#Unselected',
+                              enabled: true,
+                          },
+                      ]
+                    : []),
+            ];
+            const adapter = createStorageAdapter({
+                settings: {
+                    mytoken: 'stable-token',
+                    profileToken: 'profiles',
+                    enableFlagEmoji: false,
+                    enableTrafficNode: false,
+                },
+                subscriptions,
+                profiles: [
+                    {
+                        id: 'group-a',
+                        name: 'Group',
+                        enabled: true,
+                        subscriptions: ['sub-a'],
+                        manualNodes: ['manual'],
+                    },
+                ],
+            });
+            createAdapter.mockReturnValue(adapter);
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(
+                    async () =>
+                        new Response(
+                            'trojan://upstream@127.0.0.1:22222#UpstreamLocal\ntrojan://public@example.com:443#PublicNode',
+                            { status: 200 }
+                        )
+                )
+            );
+            silenceExpectedRequestLogs();
+            const { handleMisubRequest } =
+                await import('../../functions/modules/subscription/main-handler.js');
+
+            for (const refresh of [true, false]) {
+                const response = await handleMisubRequest({
+                    request: new Request(
+                        `https://misub.example/${path}?target=${target}&builtin=1${refresh ? '&refresh=1' : ''}`,
+                        {
+                            headers: { 'User-Agent': 'ClashMeta' },
+                        }
+                    ),
+                    env: {},
+                    waitUntil: vi.fn(),
+                });
+                const text = await response.text();
+
+                expect(response.status).toBe(200);
+                expect(response.headers.get('X-Cache-Status')).toBe(refresh ? 'MISS' : 'HIT');
+                expect(text).not.toContain('UpstreamLocal');
+                expect(text).not.toContain('DisabledLocal');
+                expect(text).not.toContain('UnselectedLocal');
+                if (target === 'clash') {
+                    expect(yaml.load(text).proxies).toEqual([
+                        expect.objectContaining({
+                            name: expect.stringContaining('ManualLocal'),
+                            server: '127.0.0.1',
+                            port: 22222,
+                            type: 'vless',
+                        }),
+                        expect.objectContaining({ server: 'example.com', type: 'trojan' }),
+                    ]);
+                } else {
+                    expect(JSON.parse(text).outbounds).toContainEqual(
+                        expect.objectContaining({
+                            tag: expect.stringContaining('ManualLocal'),
+                            server: '127.0.0.1',
+                            server_port: 22222,
+                            type: 'vless',
+                        })
+                    );
+                }
+            }
+            expect(fetch).toHaveBeenCalledTimes(1);
+        }
+    );
 
     it('uses the real storage adapter for per-subscription protective node cache', async () => {
         const subscriptions = [

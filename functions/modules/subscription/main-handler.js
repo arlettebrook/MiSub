@@ -6,6 +6,7 @@ import {
     base64EncodeUtf8,
 } from '../utils.js';
 import { generateCombinedNodeList } from '../../services/subscription-service.js';
+import { fixNodeUrlEncoding } from '../../utils/node-utils.js';
 import { sendEnhancedTgNotification, tgEscape } from '../notifications.js';
 import {
     KV_KEY_SUBS,
@@ -1060,6 +1061,19 @@ export async function handleMisubRequest(context) {
 
     console.log(`[MiSub Nodes] Count/Length: ${combinedNodeList ? combinedNodeList.length : 0}`);
 
+    // 每次请求从当前选中的节点恢复来源信息，缓存命中时也只放行手动节点。
+    const manualNodeUrls = targetMisubs
+        .filter(
+            (sub) =>
+                sub?.enabled &&
+                typeof sub.url === 'string' &&
+                sub.url.trim() &&
+                !sub.url.trim().toLowerCase().startsWith('http')
+        )
+        .map((sub) =>
+            fixNodeUrlEncoding(sub.url.trim(), { plusAsSpace: Boolean(sub.plusAsSpace) })
+        );
+
     const domain = url.hostname;
     const mergedExpireTimestamp = mergeSubscriptionUserInfo(context, targetMisubs).expire;
     const expireTime = formatNotificationExpireTime(
@@ -1119,6 +1133,7 @@ export async function handleMisubRequest(context) {
                     currentProfile?.expiresAt
                 );
                 const builtinOptions = {
+                    manualNodeUrls,
                     ...resolveBuiltinRequestOptions({
                         searchParams: url.searchParams,
                         userAgent: userAgentHeader,
@@ -1290,6 +1305,7 @@ export async function handleMisubRequest(context) {
     const finalEnableTfo = urlTfo === 'true' || urlTfo === '1';
 
     const builtinOptions = {
+        manualNodeUrls,
         ...resolveBuiltinRequestOptions({
             searchParams: url.searchParams,
             userAgent: userAgentHeader,

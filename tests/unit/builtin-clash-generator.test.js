@@ -18,6 +18,18 @@ describe('Clash 内置生成器', () => {
         expect(result).toContain('TestSS');
     });
 
+    it('proxies-only 应保留手动本机节点并过滤订阅源本机节点', () => {
+        const manual = 'trojan://manual@127.0.0.1:22222#ManualLocal';
+        const result = generateProxiesOnly(
+            manual + '\ntrojan://upstream@127.0.0.1:22222#UpstreamLocal',
+            { manualNodeUrls: [manual] }
+        );
+
+        expect(yaml.load(result).proxies).toEqual([
+            expect.objectContaining({ server: '127.0.0.1', password: 'manual' }),
+        ]);
+    });
+
     it('应使用安全 DNS 默认值并过滤本机伪节点', () => {
         const result = generateBuiltinClashConfig(
             ['trojan://fake@127.0.0.1:443#伪节点', 'trojan://real@example.com:443#真实节点'].join(

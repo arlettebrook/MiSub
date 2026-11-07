@@ -9,6 +9,7 @@ export function generateBuiltinEgernConfig(nodeList, options = {}) {
     }
 
     return renderEgernFromIniTemplate(templateEntry.content, {
+        manualNodeUrls: options.manualNodeUrls,
         nodeList,
         fileName: options.fileName || 'MiSub',
         targetFormat: 'egern',
