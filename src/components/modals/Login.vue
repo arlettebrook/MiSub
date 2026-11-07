@@ -35,9 +35,9 @@
 </script>
 
 <template>
-    <div class="w-full max-w-[420px] md:max-w-[480px] lg:max-w-[520px] relative z-10 px-6">
+    <div class="w-full max-w-[420px] md:max-w-[480px] lg:max-w-[520px] relative z-10 px-4 sm:px-6">
         <div
-            class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/10 rounded-[2rem] p-10 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.1)] dark:shadow-none overflow-hidden transition-all duration-500 hover:shadow-[0_20px_60px_-12px_rgba(0,0,0,0.15)]"
+            class="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/50 dark:border-white/10 rounded-[2rem] p-6 sm:p-10 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.1)] dark:shadow-none overflow-hidden transition-all duration-500 hover:shadow-[0_20px_60px_-12px_rgba(0,0,0,0.15)]"
         >
             <div class="flex flex-col items-center relative z-10">
                 <div class="w-24 h-24 mb-8 relative group cursor-default">

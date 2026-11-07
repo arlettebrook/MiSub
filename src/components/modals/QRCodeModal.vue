@@ -1,10 +1,13 @@
 <script setup>
+    import { ref, watch, nextTick, onUnmounted } from 'vue';
+    import QRCode from 'qrcode';
+    import Modal from '../forms/Modal.vue';
+    import Button from '../ui/Button.vue';
+    import { useToastStore } from '../../stores/toast.js';
     import { useI18n } from '../../i18n/index.js';
 
     const { t } = useI18n();
-    import { ref, watch, nextTick } from 'vue';
-    import QRCode from 'qrcode';
-    import Modal from '../forms/Modal.vue';
+    const { showToast } = useToastStore();
 
     const props = defineProps({
         show: {
@@ -17,18 +20,26 @@
         },
         title: {
             type: String,
-            default: '二维码',
+            default: '',
         },
     });
 
     const emit = defineEmits(['update:show']);
 
     const canvasRef = ref(null);
+    const qrReady = ref(false);
+    const qrError = ref(false);
+    let generationId = 0;
 
     const generateQRCode = async () => {
-        if (!props.url || !canvasRef.value) return;
+        const id = ++generationId;
+        const url = props.url;
+        const canvas = canvasRef.value;
+        qrReady.value = false;
+        qrError.value = false;
+        if (!props.show || !url || !canvas) return;
         try {
-            await QRCode.toCanvas(canvasRef.value, props.url, {
+            await QRCode.toCanvas(canvas, url, {
                 width: 256,
                 margin: 2,
                 color: {
@@ -36,24 +47,34 @@
                     light: '#ffffff',
                 },
             });
+            if (id === generationId && props.show) qrReady.value = true;
         } catch (err) {
+            if (id !== generationId || !props.show) return;
+            qrError.value = true;
             console.error('QR Code generation failed', err);
+            showToast(t('qr.generateFailed'), 'error');
         }
     };
 
     watch(
         () => [props.show, props.url],
         async ([newShow, newUrl]) => {
+            const id = ++generationId;
+            qrReady.value = false;
+            qrError.value = false;
             if (newShow && newUrl) {
                 await nextTick();
-                generateQRCode();
+                if (id === generationId) void generateQRCode();
             }
         },
         { immediate: true }
     );
+    onUnmounted(() => {
+        generationId++;
+    });
 
     const downloadQRCode = () => {
-        if (!canvasRef.value) return;
+        if (!qrReady.value || !canvasRef.value) return;
         const link = document.createElement('a');
         link.download = `${props.title || 'qrcode'}.png`;
         link.href = canvasRef.value.toDataURL('image/png');
@@ -64,24 +85,38 @@
 <template>
     <Modal :show="show" @update:show="emit('update:show', $event)">
         <template #title>
-            <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ title }}</h3>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">
+                {{ title || t('qr.title') }}
+            </h3>
         </template>
         <template #body>
             <div class="flex flex-col items-center gap-6 py-4">
                 <div
-                    class="bg-white p-4 misub-radius-lg shadow-inner border border-gray-100 dark:border-gray-700"
+                    class="w-full max-w-72 bg-white p-4 misub-radius-lg shadow-inner border border-gray-100 dark:border-gray-700"
                 >
-                    <canvas ref="canvasRef" class="w-64 h-64 misub-radius-md"></canvas>
+                    <canvas
+                        :key="url"
+                        ref="canvasRef"
+                        class="qr-canvas w-64 max-w-full misub-radius-md"
+                    ></canvas>
                 </div>
 
-                <p class="text-sm text-center text-gray-500 max-w-xs break-all">
+                <p
+                    class="w-full max-w-xs max-h-24 overflow-y-auto text-sm text-center text-gray-500 dark:text-gray-400 break-all"
+                >
                     {{ url }}
                 </p>
 
-                <button
-                    @click="downloadQRCode"
-                    class="flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white misub-radius-lg font-medium transition-colors shadow-lg shadow-primary-500/20 active:scale-95"
-                >
+                <div v-if="qrError" class="flex flex-col items-center gap-3">
+                    <p role="alert" class="text-sm text-center text-red-600 dark:text-red-400">
+                        {{ t('qr.generateFailed') }}
+                    </p>
+                    <Button data-testid="qr-retry" variant="secondary" @click="generateQRCode">
+                        {{ t('common.retry') }}
+                    </Button>
+                </div>
+
+                <Button data-testid="qr-download" :disabled="!qrReady" @click="downloadQRCode">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         class="h-5 w-5"
@@ -97,8 +132,15 @@
                         />
                     </svg>
                     {{ t('qr.saveImage') }}
-                </button>
+                </Button>
             </div>
         </template>
     </Modal>
 </template>
+
+<style scoped>
+    /* QRCode sets an inline height; allow narrow canvases to keep their aspect ratio. */
+    .qr-canvas {
+        height: auto !important;
+    }
+</style>

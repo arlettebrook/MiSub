@@ -92,7 +92,7 @@
     >
         <svg
             v-if="loading"
-            class="w-4 h-4 animate-spin relative z-10"
+            class="w-4 h-4 shrink-0 animate-spin relative z-10"
             fill="none"
             viewBox="0 0 24 24"
         >
@@ -113,7 +113,7 @@
 
         <svg
             v-else-if="icon"
-            class="w-4 h-4 relative z-10"
+            class="w-4 h-4 shrink-0 relative z-10"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -121,7 +121,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" :d="icon" />
         </svg>
 
-        <span v-if="!iconOnly" class="relative z-10">
+        <span
+            v-if="!iconOnly"
+            class="relative z-10 inline-flex min-w-0 items-center justify-center gap-[inherit]"
+        >
             <slot />
         </span>
     </button>

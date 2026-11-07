@@ -32,15 +32,16 @@ export function useSubscriptionForms({ addSubscription, updateSubscription }) {
     const openEdit = (sub) => {
         if (!sub) {
             console.error('UseSubscriptionForms: openEdit called with null/undefined');
+            showToast(t('subscriptions.openEditFailed'), 'error');
             return;
         }
         if (isDev) {
             console.debug('UseSubscriptionForms: openEdit called with', sub);
         }
-        isNew.value = false;
         // Deep copy to avoid mutating store state directly before save
         try {
             editingSubscription.value = JSON.parse(JSON.stringify(sub));
+            isNew.value = false;
             if (isDev) {
                 console.debug(
                     'UseSubscriptionForms: editingSubscription set to',
@@ -50,6 +51,7 @@ export function useSubscriptionForms({ addSubscription, updateSubscription }) {
             showModal.value = true;
         } catch (e) {
             console.error('UseSubscriptionForms: Failed to clone subscription', e);
+            showToast(t('subscriptions.openEditFailed'), 'error');
         }
     };
 

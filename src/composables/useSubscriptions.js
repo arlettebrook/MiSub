@@ -98,9 +98,9 @@ export function useSubscriptions(
     async function handleUpdateNodeCount(subId, isInitialLoad = false) {
         // Find in the filtered list
         const subToUpdate = subscriptions.value.find((s) => s.id === subId);
-        if (!subToUpdate) return;
+        if (!subToUpdate) return false;
         // Double check URL just in case
-        if (!subToUpdate.url.startsWith('http')) return;
+        if (!subToUpdate.url.startsWith('http')) return false;
 
         if (!isInitialLoad) {
             subToUpdate.isUpdating = true;
@@ -136,7 +136,7 @@ export function useSubscriptions(
             // 清除超时保护
             clearTimeout(timeoutId);
 
-            if (result.cancelled) return;
+            if (result.cancelled) return false;
 
             // 检查是否成功
             if (!result.success) {
@@ -187,7 +187,7 @@ export function useSubscriptions(
                         void dataStore.saveData();
                     }
                 }
-                return; // 开启保护性缓存节点时，失败保留旧值
+                return false; // 开启保护性缓存节点时，失败保留旧值
             }
 
             // 成功获取数据
@@ -207,6 +207,7 @@ export function useSubscriptions(
                 // 自动保存手动更新的结果
                 void dataStore.saveData();
             }
+            return true;
         } catch (error) {
             // 清除超时保护
             clearTimeout(timeoutId);
@@ -223,6 +224,7 @@ export function useSubscriptions(
             if (!isInitialLoad) {
                 showToast(errorMessage, 'error');
             }
+            return false;
         } finally {
             if (subToUpdate) subToUpdate.isUpdating = false;
         }
@@ -300,11 +302,21 @@ export function useSubscriptions(
             // This avoids 400 error because backend doesn't have these IDs yet.
             const updatePromises = subsToUpdate.map((sub) => handleUpdateNodeCount(sub.id));
 
-            try {
-                await Promise.allSettled(updatePromises);
+            // allSettled resolves even when individual updates fail; use their explicit outcomes.
+            const results = await Promise.allSettled(updatePromises);
+            const failedCount = results.filter(
+                (result) => result.status === 'rejected' || result.value !== true
+            ).length;
+            if (failedCount > 0) {
+                showToast(
+                    t('subscriptions.bulkUpdatePartial', {
+                        failed: failedCount,
+                        total: subsToUpdate.length,
+                    }),
+                    'warning'
+                );
+            } else {
                 showToast(t('subscriptions.bulkImportUpdateDone'), 'success');
-            } catch (e) {
-                console.error('Batch update finished with some errors');
             }
         } else {
             showToast(t('subscriptions.bulkImportDone'), 'success');
@@ -367,7 +379,7 @@ export function useSubscriptions(
                         total: subsToUpdate.length,
                         failed: failedCount,
                     }),
-                    'success'
+                    failedCount > 0 ? 'warning' : 'success'
                 );
                 markDirty();
             } else {
@@ -430,6 +442,7 @@ export function useSubscriptions(
                 await handleUpdateNodeCount(sub.id, true);
             }
         } catch (e) {
+            // This is a background task; avoid adding another notification here.
             console.error('Auto update failed', e);
         }
     }

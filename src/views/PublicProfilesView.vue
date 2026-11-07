@@ -188,6 +188,7 @@
                 clients.value = data.data;
             }
         } catch (e) {
+            // Client recommendations are auxiliary; profile loading reports its own failures.
             console.error('Failed to fetch clients', e);
         }
     };
@@ -241,10 +242,13 @@
 
     // QR Code in Card
     const expandedQRCards = ref(new Set());
+    const readyQRCards = ref(new Set());
     const qrCanvasRefs = ref({});
+    const qrRequests = new Map();
 
     const registerQrCanvas = (profileId, canvas) => {
         if (!canvas) return;
+        if (qrCanvasRefs.value[profileId] !== canvas) readyQRCards.value.delete(profileId);
         qrCanvasRefs.value[profileId] = canvas;
     };
 
@@ -252,9 +256,15 @@
         const profileId = profile.id;
         if (expandedQRCards.value.has(profileId)) {
             expandedQRCards.value.delete(profileId);
+            readyQRCards.value.delete(profileId);
+            qrRequests.delete(profileId);
         } else {
+            const request = Symbol();
+            qrRequests.set(profileId, request);
             expandedQRCards.value.add(profileId);
+            readyQRCards.value.delete(profileId);
             await nextTick();
+            if (qrRequests.get(profileId) !== request) return;
             const canvas = qrCanvasRefs.value[profileId];
             if (canvas) {
                 const token = config.value.profileToken || 'profiles';
@@ -266,9 +276,27 @@
                         margin: 2,
                         color: { dark: '#000000', light: '#FFFFFF' },
                     });
+                    if (
+                        qrRequests.get(profileId) === request &&
+                        qrCanvasRefs.value[profileId] === canvas
+                    ) {
+                        readyQRCards.value.add(profileId);
+                    }
                 } catch (err) {
+                    if (
+                        qrRequests.get(profileId) !== request ||
+                        qrCanvasRefs.value[profileId] !== canvas
+                    )
+                        return;
                     console.error('Failed to generate QR code:', err);
+                    expandedQRCards.value.delete(profileId);
+                    qrRequests.delete(profileId);
+                    showToast(t('publicProfiles.qrGenerateFailed'), 'error');
                 }
+            } else {
+                expandedQRCards.value.delete(profileId);
+                qrRequests.delete(profileId);
+                showToast(t('publicProfiles.qrGenerateFailed'), 'error');
             }
         }
     };
@@ -277,7 +305,7 @@
 
     const downloadQRCode = (profile) => {
         const canvas = qrCanvasRefs.value[profile.id];
-        if (!canvas) return;
+        if (!canvas || !readyQRCards.value.has(profile.id)) return;
         const url = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = `${profile.name || 'subscription'}-qrcode.png`;
@@ -335,6 +363,9 @@
     );
 
     onUnmounted(() => {
+        expandedQRCards.value.clear();
+        readyQRCards.value.clear();
+        qrRequests.clear();
         if (typeof window !== 'undefined') {
             window.removeEventListener('open-guestbook', handleGuestbookEvent);
         }

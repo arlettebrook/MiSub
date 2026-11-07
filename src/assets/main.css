@@ -589,6 +589,10 @@ textarea {
     transform: none !important;
     box-shadow: none !important;
   }
+
+  .animate-fade-in-up {
+    opacity: 1;
+  }
 }
 
 ::view-transition-old(root),

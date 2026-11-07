@@ -84,7 +84,7 @@
         <Transition name="modal-fade">
             <div
                 v-if="show"
-                class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+                class="fixed inset-0 w-screen bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
                 :style="{
                     zIndex: layer === 'confirmation' ? 'var(--z-confirm)' : 'var(--z-modal)',
                 }"
@@ -102,7 +102,7 @@
                         v-if="show"
                         ref="modalPanelRef"
                         tabindex="-1"
-                        class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl misub-radius-lg shadow-2xl w-full text-left ring-1 ring-black/5 dark:ring-white/10 flex flex-col max-h-[85vh] lg:max-h-[90vh] border border-white/20 dark:border-white/5 focus-visible:outline-none"
+                        class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl misub-radius-lg shadow-2xl w-full min-w-0 text-left ring-1 ring-black/5 dark:ring-white/10 flex flex-col max-h-[85vh] lg:max-h-[90vh] border border-white/20 dark:border-white/5 focus-visible:outline-none"
                         :class="{
                             'max-w-sm': size === 'sm',
                             'max-w-md': size === 'md',
