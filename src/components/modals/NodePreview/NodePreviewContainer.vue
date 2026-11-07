@@ -18,6 +18,7 @@
     // Composables
     import { useNodePreview } from '@/composables/useNodePreview.js';
     import { useBackdropDismiss } from '@/composables/useBackdropDismiss.js';
+    import { useModalFocus } from '@/composables/useModalFocus.js';
 
     const props = defineProps({
         show: Boolean,
@@ -29,6 +30,10 @@
     });
 
     const emit = defineEmits(['update:show']);
+    const panelRef = ref(null);
+    const { isTopModal } = useModalFocus(panelRef, () => props.show, {
+        onEscape: () => emit('update:show', false),
+    });
 
     // 使用节点预览的composable
     const {
@@ -79,16 +84,21 @@
     <!-- 主模态框 -->
     <div
         v-if="show"
+        data-modal-scroll-root
         class="fixed inset-0 overflow-y-auto"
         :style="{ zIndex: 'var(--z-modal)' }"
         :class="{ 'bg-black bg-opacity-50': show }"
         role="dialog"
-        aria-modal="true"
+        :aria-modal="isTopModal ? 'true' : 'false'"
+        :aria-hidden="isTopModal ? undefined : 'true'"
+        :inert="!isTopModal"
         @pointerdown.capture="handleBackdropPointerDown"
         @click.self="handleBackdropClick"
     >
         <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
             <div
+                ref="panelRef"
+                tabindex="-1"
                 class="relative transform overflow-hidden misub-radius-md bg-white dark:bg-gray-800 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-6xl"
             >
                 <!-- 头部 -->

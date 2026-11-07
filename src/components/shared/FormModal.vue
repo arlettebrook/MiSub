@@ -190,6 +190,7 @@
             v-if="show"
             ref="modalRef"
             class="fixed inset-0 overflow-y-auto"
+            data-modal-scroll-root
             :style="{ zIndex }"
             role="dialog"
             :aria-modal="isTopModal ? 'true' : 'false'"

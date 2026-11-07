@@ -14,6 +14,10 @@
             type: Boolean,
             default: false,
         },
+        showQrOverlay: {
+            type: Boolean,
+            default: true,
+        },
     });
 
     const emit = defineEmits([
@@ -112,6 +116,7 @@
         </div>
 
         <QRCodeOverlay
+            v-if="showQrOverlay"
             :profile="profile"
             :is-expanded="isQrExpanded"
             @close="emit('toggle-qr', profile)"

@@ -2,6 +2,7 @@
     import { computed } from 'vue';
     import ProfileCard from './ProfileCard.vue';
     import HeroProfileCard from './HeroProfileCard.vue';
+    import QRCodeOverlay from './QRCodeOverlay.vue';
 
     const props = defineProps({
         profiles: {
@@ -45,6 +46,7 @@
         <!-- 移动端：使用原卡片布局 -->
         <div class="block md:hidden max-w-md mx-auto">
             <ProfileCard
+                :show-qr-overlay="false"
                 :profile="profiles[0]"
                 :is-qr-expanded="isQrExpanded(profiles[0].id)"
                 @quick-import="emit('quick-import', profiles[0])"
@@ -58,6 +60,7 @@
         <!-- 桌面端：使用 Hero 样式 -->
         <div class="hidden md:block w-full">
             <HeroProfileCard
+                :show-qr-overlay="false"
                 :profile="profiles[0]"
                 :is-qr-expanded="isQrExpanded(profiles[0].id)"
                 @quick-import="emit('quick-import', profiles[0])"
@@ -73,6 +76,7 @@
     <!-- 多卡片：网格布局 -->
     <div v-else :class="gridClass">
         <ProfileCard
+            :show-qr-overlay="false"
             v-for="profile in profiles"
             :key="profile.id"
             :profile="profile"
@@ -85,4 +89,14 @@
             @register-canvas="(id, el) => emit('register-canvas', id, el)"
         />
     </div>
+    <!-- Keep a single overlay per profile across the mobile and desktop card layouts. -->
+    <QRCodeOverlay
+        v-for="profile in profiles"
+        :key="profile.id"
+        :profile="profile"
+        :is-expanded="isQrExpanded(profile.id)"
+        @close="emit('toggle-qr', profile)"
+        @download="emit('download-qr', profile)"
+        @register-canvas="(id, el) => emit('register-canvas', id, el)"
+    />
 </template>

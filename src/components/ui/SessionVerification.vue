@@ -1,5 +1,5 @@
 <script setup>
-    import { computed, onScopeDispose, ref, useId, watch } from 'vue';
+    import { computed, ref, useId } from 'vue';
     import { useI18n } from '../../i18n/index.js';
     import { useModalFocus } from '../../composables/useModalFocus.js';
     const props = defineProps({
@@ -13,23 +13,6 @@
     const titleId = useId();
     const descriptionId = useId();
     useModalFocus(panelRef, () => props.show, { priority: () => 2 });
-
-    let previousOverflow;
-    const restoreScroll = () => {
-        if (previousOverflow === undefined) return;
-        document.body.style.overflow = previousOverflow;
-        previousOverflow = undefined;
-    };
-    watch(
-        () => props.show,
-        (visible) => {
-            if (!visible) return restoreScroll();
-            previousOverflow = document.body.style.overflow;
-            document.body.style.overflow = 'hidden';
-        },
-        { immediate: true }
-    );
-    onScopeDispose(restoreScroll);
 
     const retry = () => {
         if (!props.busy) emit('retry');
@@ -49,6 +32,7 @@
     <Teleport to="body">
         <div
             v-if="show"
+            data-modal-scroll-root
             class="fixed inset-0 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs"
             style="z-index: var(--z-session)"
             data-testid="session-verification"

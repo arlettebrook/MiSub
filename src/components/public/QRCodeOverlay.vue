@@ -1,5 +1,7 @@
 <script setup>
+    import { ref } from 'vue';
     import { useBackdropDismiss } from '../../composables/useBackdropDismiss.js';
+    import { useModalFocus } from '../../composables/useModalFocus.js';
     import { useI18n } from '../../i18n/index.js';
 
     const { t } = useI18n();
@@ -16,6 +18,10 @@
     });
 
     const emit = defineEmits(['close', 'download', 'register-canvas']);
+    const panelRef = ref(null);
+    const { isTopModal } = useModalFocus(panelRef, () => props.isExpanded, {
+        onEscape: () => emit('close'),
+    });
 
     const { handleBackdropPointerDown, handleBackdropClick } = useBackdropDismiss(() =>
         emit('close')
@@ -27,15 +33,20 @@
         <Transition name="qr-overlay">
             <div
                 v-if="isExpanded"
+                data-modal-scroll-root
                 @pointerdown.capture="handleBackdropPointerDown"
                 @click.self="handleBackdropClick"
-                class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+                class="fixed inset-0 w-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
                 :style="{ zIndex: 'var(--z-modal)' }"
                 role="dialog"
-                aria-modal="true"
+                :aria-modal="isTopModal ? 'true' : 'false'"
+                :aria-hidden="isTopModal ? undefined : 'true'"
+                :inert="!isTopModal"
             >
                 <div
-                    class="relative bg-white dark:bg-gray-800 misub-radius-lg p-8 shadow-2xl max-w-sm w-full mx-4 transform transition-all border border-gray-100 dark:border-gray-700"
+                    ref="panelRef"
+                    tabindex="-1"
+                    class="relative min-w-0 bg-white dark:bg-gray-800 misub-radius-lg p-6 sm:p-8 shadow-2xl max-w-sm w-full my-auto transform transition-all border border-gray-100 dark:border-gray-700 focus-visible:outline-none"
                     @click.stop
                 >
                     <!-- Close Button -->
@@ -63,7 +74,7 @@
                         </p>
 
                         <div
-                            class="bg-white p-3 misub-radius-lg shadow-inner border border-gray-100 w-64 h-64 flex items-center justify-center"
+                            class="bg-white p-3 misub-radius-lg shadow-inner border border-gray-100 w-64 max-w-full aspect-square flex items-center justify-center"
                         >
                             <canvas
                                 :ref="
@@ -71,7 +82,7 @@
                                         if (el) emit('register-canvas', profile.id, el);
                                     }
                                 "
-                                class="max-w-full h-auto misub-radius-md"
+                                class="qr-canvas max-w-full misub-radius-md"
                             ></canvas>
                         </div>
 
@@ -102,6 +113,10 @@
 </template>
 
 <style scoped>
+    .qr-canvas {
+        height: auto !important;
+    }
+
     .qr-overlay-enter-active .bg-white,
     .qr-overlay-leave-active .bg-white,
     .qr-overlay-enter-active .dark\:bg-gray-800,

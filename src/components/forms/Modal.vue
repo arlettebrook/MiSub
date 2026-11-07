@@ -84,6 +84,7 @@
         <Transition name="modal-fade">
             <div
                 v-if="show"
+                data-modal-scroll-root
                 class="fixed inset-0 w-screen bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
                 :style="{
                     zIndex: layer === 'confirmation' ? 'var(--z-confirm)' : 'var(--z-modal)',

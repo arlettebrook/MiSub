@@ -1,4 +1,5 @@
 import { computed, nextTick, onScopeDispose, shallowRef, watch } from 'vue';
+import { lockModalScroll } from '../utils/modal-scroll-lock.js';
 
 const layers = shallowRef([]);
 const FOCUSABLE =
@@ -28,7 +29,7 @@ function focusLayer(layer) {
     const target = canFocus(preferred)
         ? preferred
         : focusableElements(layer)[0] || layer.panel.value;
-    target?.focus();
+    target?.focus({ preventScroll: true });
 }
 
 export function useModalFocus(panel, show, options = {}) {
@@ -39,6 +40,7 @@ export function useModalFocus(panel, show, options = {}) {
         previousFocus: null,
     };
     let registered = false;
+    let releaseScroll = null;
     const isTopModal = computed(() => layers.value.includes(layer) && topLayer() === layer);
 
     function handleKeydown(event) {
@@ -80,6 +82,8 @@ export function useModalFocus(panel, show, options = {}) {
             }
         }
         layers.value = layers.value.filter((item) => item !== layer);
+        releaseScroll?.();
+        releaseScroll = null;
         window.removeEventListener('keydown', handleKeydown);
         if (wasTop) {
             void nextTick().then(() => {
@@ -89,12 +93,12 @@ export function useModalFocus(panel, show, options = {}) {
                         top.panel.value?.contains(layer.previousFocus) &&
                         canFocus(layer.previousFocus)
                     ) {
-                        layer.previousFocus.focus();
+                        layer.previousFocus.focus({ preventScroll: true });
                     } else {
                         focusLayer(top);
                     }
                 } else if (layer.previousFocus?.isConnected && canFocus(layer.previousFocus)) {
-                    layer.previousFocus.focus();
+                    layer.previousFocus.focus({ preventScroll: true });
                 }
             });
         }
@@ -108,6 +112,10 @@ export function useModalFocus(panel, show, options = {}) {
             registered = true;
             layer.previousFocus = document.activeElement;
             layers.value = [...layers.value, layer];
+            releaseScroll = lockModalScroll(() => {
+                const panel = topLayer()?.panel.value;
+                return panel?.closest('[data-modal-scroll-root]') || panel;
+            });
             window.addEventListener('keydown', handleKeydown);
             await nextTick();
             if (registered && show() && isTopModal.value) focusLayer(layer);

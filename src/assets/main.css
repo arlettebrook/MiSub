@@ -343,6 +343,14 @@
   outline-offset: 2px;
 }
 
+[data-modal-scroll-root] {
+  overscroll-behavior: none;
+}
+
+[data-modal-scroll-root] :is(.overflow-auto, .overflow-y-auto, .overflow-x-auto) {
+  overscroll-behavior: contain;
+}
+
 .nav-action-btn-neutral {
   @apply text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/[0.055];
 }
