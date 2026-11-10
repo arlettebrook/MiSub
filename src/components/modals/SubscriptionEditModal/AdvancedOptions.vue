@@ -32,11 +32,12 @@
             <option value="Shadowrocket/2.2.93">Shadowrocket</option>
             <option value="Mozilla/5.0">Mozilla</option>
         </select>
-        <p
-            v-if="editingSubscription.customUserAgent"
-            class="text-xs text-gray-500 dark:text-gray-400 mt-1"
-        >
-            {{ t('subscriptions.currentUa', { ua: editingSubscription.customUserAgent }) }}
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{
+                t('subscriptions.currentUa', {
+                    ua: editingSubscription.customUserAgent || 'clash-verge/v2.5.10',
+                })
+            }}
         </p>
     </div>
 
