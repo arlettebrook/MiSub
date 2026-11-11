@@ -18,7 +18,8 @@ export async function handleSingleSubscriptionMode(
     env,
     subscriptionId,
     userAgent,
-    skipCertVerify = false
+    skipCertVerify = false,
+    forceRefresh = false
 ) {
     const storageAdapter = StorageFactory.createAdapter(
         env,
@@ -78,11 +79,13 @@ export async function handleSingleSubscriptionMode(
         subscription.fetchProxy,
         skipCertVerify,
         Boolean(subscription?.plusAsSpace),
-        subscription?.enableNodeCache === true
+        subscription?.enableNodeCache === true,
+        forceRefresh
     );
 
     return {
-        success: true,
+        success: result.success,
+        error: result.error,
         subscriptions: [result],
         nodes: result.nodes,
         totalCount: result.nodes.length,
@@ -104,7 +107,8 @@ export async function handleDirectUrlMode(
     subscriptionUrl,
     userAgent,
     skipCertVerify = false,
-    plusAsSpace = false
+    plusAsSpace = false,
+    forceRefresh = false
 ) {
     const debug = subscriptionUrl.includes('b0b422857bb46aba65da8234c84f38c6');
     const result = await fetchSubscriptionNodes(
@@ -116,11 +120,14 @@ export async function handleDirectUrlMode(
         '',
         null,
         skipCertVerify,
-        plusAsSpace
+        plusAsSpace,
+        false,
+        forceRefresh
     );
 
     return {
-        success: true,
+        success: result.success,
+        error: result.error,
         subscriptions: [result],
         nodes: result.nodes,
         totalCount: result.nodes.length,

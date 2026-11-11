@@ -38,8 +38,14 @@
 
     // 响应式数据
     const loading = ref(false);
+    const refreshing = ref(false);
     const error = ref('');
+    const warning = ref('');
     const allNodes = ref([]); // 存储所有节点
+    const blockingLoading = computed(
+        () => loading.value && (!refreshing.value || !allNodes.value.length)
+    );
+    let loadRequestId = 0;
     const currentPage = ref(1);
     const pageSize = ref(24);
     const viewMode = ref('list'); // 'list' 或 'card'
@@ -187,12 +193,16 @@
     });
 
     const resetState = () => {
+        loadRequestId++;
+        loading.value = false;
+        refreshing.value = false;
         currentPage.value = 1;
         protocolFilter.value = 'all';
         regionFilter.value = 'all';
         searchQuery.value = '';
         showProcessed.value = false;
         error.value = '';
+        warning.value = '';
         allNodes.value = [];
         protocolStats.value = {};
         regionStats.value = {};
@@ -227,6 +237,7 @@
     });
 
     onUnmounted(() => {
+        loadRequestId++;
         window.removeEventListener('resize', handleResize);
     });
 
@@ -241,15 +252,19 @@
     });
 
     // 加载节点数据
-    const loadNodes = async () => {
+    const loadNodes = async (forceRefresh = false) => {
         if (!props.show) return;
 
+        const requestId = ++loadRequestId;
         loading.value = true;
+        refreshing.value = forceRefresh;
         error.value = '';
+        warning.value = '';
 
         try {
             const requestData = {
                 userAgent: DEFAULT_USER_AGENT,
+                ...(forceRefresh ? { forceRefresh: true } : {}),
             };
 
             if (props.profileId) {
@@ -269,6 +284,7 @@
             }
 
             const data = await api.post(props.apiEndpoint, requestData);
+            if (requestId !== loadRequestId) return;
             if (isDev) {
                 console.debug('[Preview] Data received:', data);
             }
@@ -278,6 +294,16 @@
             }
 
             allNodes.value = data.nodes || [];
+            const failedSources = (data.subscriptions || []).filter((source) => !source.success);
+            if (failedSources.length) {
+                warning.value = t('nodePreview.partialFetchFailed', {
+                    count: failedSources.length,
+                });
+            }
+            const currentUrls = new Set(allNodes.value.map((node) => node.url));
+            selectedUrls.value = new Set(
+                [...selectedUrls.value].filter((url) => currentUrls.has(url))
+            );
             protocolStats.value = data.stats?.protocols || {};
             regionStats.value = data.stats?.regions || {};
 
@@ -331,24 +357,39 @@
             // 重置页码
             currentPage.value = 1;
         } catch (err) {
+            if (requestId !== loadRequestId) return;
             // 提供更友好的错误信息
             if (err instanceof APIError && err.status === 401) {
                 try {
                     await api.get('/api/data');
-                    error.value = '认证异常，请刷新页面后重试';
+                    if (requestId !== loadRequestId) return;
+                    error.value = t('nodePreview.authAbnormal');
                 } catch (testErr) {
-                    error.value = '认证失败，请重新登录后再试';
+                    if (requestId !== loadRequestId) return;
+                    error.value = t('nodePreview.authFailed');
                 }
             } else if (err.message.includes('网络')) {
-                error.value = '网络连接失败，请检查网络连接';
+                error.value = t('nodePreview.networkFailed');
             } else {
-                error.value = err.message || '加载节点失败';
+                error.value = err.message || t('nodePreview.loadFailed');
             }
 
-            allNodes.value = [];
+            if (forceRefresh && allNodes.value.length) {
+                warning.value = t('nodePreview.refreshFailed', { message: error.value });
+                error.value = '';
+            } else {
+                allNodes.value = [];
+            }
         } finally {
-            loading.value = false;
+            if (requestId === loadRequestId) {
+                loading.value = false;
+                refreshing.value = false;
+            }
         }
+    };
+
+    const refreshNodes = () => {
+        if (!loading.value) loadNodes(true);
     };
 
     // 复制节点链接
@@ -557,6 +598,30 @@
                 </div>
                 <div class="flex items-center gap-3 self-end sm:self-auto">
                     <button
+                        @click="refreshNodes"
+                        :disabled="loading"
+                        :aria-label="t('nodePreview.refreshNodes')"
+                        :aria-busy="refreshing"
+                        class="flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-wait disabled:opacity-50 dark:bg-gray-700/50 dark:text-gray-300"
+                    >
+                        <svg
+                            class="h-4 w-4"
+                            :class="{ 'animate-spin': refreshing }"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M4 4v5h5m11 11v-5h-5M5.5 15a7 7 0 0011.7 3L20 15M4 9l2.8-3A7 7 0 0118.5 9"
+                            />
+                        </svg>
+                        {{ refreshing ? t('nodePreview.refreshingNodes') : t('common.refresh') }}
+                    </button>
+                    <button
                         v-if="profileId"
                         @click="pickingMode = !pickingMode"
                         class="px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
@@ -589,9 +654,16 @@
         </template>
 
         <template #body>
+            <div
+                v-if="warning"
+                role="alert"
+                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200 sm:px-8"
+            >
+                {{ warning }}
+            </div>
             <!-- 统计信息 -->
             <div
-                v-if="!loading && !error && Object.keys(protocolStats).length > 0"
+                v-if="!blockingLoading && !error && Object.keys(protocolStats).length > 0"
                 class="border-b border-gray-100 bg-gray-50/30 px-4 py-6 dark:border-gray-800/50 dark:bg-gray-900/10 sm:px-8"
             >
                 <!-- 桌面端统计布局 (Premium Cards) -->
@@ -774,7 +846,7 @@
 
             <!-- 筛选控件 - 统一响应式布局 -->
             <NodeFilters
-                v-if="!loading && !error && Object.keys(protocolStats).length > 0"
+                v-if="!blockingLoading && !error && Object.keys(protocolStats).length > 0"
                 class="px-3 sm:px-6 py-2 sm:py-4 border-b border-gray-200 dark:border-gray-700"
                 :search-query="searchQuery"
                 :protocol-filter="protocolFilter"
@@ -796,7 +868,7 @@
             <div class="bg-white dark:bg-gray-800" :class="{ 'pb-24 sm:pb-28': pickingMode }">
                 <div class="px-4 py-4 sm:px-6">
                     <!-- 加载状态 -->
-                    <div v-if="loading" class="flex h-64 items-center justify-center">
+                    <div v-if="blockingLoading" class="flex h-64 items-center justify-center">
                         <div
                             class="rounded-xl border border-gray-200/70 bg-white px-8 py-8 text-center shadow-sm dark:border-white/10 dark:bg-white/5"
                         >
@@ -829,7 +901,7 @@
                             </svg>
                             <p class="mt-4 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
                             <button
-                                @click="loadNodes"
+                                @click="refreshNodes"
                                 class="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
                             >
                                 {{ t('common.retry') }}
@@ -896,7 +968,7 @@
             </div>
 
             <NodePagination
-                v-if="!loading && !error"
+                v-if="!blockingLoading && !error"
                 :current-page="currentPage"
                 :total-pages="totalPages"
                 :page-size="pageSize"

@@ -96,6 +96,7 @@ function adaptLegacyTransform(config) {
  * @param {string} profileId - 订阅组ID
  * @param {string} userAgent - 用户代理
  * @param {boolean} applyTransform - 是否应用节点转换规则（智能重命名、前缀等）
+ * @param {boolean} forceRefresh - 是否绕过上游缓存重新拉取节点
  * @returns {Promise<Object>} 处理结果
  */
 export async function handleProfileMode(
@@ -104,7 +105,8 @@ export async function handleProfileMode(
     profileId,
     userAgent,
     applyTransform = false,
-    skipCertVerify = false
+    skipCertVerify = false,
+    forceRefresh = false
 ) {
     const storageAdapter = StorageFactory.createAdapter(
         env,
@@ -202,13 +204,26 @@ export async function handleProfileMode(
                 sub.fetchProxy,
                 skipCertVerify,
                 Boolean(sub?.plusAsSpace),
-                sub?.enableNodeCache === true
+                sub?.enableNodeCache === true,
+                forceRefresh
             )
         )
     );
 
     // 合并所有结果
     const allResults = [...subscriptionResults, ...manualNodeResults];
+    if (allResults.length > 0 && allResults.every((result) => !result.success)) {
+        return {
+            success: false,
+            error: allResults
+                .map((result) => result.error)
+                .filter(Boolean)
+                .join('; '),
+            subscriptions: allResults,
+            nodes: [],
+            totalCount: 0,
+        };
+    }
 
     // 统计所有节点
     const allNodes = [];

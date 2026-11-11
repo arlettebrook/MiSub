@@ -17,6 +17,8 @@ import {
  * @param {string} excludeRules - 过滤规则文本
  * @param {boolean} skipCertVerify - 是否跳过 TLS 证书校验
  * @param {boolean} plusAsSpace - 是否将名称中的 + 视为空格
+ * @param {boolean} enableNodeCache - 是否绕过上游缓存以刷新保护性缓存
+ * @param {boolean} forceRefresh - 是否强制重新拉取预览节点
  * @returns {Promise<Object>} 节点获取结果
  */
 export async function fetchSubscriptionNodes(
@@ -29,7 +31,8 @@ export async function fetchSubscriptionNodes(
     fetchProxy = null,
     skipCertVerify = false,
     plusAsSpace = false,
-    enableNodeCache = false
+    enableNodeCache = false,
+    forceRefresh = false
 ) {
     // 自动检测调试 Token
     const shouldDebug = debug || (url && url.includes('b0b422857bb46aba65da8234c84f38c6'));
@@ -41,8 +44,8 @@ export async function fetchSubscriptionNodes(
         // 当配置了 fetchProxy 时，使用代理拉取订阅
         let requestUrl = url;
 
-        // 只有开启保护性缓存节点时才加时间戳绕过强缓存 (如 Cloudflare Edge Cache)
-        if (enableNodeCache) {
+        // 手动刷新和保护性缓存刷新都绕过上游缓存。
+        if (enableNodeCache || forceRefresh) {
             try {
                 const parsedUrl = new URL(requestUrl);
                 parsedUrl.searchParams.set('_t', Date.now().toString());
@@ -53,12 +56,15 @@ export async function fetchSubscriptionNodes(
         }
 
         if (fetchProxy && typeof fetchProxy === 'string' && fetchProxy.trim()) {
-            requestUrl = buildFetchProxyUrl(fetchProxy, url, effectiveUserAgent);
+            requestUrl = buildFetchProxyUrl(fetchProxy, requestUrl, effectiveUserAgent);
         }
 
         // 使用统一的 Fetch 工具，复用重试逻辑
         const response = await fetchWithRetry(requestUrl, {
-            headers: { 'User-Agent': effectiveUserAgent },
+            headers: {
+                'User-Agent': effectiveUserAgent,
+                ...(forceRefresh ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } : {}),
+            },
             redirect: 'follow',
             ...(skipCertVerify ? { cf: { insecureSkipVerify: true } } : {}),
         });

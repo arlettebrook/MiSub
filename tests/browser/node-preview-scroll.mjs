@@ -67,15 +67,21 @@ try {
             { width: 390, height: 844 },
         ]) {
             const page = await browser.newPage({ viewport });
-            await page.route('**/api/**', (route) =>
-                route.fulfill({
+            await page.route('**/api/**', (route) => {
+                const refreshing = route.request().postDataJSON()?.forceRefresh === true;
+                return route.fulfill({
                     json: {
                         success: true,
-                        nodes,
+                        nodes: refreshing
+                            ? nodes.map((node, index) => ({
+                                  ...node,
+                                  name: index === 0 ? 'Node 1 refreshed' : node.name,
+                              }))
+                            : nodes,
                         stats: { protocols: { vless: 60 }, regions: { 香港: 60 } },
                     },
-                })
-            );
+                });
+            });
             await page.goto(
                 `${server.resolvedUrls.local[0]}__node-preview-scroll.html${profile ? '?profile=1' : ''}`
             );
@@ -182,6 +188,34 @@ try {
                 );
                 console.log(`PASS profile=${profile} width=${viewport.width} mode=${mode}`);
             }
+            const search = page.getByRole('textbox', { name: '搜索节点', exact: true });
+            await search.fill('Node 1');
+            const refreshRequest = page.waitForRequest(
+                (request) =>
+                    request.url().includes('/api/subscription_nodes') &&
+                    request.postDataJSON()?.forceRefresh === true
+            );
+            const refreshButton = page.getByRole('button', { name: '重新拉取节点', exact: true });
+            await refreshButton.click();
+            const refreshPayload = (await refreshRequest).postDataJSON();
+            assert.equal(
+                profile ? refreshPayload.profileId : refreshPayload.subscriptionId,
+                profile ? 'profile' : 'subscription'
+            );
+            await page
+                .getByText('Node 1 refreshed', { exact: true })
+                .filter({ visible: true })
+                .first()
+                .waitFor();
+            assert.equal(await search.inputValue(), 'Node 1', 'Refresh must preserve the search');
+            await refreshButton.waitFor({ state: 'visible' });
+            assert.ok(await refreshButton.isEnabled(), 'Refresh must become available again');
+            if (process.env.NODE_PREVIEW_REFRESH_SCREENSHOT) {
+                await page.screenshot({
+                    path: `${process.env.NODE_PREVIEW_REFRESH_SCREENSHOT}-${profile ? 'profile' : 'source'}-${viewport.width}.png`,
+                });
+            }
+            console.log(`PASS refresh profile=${profile} width=${viewport.width}`);
             await page.getByRole('button', { name: '关闭', exact: true }).first().click();
             await page.waitForFunction(() => document.body.style.position !== 'fixed');
             assert.equal(

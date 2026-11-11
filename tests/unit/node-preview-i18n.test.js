@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import NodePreviewModal from '../../src/components/modals/NodePreview/NodePreviewModal.vue';
 import { createI18n } from '../../src/i18n/index.js';
 import { useDataStore } from '../../src/stores/useDataStore.js';
+import { api } from '../../src/lib/http.js';
+
+enableAutoUnmount(afterEach);
 
 const toastMock = vi.hoisted(() => vi.fn());
 
@@ -45,6 +48,7 @@ const expectNoChineseOrKeys = (text) => {
 describe('NodePreviewModal English translations', () => {
     beforeEach(() => {
         toastMock.mockClear();
+        api.post.mockClear();
     });
 
     it('renders profile preview header and picking actions in English', async () => {
@@ -80,7 +84,10 @@ describe('NodePreviewModal English translations', () => {
         expect(wrapper.text()).toContain('Total Pages');
         expectNoChineseOrKeys(wrapper.text());
 
-        await wrapper.find('button').trigger('click');
+        await wrapper
+            .findAll('button')
+            .find((button) => button.text() === 'Pick nodes')
+            .trigger('click');
 
         expect(wrapper.text()).toContain('Exit picking');
         expect(wrapper.text()).toContain('Picking mode');
@@ -131,5 +138,115 @@ describe('NodePreviewModal English translations', () => {
         });
         expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('1'), 'success');
         expect(wrapper.text()).not.toContain('Picking mode');
+    });
+});
+
+describe('NodePreviewModal refresh', () => {
+    const mountPreview = (props = {}) => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        return mount(NodePreviewModal, {
+            props: { show: true, subscriptionId: 'source-1', ...props },
+            global: {
+                plugins: [pinia, createI18n({ initialLocale: 'en-US' })],
+                stubs: {
+                    Teleport: true,
+                    NodeFilters: true,
+                    NodeCard: true,
+                    NodePagination: true,
+                },
+            },
+        });
+    };
+
+    beforeEach(() => api.post.mockClear());
+
+    it.each([
+        { subscriptionId: 'source-1' },
+        { subscriptionId: undefined, profileId: 'profile-1' },
+        { subscriptionId: undefined, subscriptionUrl: 'https://example.com/sub' },
+    ])('forces a new request and displays returned nodes: %j', async (props) => {
+        const wrapper = mountPreview(props);
+        await flushPromises();
+        const initialRequest = api.post.mock.calls[0][1];
+        expect(initialRequest.forceRefresh).toBeUndefined();
+
+        let complete;
+        api.post.mockImplementationOnce(() => new Promise((resolve) => (complete = resolve)));
+        const button = wrapper.find('button[aria-label="Fetch nodes again"]');
+        await button.trigger('click');
+
+        expect(api.post.mock.calls.at(-1)[1]).toEqual({ ...initialRequest, forceRefresh: true });
+        expect(button.attributes('disabled')).toBeDefined();
+        expect(wrapper.text()).toContain('Refreshing');
+        expect(wrapper.text()).toContain('Demo HK');
+        await button.trigger('click');
+        expect(api.post).toHaveBeenCalledTimes(2);
+
+        complete({
+            success: true,
+            nodes: [
+                {
+                    name: 'Updated Node',
+                    protocol: 'trojan',
+                    region: '其他',
+                    url: 'trojan://test@example.com:443#Updated',
+                },
+            ],
+            stats: { protocols: { trojan: 1 }, regions: { 其他: 1 } },
+        });
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('Updated Node');
+        expect(wrapper.text()).not.toContain('Demo HK');
+        expect(button.attributes('disabled')).toBeUndefined();
+    });
+
+    it('keeps current nodes and shows a failure message when refresh fails', async () => {
+        const wrapper = mountPreview();
+        await flushPromises();
+        api.post.mockResolvedValueOnce({ success: false, error: 'HTTP 403' });
+        await wrapper.find('button[aria-label="Fetch nodes again"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('[role="alert"]').text()).toContain('Previous nodes kept: HTTP 403');
+        expect(wrapper.text()).toContain('Demo HK');
+    });
+
+    it('allows a failed initial load to be retried with a fresh fetch', async () => {
+        api.post.mockResolvedValueOnce({ success: false, error: 'HTTP 403' });
+        const wrapper = mountPreview();
+        await flushPromises();
+        expect(wrapper.text()).toContain('HTTP 403');
+        await wrapper.find('button[aria-label="Fetch nodes again"]').trigger('click');
+        await flushPromises();
+
+        expect(api.post.mock.calls.at(-1)[1].forceRefresh).toBe(true);
+        expect(wrapper.text()).toContain('Demo HK');
+        expect(wrapper.text()).not.toContain('HTTP 403');
+    });
+
+    it('ignores an old refresh response after the preview is closed and reopened', async () => {
+        const wrapper = mountPreview();
+        await flushPromises();
+        let completeOldRefresh;
+        api.post.mockImplementationOnce(
+            () => new Promise((resolve) => (completeOldRefresh = resolve))
+        );
+        await wrapper.find('button[aria-label="Fetch nodes again"]').trigger('click');
+        await wrapper.setProps({ show: false });
+        await wrapper.setProps({ show: true });
+        await flushPromises();
+        completeOldRefresh({
+            success: true,
+            nodes: [{ name: 'Outdated Node', url: 'trojan://test@example.com:443#Outdated' }],
+        });
+        await flushPromises();
+
+        expect(wrapper.text()).toContain('Demo HK');
+        expect(wrapper.text()).not.toContain('Outdated Node');
+        expect(
+            wrapper.find('button[aria-label="Fetch nodes again"]').attributes('disabled')
+        ).toBeUndefined();
     });
 });
