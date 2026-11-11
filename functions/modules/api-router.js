@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
+
 /**
  * API路由处理模块
  * 处理所有API请求的路由分发
@@ -736,7 +738,7 @@ export async function handleExternalFetchRequest(request, env) {
         const response = await safeFetchPublicUrl(urlValidation.url.toString(), {
             method: 'GET',
             headers: {
-                'User-Agent': 'clash-verge/v2.5.10',
+                'User-Agent': DEFAULT_USER_AGENT,
                 Accept: '*/*',
                 'Cache-Control': 'no-cache',
             },

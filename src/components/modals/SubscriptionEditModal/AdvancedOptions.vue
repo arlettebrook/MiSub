@@ -1,6 +1,9 @@
 <script setup>
+    import { computed } from 'vue';
     import Switch from '../../ui/Switch.vue';
+    import UserAgentInput from './UserAgentInput.vue';
     import { useI18n } from '../../../i18n/index.js';
+    import { getUserAgentState, validateUserAgent } from '../../../../shared/user-agents.js';
 
     const { t } = useI18n();
 
@@ -10,6 +13,23 @@
             required: true,
         },
     });
+
+    const selectedUserAgent = computed({
+        get: () => {
+            const userAgent = props.editingSubscription.customUserAgent;
+            return typeof userAgent === 'string' && userAgent.trim() ? userAgent : '';
+        },
+        set: (userAgent) => {
+            props.editingSubscription.customUserAgent = userAgent;
+        },
+    });
+    const userAgentState = computed(() =>
+        getUserAgentState(props.editingSubscription.customUserAgent)
+    );
+    const userAgentError = computed(() => {
+        const result = validateUserAgent(props.editingSubscription.customUserAgent);
+        return result.valid ? '' : t(`subscriptions.uaValidation.${result.code}`);
+    });
 </script>
 
 <template>
@@ -17,25 +37,21 @@
     <div>
         <label for="sub-edit-ua" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
             {{ t('subscriptions.uaLabel') }}
-            <span class="text-xs text-gray-500 ml-2">{{ t('subscriptions.optionalDefault') }}</span>
         </label>
-        <select
+        <UserAgentInput
             id="sub-edit-ua"
-            v-model="editingSubscription.customUserAgent"
-            class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 misub-radius-md dark:text-white"
-        >
-            <option value="">{{ t('subscriptions.defaultUa') }}</option>
-            <option value="MiSub">MiSub</option>
-            <option value="clash-verge/v2.5.10">Clash Verge</option>
-            <option value="clash.meta/v1.19.33">Clash Meta</option>
-            <option value="v2rayN/7.25.6">v2rayN</option>
-            <option value="Shadowrocket/2.2.93">Shadowrocket</option>
-            <option value="Mozilla/5.0">Mozilla</option>
-        </select>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            v-model="selectedUserAgent"
+            class="mt-1"
+            described-by="sub-edit-ua-hint sub-edit-ua-current"
+            :error="userAgentError"
+        />
+        <p id="sub-edit-ua-hint" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t('subscriptions.uaInputHint') }}
+        </p>
+        <p id="sub-edit-ua-current" class="break-all text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{
-                t('subscriptions.currentUa', {
-                    ua: editingSubscription.customUserAgent || 'clash-verge/v2.5.10',
+                t(`subscriptions.uaState.${userAgentState.type}`, {
+                    ua: userAgentState.value,
                 })
             }}
         </p>

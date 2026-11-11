@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
+
 /**
  * 节点预览 Composable
  * @author MiSub Team
@@ -109,7 +111,7 @@ export function useNodePreview(props) {
 
         try {
             const requestData = {
-                userAgent: 'clash-verge/v2.5.10',
+                userAgent: DEFAULT_USER_AGENT,
             };
 
             if (props.profileId) {

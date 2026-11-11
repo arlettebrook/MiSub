@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import { useToastStore } from '../stores/toast.js';
 import { generateSubscriptionId } from '../utils/id.js';
 import { t } from '../i18n/index.js';
+import { validateUserAgent } from '../../shared/user-agents.js';
 
 const isDev = import.meta.env.DEV;
 
@@ -62,6 +63,12 @@ export function useSubscriptionForms({ addSubscription, updateSubscription }) {
         }
         if (!/^https?:\/\//i.test(editingSubscription.value.url)) {
             showToast(t('subscriptions.invalidUrl'), 'error');
+            return;
+        }
+
+        const userAgentValidation = validateUserAgent(editingSubscription.value.customUserAgent);
+        if (!userAgentValidation.valid) {
+            showToast(t(`subscriptions.uaValidation.${userAgentValidation.code}`), 'error');
             return;
         }
 

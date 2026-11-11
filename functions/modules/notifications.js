@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
+
 /**
  * 通知功能模块
  * 处理业务层逻辑：订阅到期和流量预警，Cron 任务报告。
@@ -154,7 +156,7 @@ export async function handleCronTrigger(env) {
 
             const [trafficResult, nodeCountResult] = await Promise.allSettled([
                 fetchWithTimeout(sub.url, {
-                    headers: { 'User-Agent': 'clash-verge/v2.5.10' },
+                    headers: { 'User-Agent': DEFAULT_USER_AGENT },
                     redirect: 'follow',
                     cf: { insecureSkipVerify: true },
                 }),

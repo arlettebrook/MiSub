@@ -6,6 +6,7 @@
     import EditForm from './SubscriptionEditModal/EditForm.vue';
     import RuleSection from './SubscriptionEditModal/RuleSection.vue';
     import AdvancedOptions from './SubscriptionEditModal/AdvancedOptions.vue';
+    import { validateUserAgent } from '../../../shared/user-agents.js';
     const props = defineProps({
         show: Boolean,
         isNew: Boolean,
@@ -15,6 +16,10 @@
     const emit = defineEmits(['update:show', 'confirm']);
     const { showToast } = useToastStore();
     const { t } = useI18n();
+    const userAgentError = computed(() => {
+        const result = validateUserAgent(props.editingSubscription?.customUserAgent);
+        return result.valid ? '' : t(`subscriptions.uaValidation.${result.code}`);
+    });
 
     // === 可视化规则编辑器 ===
     const isAdvancedMode = ref(false);
@@ -292,6 +297,10 @@
     };
 
     const handleConfirm = () => {
+        if (userAgentError.value) {
+            showToast(userAgentError.value, 'error');
+            return;
+        }
         if (isAdvancedMode.value && excludeRuleState.value.errors.length > 0) {
             showToast(t('subscriptions.ruleErrorFixFirst'), 'error');
             return;
@@ -316,8 +325,11 @@
         v-if="editingSubscription"
         :show="show"
         size="2xl"
-        :confirm-disabled="isAdvancedMode && excludeRuleState.errors.length > 0"
-        :confirm-button-title="t('subscriptions.fixRulesFirst')"
+        :confirm-disabled="
+            Boolean(userAgentError) || (isAdvancedMode && excludeRuleState.errors.length > 0)
+        "
+        :confirm-button-title="userAgentError || t('subscriptions.fixRulesFirst')"
+        :close-on-confirm="false"
         @update:show="emit('update:show', $event)"
         @confirm="handleConfirm"
     >

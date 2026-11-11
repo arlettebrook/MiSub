@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../../shared/user-agents.js';
+
 /**
  * 节点处理器模块
  * 处理节点数量统计、批量更新等节点相关API请求
@@ -107,7 +109,7 @@ export async function handleNodeCountRequest(request, env) {
         const requestedUserAgent =
             typeof customUserAgent === 'string' ? customUserAgent.trim() : '';
         const processedUserAgent =
-            requestedUserAgent || getProcessedUserAgent('clash-verge/v2.5.10', subUrl);
+            requestedUserAgent || getProcessedUserAgent(DEFAULT_USER_AGENT, subUrl);
         if (fetchProxy && typeof fetchProxy === 'string' && fetchProxy.trim()) {
             requestUrl = buildFetchProxyUrl(fetchProxy, subUrl, processedUserAgent);
         }
@@ -119,7 +121,7 @@ export async function handleNodeCountRequest(request, env) {
                 redirect: 'follow',
             };
             const trafficFetchOptions = {
-                headers: { 'User-Agent': 'clash-verge/v2.5.10' },
+                headers: { 'User-Agent': DEFAULT_USER_AGENT },
                 redirect: 'follow',
             };
 

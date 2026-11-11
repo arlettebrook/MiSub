@@ -48,6 +48,48 @@ function createRequest(path, { method = 'GET', body } = {}) {
 }
 
 describe('external subscriptions handler', () => {
+    it.each(['POST', 'PATCH'])(
+        'rejects invalid UA before trimming or saving it through %s',
+        async (method) => {
+            const existing = {
+                id: 'sub-1',
+                name: 'Airport',
+                url: 'https://example.com/sub',
+                customUserAgent: 'clash-verge/v2.4.3',
+            };
+            const env = createEnv({ subscriptions: [existing] });
+            const before = await env.MISUB_KV.get('misub_subscriptions_v1');
+            const response = await handleApiRequest(
+                createRequest(method === 'POST' ? '/subscriptions' : '/subscriptions/sub-1', {
+                    method,
+                    body: { name: 'Airport', url: 'https://example.com/sub', userAgent: '\r\n' },
+                }),
+                env
+            );
+            expect(response.status).toBe(400);
+            expect((await response.json()).error.code).toBe('invalid_user_agent');
+            expect(await env.MISUB_KV.get('misub_subscriptions_v1')).toBe(before);
+        }
+    );
+
+    it('retains an old UA when patching unrelated subscription fields', async () => {
+        const env = createEnv({
+            subscriptions: [
+                {
+                    id: 'sub-1',
+                    name: 'Airport',
+                    url: 'https://example.com/sub',
+                    customUserAgent: 'clash-verge/v2.4.3',
+                },
+            ],
+        });
+        const response = await handleApiRequest(
+            createRequest('/subscriptions/sub-1', { method: 'PATCH', body: { name: 'New name' } }),
+            env
+        );
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.userAgent).toBe('clash-verge/v2.4.3');
+    });
     it('lists only remote subscriptions on /subscriptions', async () => {
         const env = createEnv({
             subscriptions: [

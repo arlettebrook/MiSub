@@ -106,6 +106,58 @@ describe('api-handler storage helper usage', () => {
         infoSpy.mockRestore();
     });
 
+    it.each(['full', 'added', 'updated'])(
+        'rejects an invalid UA before any persistence in %s saves',
+        async (mode) => {
+            const { handleMisubsSave } = await import('../../functions/modules/api-handler.js');
+            const subscription = {
+                id: 'sub-1',
+                url: 'https://example.com/sub',
+                customUserAgent: '\r\n',
+                enabled: false,
+            };
+            getAllSubscriptions.mockResolvedValue([
+                { ...subscription, customUserAgent: 'clash-verge/v2.4.3' },
+            ]);
+            getAllProfiles.mockResolvedValue([]);
+            const body =
+                mode === 'full'
+                    ? { misubs: [subscription], profiles: [] }
+                    : { diff: { subscriptions: { [mode]: [subscription] } } };
+            const response = await handleMisubsSave({ json: async () => body }, { MISUB_DB: {} });
+            expect(response.status).toBe(400);
+            expect(await response.json()).toMatchObject({
+                success: false,
+                code: 'invalid_user_agent',
+                validationCode: 'lineBreaks',
+            });
+            expect(put).not.toHaveBeenCalled();
+            expect(putSubscription).not.toHaveBeenCalled();
+            expect(putProfile).not.toHaveBeenCalled();
+            expect(clearAllNodeCaches).not.toHaveBeenCalled();
+        }
+    );
+
+    it('allows unrelated profile changes without rewriting a stored old UA', async () => {
+        const { handleMisubsSave } = await import('../../functions/modules/api-handler.js');
+        const subscription = {
+            id: 'sub-1',
+            url: 'https://example.com/sub',
+            customUserAgent: 'clash-verge/v2.4.3',
+            enabled: false,
+        };
+        getAllSubscriptions.mockResolvedValue([subscription]);
+        getAllProfiles.mockResolvedValue([]);
+        const response = await handleMisubsSave(
+            { json: async () => ({ diff: { profiles: { added: [{ id: 'profile-1' }] } } }) },
+            { MISUB_DB: {} }
+        );
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.misubs[0].customUserAgent).toBe(
+            subscription.customUserAgent
+        );
+    });
+
     it('handleDataRequest prefers getAll helper APIs', async () => {
         const { handleDataRequest } = await import('../../functions/modules/api-handler.js');
 

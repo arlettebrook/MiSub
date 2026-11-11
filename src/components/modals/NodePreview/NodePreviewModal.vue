@@ -1,4 +1,5 @@
 <script setup>
+    import { DEFAULT_USER_AGENT } from '../../../../shared/user-agents.js';
     import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
     import { api, APIError } from '../../../lib/http.js';
     import { useToastStore } from '../../../stores/toast.js';
@@ -248,7 +249,7 @@
 
         try {
             const requestData = {
-                userAgent: 'clash-verge/v2.5.10',
+                userAgent: DEFAULT_USER_AGENT,
             };
 
             if (props.profileId) {

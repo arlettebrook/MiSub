@@ -25,6 +25,7 @@ import { sendTgNotification, checkAndNotify } from './notifications.js';
 import { clearAllNodeCaches } from '../services/node-cache-service.js';
 import { buildSubscriptionNodeCacheKey } from '../services/subscription-service.js';
 import { maybeRunScheduledTasks } from './scheduled-task-runner.js';
+import { validateUserAgent } from '../../shared/user-agents.js';
 
 import {
     KV_KEY_SUBS,
@@ -338,6 +339,24 @@ export async function handleMisubsSave(request, env) {
                     {
                         success: false,
                         message: 'misubs 和 profiles 必须是数组格式',
+                    },
+                    400
+                );
+            }
+        }
+
+        const userAgentChanges = diff
+            ? [...(diff.subscriptions?.added || []), ...(diff.subscriptions?.updated || [])]
+            : finalMisubs;
+        for (const subscription of userAgentChanges || []) {
+            const result = validateUserAgent(subscription?.customUserAgent);
+            if (!result.valid) {
+                return createJsonResponse(
+                    {
+                        success: false,
+                        message: `Invalid User-Agent for subscription ${subscription?.name || subscription?.id || ''}: ${result.message}`,
+                        code: 'invalid_user_agent',
+                        validationCode: result.code,
                     },
                     400
                 );

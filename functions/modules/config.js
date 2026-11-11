@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
+
 /**
  * Unified config file.
  * Includes constants, KV keys, and default settings for the worker.
@@ -41,7 +43,7 @@ export const DEFAULT_SETTINGS = {
     enableTemplateEngine: true, // 启用模板引擎
     enableEnhancedLogging: true, // 启用增强日志
     maxSubscriptionConcurrency: 3, // 最大订阅并发数
-    defaultUserAgent: 'clash-verge/v2.5.10', // 默认User-Agent
+    defaultUserAgent: DEFAULT_USER_AGENT, // 默认User-Agent
     defaultPrefixSettings: {
         enableManualNodes: true,
         enableSubscriptions: true,
@@ -182,5 +184,5 @@ export const DEFAULT_SETTINGS = {
 export const SYSTEM_CONSTANTS = {
     VERSION: '2.7.0',
     // Use Clash Verge UA to fetch subscriptions reliably.
-    FETCHER_USER_AGENT: 'clash-verge/v2.5.10',
+    FETCHER_USER_AGENT: DEFAULT_USER_AGENT,
 };

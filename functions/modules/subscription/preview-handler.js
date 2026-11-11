@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../../shared/user-agents.js';
+
 import { StorageFactory } from '../../storage-adapter.js';
 import {
     createJsonResponse,
@@ -38,7 +40,7 @@ export async function handlePublicPreviewRequest(request, env) {
 
     try {
         const requestData = await readJsonWithLimit(request, JSON_BODY_LIMITS.normal);
-        const { profileId, userAgent = 'clash-verge/v2.5.10' } = requestData;
+        const { profileId, userAgent = DEFAULT_USER_AGENT } = requestData;
 
         if (!profileId) {
             return createJsonResponse({ error: 'Missing profile ID' }, 400);
@@ -101,7 +103,7 @@ export async function handleSubscriptionNodesRequest(request, env) {
             url: subscriptionUrl,
             subscriptionId,
             profileId,
-            userAgent = 'clash-verge/v2.5.10',
+            userAgent = DEFAULT_USER_AGENT,
             applyTransform = false, // 管理后台默认不应用转换，由前端控制
             skipCertVerify = false,
             plusAsSpace = false,

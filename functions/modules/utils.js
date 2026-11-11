@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
+
 /**
  * 工具函数模块
  * 包含各种通用的辅助函数
@@ -316,18 +318,18 @@ export function getProcessedUserAgent(originalUserAgent, url = '') {
         const parsedUrl = new URL(rawUrl);
         const params = parsedUrl.searchParams;
         if (params.has('clash') || params.get('target')?.toLowerCase() === 'clash') {
-            return 'clash-verge/v2.5.10';
+            return DEFAULT_USER_AGENT;
         }
     } catch {
         if (/[?&](?:clash(?:=|&|$)|target=clash(?:&|$))/i.test(rawUrl)) {
-            return 'clash-verge/v2.5.10';
+            return DEFAULT_USER_AGENT;
         }
     }
 
     // CF-Workers-SUB的精华策略：
     // 默认使用 Clash Verge UA 获取订阅。
     // 个别 Clash 专用链接（如 ?clash=2）会严格校验 UA，需要保留 Clash UA。
-    return 'clash-verge/v2.5.10';
+    return DEFAULT_USER_AGENT;
 }
 /**
  * 名称前缀辅助函数

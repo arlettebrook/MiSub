@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../shared/user-agents.js';
+
 /**
  * Cron Triggers 定时同步服务
  * 使用 Cloudflare Pages Functions 的 Cron Triggers 功能
@@ -121,7 +123,7 @@ async function getSubscriptionsToSync(env) {
  * 同步单个订阅
  */
 async function syncSingleSubscription(subscription, env) {
-    const { url, userAgent = 'clash-verge/v2.5.10', timeout = 30000 } = subscription;
+    const { url, userAgent = DEFAULT_USER_AGENT, timeout = 30000 } = subscription;
 
     console.log(`[Cron Sync] Syncing subscription: ${subscription.name}`);
 

@@ -13,6 +13,7 @@ import {
 import { isRemoteSubscription, toExternalSubscription } from './external-api-mappers.js';
 import { handleNodeCountRequest } from './handlers/node-handler.js';
 import { getProcessedUserAgent } from '../utils/format-utils.js';
+import { validateUserAgent } from '../../shared/user-agents.js';
 
 function nowIso() {
     return new Date().toISOString();
@@ -277,6 +278,10 @@ export async function handleExternalSubscriptionsRequest(request, env, selector 
 
     if (request.method === 'POST' && !id) {
         const payload = await readExternalJson(request);
+        const userAgentValidation = validateUserAgent(payload?.userAgent);
+        if (!userAgentValidation.valid) {
+            return createExternalError('invalid_user_agent', userAgentValidation.message, 400);
+        }
         if (!String(payload?.name || '').trim())
             return createExternalError(
                 'subscription_name_required',
@@ -324,6 +329,10 @@ export async function handleExternalSubscriptionsRequest(request, env, selector 
         if (!current)
             return createExternalError('subscription_not_found', 'Subscription not found', 404);
         const payload = await readExternalJson(request);
+        const userAgentValidation = validateUserAgent(payload?.userAgent);
+        if (!userAgentValidation.valid) {
+            return createExternalError('invalid_user_agent', userAgentValidation.message, 400);
+        }
         const updated = {
             ...current,
             ...(payload.name !== undefined ? { name: String(payload.name || '').trim() } : {}),

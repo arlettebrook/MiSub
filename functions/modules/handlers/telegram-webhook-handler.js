@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT } from '../../../shared/user-agents.js';
+
 /**
  * Telegram Bot Webhook 处理模块 v2
  * 用于接收和处理用户通过 Telegram 推送的节点
@@ -1486,7 +1488,7 @@ async function handleImportCommand(chatId, userId, args, env) {
                 const response = await fetch(input, {
                     method: 'GET',
                     headers: {
-                        'User-Agent': 'clash-verge/v2.5.10',
+                        'User-Agent': DEFAULT_USER_AGENT,
                         Accept: '*/*',
                     },
                 });
