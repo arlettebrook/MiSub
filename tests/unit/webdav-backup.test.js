@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 function createMemoryKV(initial = {}) {
     const store = new Map(
@@ -357,5 +357,328 @@ describe('WebDAV backup payload and restore', () => {
         expect(formatBackupFilename('backup-{datetime}-{date}.json', now)).toBe(
             'backup-2026-08-11-00-30-45-2026-08-11.json'
         );
+    });
+});
+
+function createRetentionEnv(config = {}) {
+    const defaults = JSON.parse(createEnv().MISUB_KV.dump().worker_settings_v1).webdavBackup;
+    return createEnv({ webdavBackup: { ...defaults, ...config } });
+}
+
+function mockWebdavServer(entries, options = {}) {
+    const files = new Map(entries.map((entry) => [entry.path, entry]));
+    const prefix = '/remote.php/dav/files/user';
+    const escapeXml = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const fetchMock = vi.fn(async (url, init) => {
+        const path = decodeURIComponent(new URL(url).pathname.slice(prefix.length));
+        if (init.method === 'MKCOL') return new Response(null, { status: 405 });
+        if (init.method === 'PUT') {
+            if (options.uploadStatus) return new Response(null, { status: options.uploadStatus });
+            if (!options.omitUploadFromList) {
+                files.set(path, { path, modifiedAt: new Date().toUTCString() });
+            }
+            return new Response(null, { status: 201 });
+        }
+        if (init.method === 'PROPFIND') {
+            if (options.listStatus) return new Response(null, { status: options.listStatus });
+            if (options.listBody) return new Response(options.listBody, { status: 207 });
+            const responses = [...files.values(), ...(options.extraEntries || [])].map((entry) => {
+                const href =
+                    entry.href ||
+                    `${prefix}${entry.path.split('/').map(encodeURIComponent).join('/')}`;
+                const properties = `${entry.modifiedAt ? `<d:getlastmodified>${entry.modifiedAt}</d:getlastmodified>` : ''}
+                    ${entry.collection ? '<d:resourcetype><d:collection /></d:resourcetype>' : '<d:resourcetype />'}`;
+                return `<d:response><d:href>${escapeXml(href)}</d:href>
+                    <d:propstat><d:prop>${properties}</d:prop><d:status>HTTP/1.1 ${entry.status || 200} OK</d:status></d:propstat>
+                    </d:response>`;
+            });
+            return new Response(
+                `<d:multistatus xmlns:d="DAV:">${responses.join('')}</d:multistatus>`,
+                { status: 207 }
+            );
+        }
+        if (init.method === 'DELETE') {
+            if (options.deleteErrors?.[path]) throw new Error(options.deleteErrors[path]);
+            const status = options.deleteStatuses?.[path] || 204;
+            if ([200, 204, 404, 410].includes(status)) files.delete(path);
+            return new Response(null, { status });
+        }
+        throw new Error(`Unexpected WebDAV request: ${init.method}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return {
+        files,
+        fetchMock,
+        deletions: () =>
+            fetchMock.mock.calls
+                .filter(([, init]) => init.method === 'DELETE')
+                .map(([url]) => decodeURIComponent(new URL(url).pathname.slice(prefix.length))),
+    };
+}
+
+const oldBackup = (day, directory = '/MiSub') => ({
+    path: `${directory}/misub-backup-2026-11-${String(day).padStart(2, '0')}-12-00-00.json`,
+});
+
+describe('WebDAV backup retention', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        vi.unstubAllGlobals();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-11-11T04:00:00.000Z'));
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it.each(['manual', 'lazy-cron'])(
+        'keeps the latest configured number after a successful %s backup',
+        async (trigger) => {
+            const { performWebdavBackup } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const server = mockWebdavServer([
+                oldBackup(9),
+                oldBackup(6),
+                oldBackup(10),
+                oldBackup(8),
+            ]);
+            const env = createRetentionEnv({ retentionCount: 3 });
+            const result = await performWebdavBackup(env, { trigger });
+
+            expect(result.success).toBe(true);
+            expect(result.cleanup).toMatchObject({ success: true, deleted: 2, retentionCount: 3 });
+            expect([...server.files.keys()].sort()).toEqual(
+                [oldBackup(9).path, oldBackup(10).path, result.file].sort()
+            );
+            expect(server.deletions()).toEqual([oldBackup(6).path, oldBackup(8).path]);
+            expect(server.fetchMock.mock.calls.map(([, init]) => init.method)).toEqual([
+                'MKCOL',
+                'PUT',
+                'PROPFIND',
+                'DELETE',
+                'DELETE',
+            ]);
+            const settings = JSON.parse(env.MISUB_KV.dump().worker_settings_v1);
+            expect(settings.webdavBackup.lastBackupStatus).toBe('success');
+            expect(settings.webdavBackup.lastBackupFile).toBe(result.file);
+        }
+    );
+
+    it('orders backups by server modification time when it differs from filename order', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const olderName = { ...oldBackup(1), modifiedAt: 'Tue, 10 Nov 2026 04:00:00 GMT' };
+        const newerName = { ...oldBackup(10), modifiedAt: 'Sun, 01 Nov 2026 04:00:00 GMT' };
+        const server = mockWebdavServer([olderName, newerName]);
+        await performWebdavBackup(createRetentionEnv({ retentionCount: 2 }));
+        expect(server.deletions()).toEqual([newerName.path]);
+        expect(server.files.has(olderName.path)).toBe(true);
+    });
+
+    it('keeps the uploaded file and reserves its slot if it is missing from the listing', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const server = mockWebdavServer([oldBackup(9), oldBackup(10)], {
+            omitUploadFromList: true,
+        });
+        const result = await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
+        expect(server.deletions()).toEqual([oldBackup(9).path, oldBackup(10).path]);
+        expect(server.deletions()).not.toContain(result.file);
+    });
+
+    it.each([0, 2])(
+        'does not delete when the total is within the limit (%i older files)',
+        async (count) => {
+            const { performWebdavBackup } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const server = mockWebdavServer(
+                Array.from({ length: count }, (_, index) => oldBackup(index + 1))
+            );
+            await performWebdavBackup(createRetentionEnv({ retentionCount: 3 }));
+            expect(server.deletions()).toEqual([]);
+        }
+    );
+
+    it.each([
+        [undefined, 7],
+        [0, 7],
+        [-2, 7],
+        ['invalid', 7],
+        [true, 7],
+        [2.8, 2],
+        ['3', 3],
+        [1000, 100],
+    ])('normalizes the configured retention count (%j → %i)', async (configured, expected) => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const server = mockWebdavServer(
+            Array.from({ length: 9 }, (_, index) => oldBackup(index + 1))
+        );
+        const result = await performWebdavBackup(
+            createRetentionEnv({ retentionCount: configured })
+        );
+        expect(result.cleanup.retentionCount).toBe(expected);
+        expect(server.files.size).toBe(Math.min(10, expected));
+        expect(server.files.has(result.file)).toBe(true);
+    });
+
+    it('handles custom filename templates and includes backups using the default template', async () => {
+        const { performWebdavBackup, listWebdavBackupFiles } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const directory = '/备份 & 数据';
+        const customFile = { path: `${directory}/[MiSub]+-2026-11-10-12-00-00.json` };
+        const legacyFile = oldBackup(9, directory);
+        const unrelatedFile = { path: `${directory}/xMiSub-2026-11-08-12-00-00.json` };
+        const server = mockWebdavServer([customFile, legacyFile, unrelatedFile]);
+        const env = createRetentionEnv({
+            remotePath: `${directory}/`,
+            filenameTemplate: '[MiSub]+-{datetime}.json',
+            retentionCount: 2,
+        });
+        const result = await performWebdavBackup(env);
+
+        expect(server.deletions()).toEqual([legacyFile.path]);
+        expect(server.files.has(unrelatedFile.path)).toBe(true);
+        expect((await listWebdavBackupFiles(env)).map((file) => file.path)).toEqual([
+            result.file,
+            customFile.path,
+        ]);
+        expect(
+            server.fetchMock.mock.calls.filter(([, init]) => init.method === 'DELETE')[0][1]
+                .redirect
+        ).toBe('error');
+    });
+
+    it('supports backups in the endpoint root', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const server = mockWebdavServer([oldBackup(10, '')]);
+        const result = await performWebdavBackup(
+            createRetentionEnv({ remotePath: '/', retentionCount: 1 })
+        );
+        expect(result.cleanup.success).toBe(true);
+        expect(server.deletions()).toEqual([oldBackup(10, '').path]);
+        expect(server.files.has(result.file)).toBe(true);
+    });
+
+    it.each(['', null])(
+        'uses the default filename template when it is empty (%j)',
+        async (filenameTemplate) => {
+            const { performWebdavBackup } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const server = mockWebdavServer([oldBackup(10)]);
+            const result = await performWebdavBackup(
+                createRetentionEnv({ filenameTemplate, retentionCount: 1 })
+            );
+            expect(result.cleanup).toMatchObject({ success: true, deleted: 1 });
+            expect(server.files.has(result.file)).toBe(true);
+        }
+    );
+
+    it('excludes unrelated files, collections, failed responses, and paths outside the configured directory', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const excluded = [
+            { path: '/MiSub/notes.json' },
+            { path: '/MiSub/report-misub-backup-2026-11-01-12-00-00.json' },
+            { ...oldBackup(1), collection: true },
+            { ...oldBackup(2), status: 404 },
+            oldBackup(3, '/Other'),
+            oldBackup(4, '/MiSub/nested'),
+            {
+                ...oldBackup(5),
+                href: 'https://evil.example/remote.php/dav/files/user/MiSub/misub-backup-2026-11-05-12-00-00.json',
+            },
+            {
+                ...oldBackup(6),
+                href: '/another-endpoint/MiSub/misub-backup-2026-11-06-12-00-00.json',
+            },
+            {
+                ...oldBackup(7),
+                href: '/remote.php/dav/files/user/MiSub/..%2Fmisub-backup-2026-11-07-12-00-00.json',
+            },
+        ];
+        const server = mockWebdavServer([...excluded, oldBackup(10)], {
+            extraEntries: [oldBackup(10)],
+        });
+        await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
+        expect(server.deletions()).toEqual([oldBackup(10).path]);
+        excluded.forEach((entry) => expect(server.files.has(entry.path)).toBe(true));
+    });
+
+    it('protects backups uploaded by another request after this backup started', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const newerFile = oldBackup(12);
+        const server = mockWebdavServer([oldBackup(10), newerFile]);
+        const result = await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
+        expect(server.deletions()).toEqual([oldBackup(10).path]);
+        expect(server.files.has(newerFile.path)).toBe(true);
+        expect(server.files.has(result.file)).toBe(true);
+    });
+
+    it('never lists or deletes old backups when uploading fails', async () => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const server = mockWebdavServer([oldBackup(9), oldBackup(10)], { uploadStatus: 500 });
+        const env = createRetentionEnv({ retentionCount: 1 });
+        await expect(performWebdavBackup(env)).rejects.toThrow('WebDAV 上传失败');
+        expect(server.fetchMock.mock.calls.map(([, init]) => init.method)).toEqual([
+            'MKCOL',
+            'PUT',
+        ]);
+        expect(server.files.size).toBe(2);
+        expect(
+            JSON.parse(env.MISUB_KV.dump().worker_settings_v1).webdavBackup.lastBackupStatus
+        ).toBe('failed');
+    });
+
+    it.each([
+        { listStatus: 403 },
+        { listBody: '<html>Access denied</html>' },
+        { listBody: '<d:multistatus xmlns:d="DAV:"><d:response>truncated' },
+    ])('keeps the uploaded backup successful if listing fails (%j)', async (options) => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const server = mockWebdavServer([oldBackup(10)], options);
+        const env = createRetentionEnv({ retentionCount: 1 });
+        const result = await performWebdavBackup(env);
+        expect(result.success).toBe(true);
+        expect(result.cleanup.success).toBe(false);
+        expect(result.message).toContain('旧备份清理失败');
+        expect(server.deletions()).toEqual([]);
+        expect(server.files.has(result.file)).toBe(true);
+        const savedConfig = JSON.parse(env.MISUB_KV.dump().worker_settings_v1).webdavBackup;
+        expect(savedConfig.lastBackupStatus).toBe('success');
+        expect(savedConfig.lastBackupMessage).toBe(result.message);
+    });
+
+    it.each([403, 207, 'network'])(
+        'reports deletion failures and continues cleaning other old files (%j)',
+        async (failure) => {
+            const { performWebdavBackup } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const options =
+                failure === 'network'
+                    ? { deleteErrors: { [oldBackup(9).path]: 'Network unavailable' } }
+                    : { deleteStatuses: { [oldBackup(9).path]: failure } };
+            const server = mockWebdavServer([oldBackup(9), oldBackup(10)], options);
+            const result = await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
+            expect(result.success).toBe(true);
+            expect(result.cleanup).toMatchObject({ success: false, deleted: 1 });
+            expect(result.cleanup.message).toContain(oldBackup(9).path.split('/').pop());
+            expect(server.deletions()).toEqual([oldBackup(9).path, oldBackup(10).path]);
+            expect(server.files.has(result.file)).toBe(true);
+        }
+    );
+
+    it.each([404, 410])('treats already removed files as cleaned (HTTP %i)', async (status) => {
+        const { performWebdavBackup } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        mockWebdavServer([oldBackup(10)], { deleteStatuses: { [oldBackup(10).path]: status } });
+        const result = await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
+        expect(result.cleanup).toMatchObject({ success: true, deleted: 1 });
     });
 });

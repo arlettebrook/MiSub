@@ -76,7 +76,16 @@
             config.lastBackupStatus = 'success';
             config.lastBackupMessage = result.message;
             config.lastBackupFile = result.file;
-            showToast(t('settings.webdavBackupSuccess'), 'success');
+            if (result.cleanup?.success === false) {
+                showToast(
+                    t('settings.webdavCleanupFailedWithMessage', {
+                        message: result.cleanup.message,
+                    }),
+                    'warning'
+                );
+            } else {
+                showToast(t('settings.webdavBackupSuccess'), 'success');
+            }
         } catch (error) {
             showToast(
                 t('settings.webdavBackupFailedWithMessage', { message: error.message }),
@@ -280,13 +289,18 @@
                     v-model="settings.webdavBackup.filenameTemplate"
                     placeholder="misub-backup-{datetime}.json"
                 />
-                <Input
-                    :label="t('settings.webdavRetentionCount')"
-                    v-model.number="settings.webdavBackup.retentionCount"
-                    type="number"
-                    min="1"
-                    max="100"
-                />
+                <div class="space-y-2">
+                    <Input
+                        :label="t('settings.webdavRetentionCount')"
+                        v-model.number="settings.webdavBackup.retentionCount"
+                        type="number"
+                        min="1"
+                        max="100"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ t('settings.webdavRetentionHint') }}
+                    </p>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

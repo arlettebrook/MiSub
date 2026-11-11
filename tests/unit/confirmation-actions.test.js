@@ -118,6 +118,26 @@ describe('actions guarded by confirmation dialogs', () => {
         expect(mocks.del).toHaveBeenCalledExactlyOnceWith('/api/logs');
     });
 
+    it('shows a cleanup warning while preserving the successful backup status', async () => {
+        const settings = { webdavBackup: { ...DEFAULT_SETTINGS.webdavBackup, enabled: true } };
+        mocks.post.mockResolvedValue({
+            success: true,
+            timestamp: '2026-11-11T04:00:00.000Z',
+            file: '/MiSub/misub-backup-2026-11-11-12-00-00.json',
+            message: '备份成功，但旧备份清理失败: HTTP 403',
+            cleanup: { success: false, deleted: 0, message: 'HTTP 403' },
+        });
+        await mountAction(WebdavBackupSettings, { settings });
+        await click(button('settings.webdavRunBackup'));
+        await click(confirmation().querySelectorAll('button')[1]);
+        expect(settings.webdavBackup.lastBackupStatus).toBe('success');
+        expect(settings.webdavBackup.lastBackupMessage).toContain('HTTP 403');
+        expect(mocks.showToast).toHaveBeenLastCalledWith(
+            i18n.t('settings.webdavCleanupFailedWithMessage', { message: 'HTTP 403' }),
+            'warning'
+        );
+    });
+
     it('restores a WebDAV file only after approval', async () => {
         vi.useFakeTimers();
         mocks.get.mockResolvedValue({

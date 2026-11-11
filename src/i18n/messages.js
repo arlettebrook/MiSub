@@ -856,6 +856,7 @@ export const messages = {
             webdavPasswordPlaceholder: 'WebDAV 密码',
             webdavFilenameTemplate: '文件名模板',
             webdavRetentionCount: '保留份数',
+            webdavRetentionHint: '每次成功备份后自动清理旧文件，仅保留最近指定份数（1–100 份）。',
             webdavBackupScope: '备份范围',
             webdavScopeDataOnly: '仅数据',
             webdavScopeDataOnlyDesc: '机场订阅、手动节点、自定义订阅组、自定义规则模板。',
@@ -901,6 +902,7 @@ export const messages = {
             webdavRunBackupConfirm: '确定立即执行 WebDAV 备份吗？请先确认已保存当前 WebDAV 配置。',
             webdavBackupFailed: '备份失败',
             webdavBackupSuccess: 'WebDAV 备份成功',
+            webdavCleanupFailedWithMessage: '备份成功，但旧备份清理失败: {message}',
             webdavBackupFailedWithMessage: 'WebDAV 备份失败: {message}',
             webdavRestoreLocalConfirm:
                 '确定从该备份恢复吗？\n\n备份范围：{scope}\n恢复会按 MiSub 数据域覆盖，不会清空整个 KV/D1，WebDAV 配置会保留当前值。',
@@ -2454,6 +2456,8 @@ export const messages = {
             webdavPasswordPlaceholder: 'WebDAV password',
             webdavFilenameTemplate: 'Filename template',
             webdavRetentionCount: 'Retention count',
+            webdavRetentionHint:
+                'After each successful backup, older files are removed to keep the most recent 1–100 backups as configured.',
             webdavBackupScope: 'Backup scope',
             webdavScopeDataOnly: 'Data only',
             webdavScopeDataOnlyDesc:
@@ -2502,6 +2506,8 @@ export const messages = {
                 'Run WebDAV backup now? Make sure the current WebDAV configuration is saved first.',
             webdavBackupFailed: 'Backup failed',
             webdavBackupSuccess: 'WebDAV backup succeeded',
+            webdavCleanupFailedWithMessage:
+                'Backup succeeded, but old backup cleanup failed: {message}',
             webdavBackupFailedWithMessage: 'WebDAV backup failed: {message}',
             webdavRestoreLocalConfirm:
                 'Restore from this backup?\n\nScope: {scope}\nRestore overwrites MiSub data domains, does not clear the whole KV/D1, and keeps current WebDAV configuration.',

@@ -25,7 +25,6 @@ export const BACKUP_SCOPES = {
 };
 
 const RESTORE_SNAPSHOT_KEY = 'misub_restore_snapshot_latest';
-const BACKUP_FILENAME_PREFIX = 'misub-backup-';
 const BACKUP_TIMEZONE_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DEFAULT_WEBDAV_CONFIG = {
     enabled: false,
@@ -56,7 +55,16 @@ function normalizeScope(scope) {
 }
 
 function normalizeWebdavConfig(settings = {}) {
-    return { ...DEFAULT_WEBDAV_CONFIG, ...(settings.webdavBackup || {}) };
+    const config = { ...DEFAULT_WEBDAV_CONFIG, ...(settings.webdavBackup || {}) };
+    const retentionCount =
+        typeof config.retentionCount === 'number' || typeof config.retentionCount === 'string'
+            ? Number(config.retentionCount)
+            : NaN;
+    config.retentionCount =
+        Number.isFinite(retentionCount) && retentionCount >= 1
+            ? Math.min(100, Math.floor(retentionCount))
+            : DEFAULT_WEBDAV_CONFIG.retentionCount;
+    return config;
 }
 
 function sanitizeRuntimeSecrets(settings = {}) {
@@ -304,11 +312,16 @@ function decodeWebdavPathSegment(segment) {
 
 function normalizeWebdavHref(endpoint, href) {
     const endpointUrl = new URL(endpoint);
-    const hrefUrl = new URL(String(href || '').replace(/&amp;/gi, '&'), `${endpointUrl.origin}/`);
+    let hrefUrl;
+    try {
+        hrefUrl = new URL(String(href || ''), `${endpointUrl.origin}/`);
+    } catch {
+        return null;
+    }
 
     // A PROPFIND response can contain absolute URLs. Never turn a URL from a
     // different origin into a path that will later be fetched with credentials.
-    if (hrefUrl.origin !== endpointUrl.origin) return null;
+    if (hrefUrl.origin !== endpointUrl.origin || hrefUrl.search || hrefUrl.hash) return null;
 
     const endpointPath = endpointUrl.pathname.replace(/\/+$/, '');
     const hrefPath = hrefUrl.pathname;
@@ -316,6 +329,13 @@ function normalizeWebdavHref(endpoint, href) {
 
     const relativePath = hrefPath.slice(endpointPath.length);
     const decodedParts = relativePath.split('/').filter(Boolean).map(decodeWebdavPathSegment);
+    if (
+        decodedParts.some(
+            (part) => part === '.' || part === '..' || /[/\\\u0000-\u001f]/.test(part)
+        )
+    ) {
+        return null;
+    }
     return decodedParts.length ? `/${decodedParts.join('/')}` : '/';
 }
 
@@ -380,6 +400,46 @@ async function updateBackupStatus(env, patch) {
     return webdavBackup;
 }
 
+async function cleanupWebdavBackups(config, latestFilePath, uploadedAt) {
+    const result = {
+        success: true,
+        deleted: 0,
+        retentionCount: config.retentionCount,
+        message: '',
+    };
+    try {
+        const files = await listWebdavFiles(config);
+        // Reserve a slot even when the server has not yet listed the new upload.
+        const olderFiles = files.filter((file) => file.path !== latestFilePath);
+        const obsoleteFiles = olderFiles.slice(config.retentionCount - 1).reverse();
+        const errors = [];
+        for (const file of obsoleteFiles) {
+            // Another backup may have uploaded while this one was running.
+            if (file.modifiedAt > Date.parse(uploadedAt)) continue;
+            try {
+                const response = await webdavFetch(config, file.path, {
+                    method: 'DELETE',
+                    redirect: 'error',
+                });
+                if (
+                    (!response.ok || response.status === 207) &&
+                    ![404, 410].includes(response.status)
+                ) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                result.deleted += 1;
+            } catch (error) {
+                errors.push(`${file.name}: ${error.message || '删除失败'}`);
+            }
+        }
+        if (errors.length) throw new Error(errors.join('; '));
+    } catch (error) {
+        result.success = false;
+        result.message = error.message || '旧备份清理失败';
+    }
+    return result;
+}
+
 export async function performWebdavBackup(env, options = {}) {
     const { storageAdapter } = await getStorage(env);
     const settings = (await storageAdapter.get(KV_KEY_SETTINGS)) || {};
@@ -391,7 +451,7 @@ export async function performWebdavBackup(env, options = {}) {
         trigger: options.trigger || 'manual',
     });
     const filename = formatBackupFilename(config.filenameTemplate);
-    const remotePath = `${String(config.remotePath || '/MiSub').replace(/\/+$/, '')}/${filename}`;
+    const remotePath = `${webdavRemoteDirectory(config).replace(/\/$/, '')}/${filename}`;
     const body = JSON.stringify(payload, null, 2);
 
     try {
@@ -405,20 +465,25 @@ export async function performWebdavBackup(env, options = {}) {
             throw new Error(`WebDAV 上传失败: HTTP ${response.status}`);
         }
 
+        const cleanup = await cleanupWebdavBackups(config, remotePath, payload.exportedAt);
+        const message = cleanup.success
+            ? '备份成功'
+            : `备份成功，但旧备份清理失败: ${cleanup.message}`;
         await updateBackupStatus(env, {
             lastBackupAt: payload.exportedAt,
             lastBackupStatus: 'success',
-            lastBackupMessage: '备份成功',
+            lastBackupMessage: message,
             lastBackupFile: remotePath,
         });
 
         return {
             success: true,
-            message: '备份成功',
+            message,
             file: remotePath,
             size: body.length,
             scope: payload.scope,
             timestamp: payload.exportedAt,
+            cleanup,
         };
     } catch (error) {
         await updateBackupStatus(env, {
@@ -514,30 +579,108 @@ export async function handleBackupRestore(request, env) {
     }
 }
 
-export async function listWebdavBackupFiles(env) {
-    const { storageAdapter } = await getStorage(env);
-    const settings = (await storageAdapter.get(KV_KEY_SETTINGS)) || {};
-    const config = normalizeWebdavConfig(settings);
-    const remoteDir = String(config.remotePath || '/MiSub').replace(/\/+$/, '');
-    const response = await webdavFetch(config, remoteDir || '/', {
+function webdavRemoteDirectory(config) {
+    const parts = String(config.remotePath || '/MiSub')
+        .split('/')
+        .filter(Boolean);
+    return parts.length ? `/${parts.join('/')}` : '/';
+}
+
+function backupFilenamePattern(template) {
+    const safeTemplate = template || DEFAULT_WEBDAV_CONFIG.filenameTemplate;
+    const tokens = {
+        '{date}': '\\d{4}-\\d{2}-\\d{2}',
+        '{datetime}': '\\d{4}-\\d{2}-\\d{2}[-_T ]\\d{2}-\\d{2}-\\d{2}',
+    };
+    const pattern = safeTemplate
+        .split(/(\{date\}|\{datetime\})/g)
+        .map((part) => tokens[part] || part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('');
+    return new RegExp(`^${pattern}$`);
+}
+
+function decodeWebdavXml(text) {
+    const entities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+    return text.replace(/&(amp|lt|gt|quot|apos|#x[\da-f]+|#\d+);/gi, (match, entity) => {
+        if (entity[0] !== '#') return entities[entity.toLowerCase()];
+        const hex = entity[1].toLowerCase() === 'x';
+        const codePoint = parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
+        return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
+    });
+}
+
+function webdavXmlElement(xml, name) {
+    const pattern = new RegExp(
+        `<(?:[\\w.-]+:)?${name}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?${name}\\s*>`,
+        'i'
+    );
+    return decodeWebdavXml(xml.match(pattern)?.[1]?.trim() || '');
+}
+
+function backupFileTime(name) {
+    const match = name.match(/(\d{4}-\d{2}-\d{2})(?:[-_T ](\d{2})-(\d{2})-(\d{2}))?/);
+    if (!match) return 0;
+    const timestamp = Date.parse(
+        `${match[1]}T${match[2] || '00'}:${match[3] || '00'}:${match[4] || '00'}+08:00`
+    );
+    return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+async function listWebdavFiles(config) {
+    const remoteDir = webdavRemoteDirectory(config);
+    const response = await webdavFetch(config, remoteDir, {
         method: 'PROPFIND',
         headers: { Depth: '1' },
     });
     if (!response.ok) throw new Error(`列出 WebDAV 备份失败: HTTP ${response.status}`);
 
-    const xml = await response.text();
-    const hrefs = Array.from(xml.matchAll(/<[^:>]*:?href[^>]*>([^<]+)<\/[^:>]*:?href>/gi))
-        .map((match) => normalizeWebdavHref(config.endpoint, match[1]))
-        .filter(Boolean);
-    const files = hrefs
-        .filter((href) => href.endsWith('.json') && href.includes(BACKUP_FILENAME_PREFIX))
-        .map((href) => ({
-            path: href,
-            name: href.split('/').filter(Boolean).pop(),
-        }))
-        .sort((a, b) => String(b.name).localeCompare(String(a.name)));
+    const xml = (await response.text()).replace(/<!--[\s\S]*?-->/g, '');
+    if (!/<(?:[\w.-]+:)?multistatus\b[^>]*>[\s\S]*<\/(?:[\w.-]+:)?multistatus\s*>/i.test(xml)) {
+        throw new Error('无效的 WebDAV 文件列表');
+    }
+    const namePatterns = [config.filenameTemplate, DEFAULT_WEBDAV_CONFIG.filenameTemplate].map(
+        backupFilenamePattern
+    );
+    const files = new Map();
+    const responses = xml.matchAll(
+        /<(?:[\w.-]+:)?response\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?response\s*>/gi
+    );
+    for (const [, entry] of responses) {
+        const href = webdavXmlElement(entry, 'href');
+        if (!href || href.endsWith('/')) continue;
+        const path = normalizeWebdavHref(config.endpoint, href);
+        if (!path || (path.slice(0, path.lastIndexOf('/')) || '/') !== remoteDir) continue;
+        const name = path.slice(path.lastIndexOf('/') + 1);
+        if (!namePatterns.some((pattern) => pattern.test(name))) continue;
 
-    return files;
+        const propstats = Array.from(
+            entry.matchAll(/<(?:[\w.-]+:)?propstat\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?propstat\s*>/gi)
+        );
+        const successfulProps = propstats
+            .filter(([, propstat]) => /\s2\d{2}(?:\s|$)/.test(webdavXmlElement(propstat, 'status')))
+            .map(([, propstat]) => webdavXmlElement(propstat, 'prop'))
+            .join('');
+        if (propstats.length && !successfulProps) continue;
+        const status = propstats.length ? '' : webdavXmlElement(entry, 'status');
+        if (status && !/\s2\d{2}(?:\s|$)/.test(status)) continue;
+        if (/<(?:[\w.-]+:)?collection\b/i.test(successfulProps)) continue;
+
+        const modifiedAt =
+            Date.parse(webdavXmlElement(successfulProps, 'getlastmodified')) ||
+            Date.parse(webdavXmlElement(successfulProps, 'creationdate')) ||
+            backupFileTime(name);
+        if (!files.has(path)) files.set(path, { path, name, modifiedAt });
+    }
+    return [...files.values()].sort(
+        (a, b) => b.modifiedAt - a.modifiedAt || b.name.localeCompare(a.name)
+    );
+}
+
+export async function listWebdavBackupFiles(env) {
+    const { storageAdapter } = await getStorage(env);
+    const settings = (await storageAdapter.get(KV_KEY_SETTINGS)) || {};
+    const files = await listWebdavFiles(normalizeWebdavConfig(settings));
+    return files.map(({ path, name }) => ({ path, name }));
 }
 
 export async function handleWebdavBackupList(request, env) {
