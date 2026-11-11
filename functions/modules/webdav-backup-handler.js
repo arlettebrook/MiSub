@@ -562,6 +562,23 @@ export async function fetchWebdavBackupFile(env, filePath) {
     return response.json();
 }
 
+export async function handleWebdavBackupDownload(request, env) {
+    if (request.method !== 'POST') return createErrorResponse('Method Not Allowed', 405);
+    try {
+        const body = await readJsonWithLimit(request, JSON_BODY_LIMITS.normal);
+        if (typeof body?.file !== 'string' || !body.file.trim()) {
+            return createJsonResponse({ success: false, message: '请选择远端备份文件' }, 400);
+        }
+        const payload = await fetchWebdavBackupFile(env, body.file);
+        return createJsonResponse({ success: true, exportData: payload });
+    } catch (error) {
+        return createJsonResponse(
+            { success: false, message: error.message || '下载备份失败' },
+            error.status || 400
+        );
+    }
+}
+
 export async function handleWebdavRestore(request, env) {
     if (request.method !== 'POST') return createErrorResponse('Method Not Allowed', 405);
     try {

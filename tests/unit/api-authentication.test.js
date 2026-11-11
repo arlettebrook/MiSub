@@ -21,6 +21,7 @@ const PRIVATE_ROUTES = [
     ['/backup/webdav/test', 'POST'],
     ['/backup/webdav/run', 'POST'],
     ['/backup/webdav/list', 'GET'],
+    ['/backup/webdav/download', 'POST'],
     ['/backup/webdav/restore', 'POST'],
     ['/node_count', 'POST'],
     ['/nodes/health', 'POST'],

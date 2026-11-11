@@ -43,6 +43,7 @@ import {
     handleWebdavBackupTest,
     handleManualWebdavBackup,
     handleWebdavBackupList,
+    handleWebdavBackupDownload,
     handleWebdavRestore,
     handleBackupExport,
     handleBackupRestore,
@@ -484,6 +485,9 @@ async function dispatchApiRequest(request, env, context, path) {
 
         case '/backup/webdav/list':
             return await handleWebdavBackupList(request, env);
+
+        case '/backup/webdav/download':
+            return await handleWebdavBackupDownload(request, env);
 
         case '/backup/webdav/restore':
             return await handleWebdavRestore(request, env);

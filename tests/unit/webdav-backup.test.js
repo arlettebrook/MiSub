@@ -259,6 +259,96 @@ describe('WebDAV backup payload and restore', () => {
         );
     });
 
+    it('downloads the selected remote payload without restoring or changing storage', async () => {
+        const { buildBackupPayload, handleWebdavBackupDownload } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const env = createEnv();
+        const payload = await buildBackupPayload(env, { scope: 'dataAndSettings' });
+        payload.exportedAt = '2026-08-09T04:00:00.000Z';
+        payload.extraMetadata = { keep: true };
+        const before = env.MISUB_KV.dump();
+        const put = vi.spyOn(env.MISUB_KV, 'put');
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify(payload), {
+                headers: { 'Content-Type': 'application/json' },
+            })
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await handleWebdavBackupDownload(
+            new Request('https://misub.example/api/backup/webdav/download', {
+                method: 'POST',
+                body: JSON.stringify({ file: '/MiSub/misub-backup-测试 12-00-00.json' }),
+            }),
+            env
+        );
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ success: true, exportData: payload });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock.mock.calls[0][0]).toBe(
+            'https://dav.example/remote.php/dav/files/user/MiSub/misub-backup-%E6%B5%8B%E8%AF%95%2012-00-00.json'
+        );
+        expect(fetchMock.mock.calls[0][1].method).toBe('GET');
+        expect(put).not.toHaveBeenCalled();
+        expect(env.MISUB_KV.dump()).toEqual(before);
+    });
+
+    it.each([undefined, null, 42, '', '   '])(
+        'rejects an invalid remote download file path (%j) before fetching',
+        async (file) => {
+            const { handleWebdavBackupDownload } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const fetchMock = vi.fn();
+            vi.stubGlobal('fetch', fetchMock);
+
+            const response = await handleWebdavBackupDownload(
+                new Request('https://misub.example/api/backup/webdav/download', {
+                    method: 'POST',
+                    body: JSON.stringify({ file }),
+                }),
+                createEnv()
+            );
+
+            expect(response.status).toBe(400);
+            expect((await response.json()).success).toBe(false);
+            expect(fetchMock).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each([
+        new Response('Not Found', { status: 404 }),
+        new Response('invalid JSON', { status: 200 }),
+    ])('reports remote download failures without changing storage', async (remoteResponse) => {
+        const { handleWebdavBackupDownload } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(remoteResponse));
+        const env = createEnv();
+        const before = env.MISUB_KV.dump();
+
+        const response = await handleWebdavBackupDownload(
+            new Request('https://misub.example/api/backup/webdav/download', {
+                method: 'POST',
+                body: JSON.stringify({ file: '/MiSub/misub-backup.json' }),
+            }),
+            env
+        );
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).success).toBe(false);
+        expect(env.MISUB_KV.dump()).toEqual(before);
+    });
+
+    it('rejects download requests using an unsupported method', async () => {
+        const { handleWebdavBackupDownload } =
+            await import('../../functions/modules/webdav-backup-handler.js');
+        const response = await handleWebdavBackupDownload(
+            new Request('https://misub.example/api/backup/webdav/download'),
+            createEnv()
+        );
+        expect(response.status).toBe(405);
+    });
+
     it('formats backup filenames in UTC+8', async () => {
         const { formatBackupFilename } =
             await import('../../functions/modules/webdav-backup-handler.js');

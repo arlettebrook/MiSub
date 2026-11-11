@@ -2,6 +2,7 @@ import { useToastStore } from '../stores/toast.js';
 import { api } from '../lib/http.js';
 import { t } from '../i18n/index.js';
 import { useConfirm } from './useConfirm.js';
+import { downloadJson } from '../utils/download.js';
 
 /**
  * 备份和恢复逻辑 composable
@@ -13,19 +14,6 @@ import { useConfirm } from './useConfirm.js';
 export function useBackupLogic() {
     const { showToast } = useToastStore();
     const { confirmAction } = useConfirm();
-
-    const downloadJson = (data, filename) => {
-        const jsonString = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
 
     /**
      * 导出本地备份。

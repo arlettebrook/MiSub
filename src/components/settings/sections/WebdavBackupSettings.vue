@@ -4,6 +4,7 @@
     import { useToastStore } from '../../../stores/toast.js';
     import { useI18n } from '../../../i18n/index.js';
     import { useConfirm } from '../../../composables/useConfirm.js';
+    import { downloadJson } from '../../../utils/download.js';
     import Input from '../../ui/Input.vue';
 
     const props = defineProps({
@@ -21,6 +22,7 @@
     const isRestoring = ref(false);
     const isLoadingRemoteFiles = ref(false);
     const remoteFiles = ref([]);
+    const downloadingRemoteFile = ref('');
 
     const ensureConfig = () => {
         if (!props.settings.webdavBackup) {
@@ -146,6 +148,26 @@
             );
         } finally {
             isLoadingRemoteFiles.value = false;
+        }
+    };
+
+    const downloadRemoteFile = async (file) => {
+        if (!file?.path || downloadingRemoteFile.value) return;
+        downloadingRemoteFile.value = file.path;
+        try {
+            const result = await api.post('/api/backup/webdav/download', { file: file.path });
+            if (!result?.success || !result.exportData) {
+                throw new Error(result?.message || t('settings.webdavDownloadFailed'));
+            }
+            downloadJson(result.exportData, file.name);
+            showToast(t('settings.webdavDownloadSuccess'), 'success');
+        } catch (error) {
+            showToast(
+                t('settings.webdavDownloadFailedWithMessage', { message: error.message }),
+                'error'
+            );
+        } finally {
+            downloadingRemoteFile.value = '';
         }
     };
 
@@ -436,18 +458,31 @@
                     <div
                         v-for="file in remoteFiles"
                         :key="file.path"
-                        class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 dark:border-white/10 px-3 py-2"
+                        class="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-gray-100 dark:border-white/10 px-3 py-2"
                     >
                         <span class="text-xs text-gray-600 dark:text-gray-300 break-all">{{
                             file.name
                         }}</span>
-                        <button
-                            @click="restoreRemoteFile(file)"
-                            :disabled="isRestoring"
-                            class="touch-target shrink-0 px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50"
-                        >
-                            {{ t('settings.webdavRestore') }}
-                        </button>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <button
+                                @click="downloadRemoteFile(file)"
+                                :disabled="!!downloadingRemoteFile || isRestoring"
+                                class="touch-target px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50"
+                            >
+                                {{
+                                    downloadingRemoteFile === file.path
+                                        ? t('settings.webdavDownloading')
+                                        : t('settings.webdavDownload')
+                                }}
+                            </button>
+                            <button
+                                @click="restoreRemoteFile(file)"
+                                :disabled="isRestoring"
+                                class="touch-target px-3 py-1.5 text-xs font-medium text-white rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {{ t('settings.webdavRestore') }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
