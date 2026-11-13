@@ -419,7 +419,9 @@ async function cleanupWebdavBackups(config, latestFilePath, uploadedAt) {
             try {
                 const response = await webdavFetch(config, file.path, {
                     method: 'DELETE',
-                    redirect: 'error',
+                    // Workers only supports follow/manual. Inspect redirects below
+                    // without forwarding DELETE or credentials to another URL.
+                    redirect: 'manual',
                 });
                 if (
                     (!response.ok || response.status === 207) &&

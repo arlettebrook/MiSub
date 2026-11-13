@@ -370,6 +370,10 @@ function mockWebdavServer(entries, options = {}) {
     const prefix = '/remote.php/dav/files/user';
     const escapeXml = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const fetchMock = vi.fn(async (url, init) => {
+        // Match the redirect modes supported by the Cloudflare Workers runtime.
+        if (init.redirect && !['follow', 'manual'].includes(init.redirect)) {
+            throw new TypeError('Invalid redirect value, must be one of "follow" or "manual"');
+        }
         const path = decodeURIComponent(new URL(url).pathname.slice(prefix.length));
         if (init.method === 'MKCOL') return new Response(null, { status: 405 });
         if (init.method === 'PUT') {
@@ -401,7 +405,8 @@ function mockWebdavServer(entries, options = {}) {
             if (options.deleteErrors?.[path]) throw new Error(options.deleteErrors[path]);
             const status = options.deleteStatuses?.[path] || 204;
             if ([200, 204, 404, 410].includes(status)) files.delete(path);
-            return new Response(null, { status });
+            const location = options.deleteLocations?.[path];
+            return new Response(null, { status, headers: location ? { Location: location } : {} });
         }
         throw new Error(`Unexpected WebDAV request: ${init.method}`);
     });
@@ -548,7 +553,7 @@ describe('WebDAV backup retention', () => {
         expect(
             server.fetchMock.mock.calls.filter(([, init]) => init.method === 'DELETE')[0][1]
                 .redirect
-        ).toBe('error');
+        ).toBe('manual');
     });
 
     it('supports backups in the endpoint root', async () => {
@@ -681,4 +686,36 @@ describe('WebDAV backup retention', () => {
         const result = await performWebdavBackup(createRetentionEnv({ retentionCount: 1 }));
         expect(result.cleanup).toMatchObject({ success: true, deleted: 1 });
     });
+
+    it.each([301, 302, 303, 307, 308])(
+        'does not follow a redirected deletion or count it as cleaned (HTTP %i)',
+        async (status) => {
+            const { performWebdavBackup } =
+                await import('../../functions/modules/webdav-backup-handler.js');
+            const redirectedFile = oldBackup(9);
+            const location = 'https://other.example/backup.json';
+            const server = mockWebdavServer([redirectedFile, oldBackup(10)], {
+                deleteStatuses: { [redirectedFile.path]: status },
+                deleteLocations: { [redirectedFile.path]: location },
+            });
+            const env = createRetentionEnv({ retentionCount: 1 });
+            const result = await performWebdavBackup(env);
+
+            expect(result.success).toBe(true);
+            expect(result.cleanup).toMatchObject({ success: false, deleted: 1 });
+            expect(result.cleanup.message).toContain(`HTTP ${status}`);
+            expect(server.files.has(redirectedFile.path)).toBe(true);
+            expect(server.files.has(result.file)).toBe(true);
+            expect(server.files.has(oldBackup(10).path)).toBe(false);
+            expect(server.deletions()).toEqual([redirectedFile.path, oldBackup(10).path]);
+            const deleteCalls = server.fetchMock.mock.calls.filter(
+                ([, init]) => init.method === 'DELETE'
+            );
+            expect(deleteCalls.every(([, init]) => init.redirect === 'manual')).toBe(true);
+            expect(server.fetchMock.mock.calls.some(([url]) => url === location)).toBe(false);
+            const savedConfig = JSON.parse(env.MISUB_KV.dump().worker_settings_v1).webdavBackup;
+            expect(savedConfig.lastBackupStatus).toBe('success');
+            expect(savedConfig.lastBackupMessage).toBe(result.message);
+        }
+    );
 });
