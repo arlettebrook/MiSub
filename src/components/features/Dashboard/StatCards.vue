@@ -65,7 +65,7 @@
     });
 
     const cardBaseClass =
-        'stat-card group w-full text-left bg-white/90 dark:bg-gray-900/70 p-4 misub-radius-lg shadow-sm border transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500/30';
+        'stat-card group flex flex-col items-start w-full min-w-0 text-left bg-white/90 dark:bg-gray-900/70 p-4 misub-radius-lg shadow-sm border transition-all duration-500 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500/30';
     const normalCardClass = 'border-gray-100/80 dark:border-white/10';
     const warningCardClass =
         'border-amber-200/80 bg-amber-50/70 dark:border-amber-400/20 dark:bg-amber-500/10';
@@ -90,12 +90,12 @@
                 navigate('/dashboard/groups', hasTrafficWarning ? { status: 'low-traffic' } : {})
             "
         >
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between w-full min-h-8 gap-1 mb-2">
                 <h3 class="text-xs font-medium text-gray-500 uppercase">
                     {{ t('dashboard.remainingTraffic') }}
                 </h3>
                 <span
-                    class="p-1.5 misub-radius-md"
+                    class="shrink-0 p-1.5 misub-radius-md"
                     :class="
                         hasTrafficWarning
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
@@ -176,12 +176,12 @@
                 )
             "
         >
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between w-full min-h-8 gap-1 mb-2">
                 <h3 class="text-xs font-medium text-gray-500 uppercase">
                     {{ t('dashboard.activeSubscriptions') }}
                 </h3>
                 <span
-                    class="p-1.5 misub-radius-md"
+                    class="shrink-0 p-1.5 misub-radius-md"
                     :class="
                         hasSubscriptionWarning
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
@@ -245,12 +245,12 @@
             style="--delay: 200ms"
             @click="navigate('/dashboard/groups', hasNodeWarning ? { status: 'zero-nodes' } : {})"
         >
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between w-full min-h-8 gap-1 mb-2">
                 <h3 class="text-xs font-medium text-gray-500 uppercase">
                     {{ t('dashboard.totalNodes') }}
                 </h3>
                 <span
-                    class="p-1.5 misub-radius-md"
+                    class="shrink-0 p-1.5 misub-radius-md"
                     :class="
                         hasNodeWarning
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
@@ -307,12 +307,12 @@
                 navigate('/dashboard/subscriptions', hasProfileWarning ? { focus: 'profiles' } : {})
             "
         >
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between w-full min-h-8 gap-1 mb-2">
                 <h3 class="text-xs font-medium text-gray-500 uppercase">
                     {{ t('dashboard.combinedSubscriptions') }}
                 </h3>
                 <span
-                    class="p-1.5 misub-radius-md"
+                    class="shrink-0 p-1.5 misub-radius-md"
                     :class="
                         hasProfileWarning
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
