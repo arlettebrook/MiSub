@@ -8,6 +8,8 @@
  * 返回链接数组；无法识别的出站跳过。
  */
 
+import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
+
 function toArray(value) {
     if (value === undefined || value === null) return [];
     return Array.isArray(value) ? value : [value];
@@ -51,7 +53,9 @@ function tlsParams(outbound) {
 function buildQuery(params) {
     const search = new URLSearchParams();
     for (const [key, value] of params) {
-        if (value !== undefined && value !== null && value !== '') search.set(key, value);
+        if (value !== undefined && value !== null && (value !== '' || key === 'packetEncoding')) {
+            search.set(key, value);
+        }
     }
     const qs = search.toString();
     return qs ? `?${qs}` : '';
@@ -74,6 +78,8 @@ export function singboxOutboundToUrl(ob) {
     switch (type) {
         case 'vless': {
             const params = tlsParams(ob);
+            const packetEncoding = getVlessPacketEncoding(ob);
+            if (packetEncoding !== undefined) params.push(['packetEncoding', packetEncoding]);
             if (ob.encryption) params.push(['encryption', ob.encryption]);
             else params.push(['encryption', 'none']);
             return `vless://${ob.uuid}@${server}:${port}${buildQuery(params)}${hash}`;

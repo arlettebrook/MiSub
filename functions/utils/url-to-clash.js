@@ -4,6 +4,10 @@
 
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
+import {
+    getVlessPacketEncoding,
+    xhttpExtraToClashOptions,
+} from '../../src/utils/protocols/common/vless-params.js';
 
 const VIRTUAL_INFO_NODE_PASSWORD = '00000000-0000-0000-0000-000000000000';
 
@@ -153,6 +157,10 @@ function parseVlessUrl(url) {
             uuid,
         };
 
+        const packetEncoding = getVlessPacketEncoding(params);
+        if (packetEncoding !== undefined) proxy['packet-encoding'] = packetEncoding;
+        if (params.has('encryption')) proxy.encryption = params.get('encryption');
+
         // 网络类型
         const network = params.get('type') || 'tcp';
         if (network !== 'tcp') {
@@ -214,27 +222,7 @@ function parseVlessUrl(url) {
 
             if (extraRaw) {
                 try {
-                    const extra = JSON.parse(extraRaw);
-
-                    if (Object.prototype.hasOwnProperty.call(extra, 'xPaddingObfsMode')) {
-                        xhttpOpts['x-padding-obfs-mode'] = extra.xPaddingObfsMode;
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(extra, 'xPaddingMethod')) {
-                        xhttpOpts['x-padding-method'] = extra.xPaddingMethod;
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(extra, 'xPaddingPlacement')) {
-                        xhttpOpts['x-padding-placement'] = extra.xPaddingPlacement;
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(extra, 'xPaddingHeader')) {
-                        xhttpOpts['x-padding-header'] = extra.xPaddingHeader;
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(extra, 'xPaddingKey')) {
-                        xhttpOpts['x-padding-key'] = extra.xPaddingKey;
-                    }
+                    Object.assign(xhttpOpts, xhttpExtraToClashOptions(JSON.parse(extraRaw)));
                 } catch (e) {
                     // extra 非法时不能让整个订阅转换失败
                     console.warn('[MiSub] XHTTP extra 参数解析失败:', e);

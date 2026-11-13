@@ -1,7 +1,9 @@
 /**
  * VLESS配置转换为URL
- * 支持完整参数：TLS、Reality、WebSocket、gRPC、HTTP/2、HTTPUpgrade
+ * 支持 TLS、Reality、WebSocket、gRPC、HTTP/2、HTTPUpgrade 和 XHTTP 参数。
  */
+import { getVlessPacketEncoding, clashXhttpOptionsToExtra } from '../common/vless-params.js';
+
 export function convertVlessToUrl(proxy) {
     try {
         // 兼容 uuid 和 UUID 两种写法
@@ -14,6 +16,8 @@ export function convertVlessToUrl(proxy) {
 
         // 基础参数
         params.set('encryption', proxy.encryption || 'none');
+        const packetEncoding = getVlessPacketEncoding(proxy);
+        if (packetEncoding !== undefined) params.set('packetEncoding', packetEncoding);
 
         // 传输类型
         const network = proxy.network || 'tcp';
@@ -85,21 +89,26 @@ export function convertVlessToUrl(proxy) {
                 }
                 break;
 
-            case 'xhttp':
-                if (proxy['xhttp-opts']) {
-                    if (proxy['xhttp-opts'].path) {
-                        params.set('path', proxy['xhttp-opts'].path);
+            case 'xhttp': {
+                const xhttpOpts = proxy['xhttp-opts'] || proxy.xhttpOpts;
+                if (xhttpOpts) {
+                    if (xhttpOpts.path) {
+                        params.set('path', xhttpOpts.path);
                     }
-                    const xhttpHost =
-                        proxy['xhttp-opts'].host || proxy['xhttp-opts']['headers']?.Host;
+                    const xhttpHost = xhttpOpts.host || xhttpOpts.headers?.Host;
                     if (xhttpHost) {
                         params.set('host', xhttpHost);
                     }
-                    if (proxy['xhttp-opts'].mode) {
-                        params.set('mode', proxy['xhttp-opts'].mode);
+                    if (xhttpOpts.mode) {
+                        params.set('mode', xhttpOpts.mode);
+                    }
+                    const extra = clashXhttpOptionsToExtra(xhttpOpts);
+                    if (Object.keys(extra).length > 0) {
+                        params.set('extra', JSON.stringify(extra));
                     }
                 }
                 break;
+            }
 
             case 'tcp':
                 // TCP with HTTP header
@@ -161,19 +170,19 @@ export function convertVlessToUrl(proxy) {
             if (proxy['client-fingerprint'] || proxy.fingerprint) {
                 params.set('fp', proxy['client-fingerprint'] || proxy.fingerprint);
             }
+        } else {
+            params.set('security', 'none');
+        }
 
-            // ALPN
+        if (proxy.tls || proxy['reality-opts'] || proxy.reality) {
             if (proxy.alpn) {
                 const alpn = Array.isArray(proxy.alpn) ? proxy.alpn.join(',') : proxy.alpn;
                 params.set('alpn', alpn);
             }
-
-            // 跳过证书验证
-            if (proxy['skip-cert-verify'] !== undefined) {
-                params.set('allowInsecure', proxy['skip-cert-verify'] ? '1' : '0');
+            const skipCertVerify = proxy['skip-cert-verify'] ?? proxy.skipCertVerify;
+            if (skipCertVerify !== undefined) {
+                params.set('allowInsecure', skipCertVerify ? '1' : '0');
             }
-        } else {
-            params.set('security', 'none');
         }
 
         // dialer-proxy 链式代理支持 (使用自定义参数 dp)

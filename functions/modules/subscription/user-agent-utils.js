@@ -20,7 +20,7 @@ export function isBrowserAgent(userAgent) {
 
     // Common proxy client and bot keywords to exclude
     const isProxyOrBot =
-        /clash|flclash|v2ray|surge|loon|shadowrocket|quantumult|stash|shadowsocks|mihomo|mihomo\.party|meta|nekobox|nekoray|sfi|sfa|sfra|sing-box|surfboard|hiddify|egern|yuetu|月兔|dio|dart|flutter|http-client|okhttp|axios|postman|curl|wget|go-http-client|python|java/i.test(
+        /karing|clash|flclash|v2ray|surge|loon|shadowrocket|quantumult|stash|shadowsocks|mihomo|mihomo\.party|meta|nekobox|nekoray|sfi|sfa|sfra|sing-box|surfboard|hiddify|egern|yuetu|月兔|dio|dart|flutter|http-client|okhttp|axios|postman|curl|wget|go-http-client|python|java/i.test(
             userAgent
         );
 
@@ -34,7 +34,8 @@ export function isBrowserAgent(userAgent) {
  * @returns {string} targetFormat (e.g., 'clash', 'singbox', 'base64')
  */
 export function isHiddifyAgent(userAgent) {
-    return /hiddify/i.test(userAgent || '');
+    // Karing advertises Hiddify compatibility in its UA; identify the primary client first.
+    return !/^\s*karing\b/i.test(userAgent || '') && /hiddify/i.test(userAgent || '');
 }
 
 export function determineTargetFormat(userAgent, searchParams) {
@@ -80,6 +81,11 @@ export function determineTargetFormat(userAgent, searchParams) {
 
     // 2. Check User-Agent
     const ua = (userAgent || '').toLowerCase();
+
+    // Karing's compatibility list can contain HiddifyNext and several other client names.
+    if (/^\s*karing\b/.test(ua)) {
+        return /prefer clashmeta format|mihomo|clash/.test(ua) ? 'clash' : 'singbox';
+    }
 
     // --- Surge Specific Handling ---
     // Extract version accurately (e.g., "Surge/4.0", "Surge Mac/3.0", "Surge-Mac/5.0")

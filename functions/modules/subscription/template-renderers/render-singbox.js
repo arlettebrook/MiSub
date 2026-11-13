@@ -1,4 +1,5 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
+import { getVlessPacketEncoding } from '../../../../src/utils/protocols/common/vless-params.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
 import { buildSingboxDnsConfig, DNS_PROXY_GROUP, SINGBOX_CN_RULE_SET } from '../safe-dns.js';
 import { getSingboxDnsRuleSet, pinRemoteRuleUrl } from '../builtin-rules-provider.js';
@@ -117,6 +118,8 @@ function buildOutbound(proxy) {
             uuid: proxy.uuid || '',
         };
         if (proxy.flow) outbound.flow = proxy.flow;
+        const packetEncoding = getVlessPacketEncoding(proxy);
+        if (packetEncoding !== undefined) outbound.packet_encoding = packetEncoding;
 
         const network = proxy.network || '';
         if (network === 'ws') {
@@ -166,6 +169,9 @@ function buildOutbound(proxy) {
                 if (realityOpts['spider-x'] || realityOpts.spiderX) {
                     outbound.tls.reality.spider_x = realityOpts['spider-x'] || realityOpts.spiderX;
                 }
+            }
+            if (proxy.alpn) {
+                outbound.tls.alpn = Array.isArray(proxy.alpn) ? proxy.alpn : [proxy.alpn];
             }
         }
         return outbound;

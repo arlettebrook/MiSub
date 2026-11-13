@@ -125,6 +125,7 @@ profile 模式下，如果访问日志开启且不是 `callback_token`/内部请
    - `v2ray` 和 `trojan` 会归一为 `base64`。
    - `target=surge&ver=N` 会保留版本，`target=surge` 默认使用 `surge&ver=4`。
 2. User-Agent：
+   - 以 Karing 开头的 UA 优先识别主客户端：包含 Mihomo/Clash 或 `Prefer ClashMeta Format` 时使用 `clash`，否则使用 `singbox`。兼容列表中的 `HiddifyNext` 不会触发 Hiddify 的格式、模板或引擎降级。
    - Mihomo/Meta/Clash/Stash/NekoBox 等默认 `clash`。
    - Sing-box 默认 `singbox`。
    - Shadowrocket、v2rayN、v2rayNG 默认 `base64`。
@@ -141,6 +142,10 @@ profile 模式下，如果访问日志开启且不是 `callback_token`/内部请
 - 否则按订阅组 `subconverter.engineMode`、全局 `subconverter.engineMode`、默认 `builtin`。
 
 内置转换会保留当前订阅选中的手动节点，即使其服务器地址为 `127.0.0.1`、`localhost`、`::1` 等本机或未指定地址。HTTP 订阅源中的这类地址仍按原有规则过滤，系统虚拟信息节点继续使用已有的放行条件。手动节点按连接配置识别，添加名称前缀、重命名及聚合缓存命中不会影响放行；用户配置的其他过滤规则和客户端协议支持限制仍然生效。外部 subconverter 的过滤行为由对应服务决定。
+
+VLESS 的 UDP 编码参数支持 `packet_encoding`、`packet-encoding`、`packetEncoding` 三种输入写法，链接输出使用 `packetEncoding`，Clash/Mihomo 输出使用 `packet-encoding`，sing-box 输出使用 `packet_encoding`。未指定时不注入默认值，显式空字符串会保留。前后端 Clash 导入及 sing-box JSON 导入都会保留该参数，sing-box 的基础输出和模板输出使用同一映射。
+
+VLESS XHTTP 链接的 `extra` 与 Clash `xhttp-opts` 支持双向映射 Padding 参数、`noGRPCHeader`、`scMaxEachPostBytes` 和 `scMinPostsIntervalMs`；布尔值 `false` 不会被忽略。Clash 导入同时保留 VLESS 的 `encryption`、ALPN 和证书验证选项。这些保证适用于内置转换；可用 `builtin=1` 指定内置引擎，外部服务的参数支持由对应服务决定。
 
 ## 7. 模板、规则等级与请求参数覆盖
 

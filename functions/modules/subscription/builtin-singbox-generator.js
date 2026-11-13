@@ -4,6 +4,7 @@
  */
 
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
+import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
 import { getUniqueName } from './name-utils.js';
 import { groupNodeLinesByRegion } from './region-groups.js';
 import {
@@ -98,6 +99,8 @@ function buildOutbound(proxy) {
         outbound.server = server;
         outbound.server_port = port;
         outbound.uuid = proxy.uuid || '';
+        const packetEncoding = getVlessPacketEncoding(proxy);
+        if (packetEncoding !== undefined) outbound.packet_encoding = packetEncoding;
         if (proxy.network) {
             outbound.transport = { type: proxy.network };
             if (proxy.network === 'ws') {
@@ -117,6 +120,12 @@ function buildOutbound(proxy) {
             }
         }
         if (proxy.flow) outbound.flow = proxy.flow;
+        if (proxy.tls) {
+            outbound.tls = {
+                enabled: true,
+                server_name: proxy.sni || proxy.servername || server,
+            };
+        }
         if (proxy.reality_opts || proxy['reality-opts']) {
             const reality = proxy.reality_opts || proxy['reality-opts'];
             outbound.tls = {
@@ -129,6 +138,9 @@ function buildOutbound(proxy) {
                     short_id: reality['short-id'] || reality.short_id,
                 },
             };
+        }
+        if (outbound.tls && proxy.alpn) {
+            outbound.tls.alpn = Array.isArray(proxy.alpn) ? proxy.alpn : [proxy.alpn];
         }
     } else if (type === 'trojan') {
         outbound.type = 'trojan';

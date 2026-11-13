@@ -51,6 +51,113 @@ describe('handleMisubRequest regression coverage', () => {
         vi.restoreAllMocks();
     });
 
+    it.each(['vless-url', 'clash-yaml', 'singbox-json'])(
+        'preserves Karing VLESS parameters from %s on fresh and cached subscription requests',
+        async (sourceFormat) => {
+            const userAgent =
+                'Karing/1.2.26.2909 platform/windows;mihomo/1.19.28;ClashMeta;clash-verge;NekoBox/Android/1.4.1 (Prefer ClashMeta Format);HiddifyNext;v2ray;FLClash';
+            const uuid = '11111111-1111-4111-8111-111111111111';
+            const extra = {
+                xPaddingObfsMode: false,
+                xPaddingMethod: 'tokenish',
+                xPaddingPlacement: 'queryInHeader',
+                xPaddingHeader: 'X-Padding',
+                xPaddingKey: 'padding+%&=',
+            };
+            const xhttpOptions = {
+                path: '/xhttp',
+                host: 'edge.example.com',
+                mode: 'packet-up',
+                'x-padding-obfs-mode': false,
+                'x-padding-method': 'tokenish',
+                'x-padding-placement': 'queryInHeader',
+                'x-padding-header': 'X-Padding',
+                'x-padding-key': 'padding+%&=',
+            };
+            const upstreamContent = {
+                'vless-url': `vless://${uuid}@edge.example.com:443?type=xhttp&security=tls&host=edge.example.com&path=%2Fxhttp&mode=packet-up&packet_encoding=packetaddr&extra=${encodeURIComponent(JSON.stringify(extra))}#VLESS`,
+                'clash-yaml': yaml.dump({
+                    proxies: [
+                        {
+                            name: 'VLESS',
+                            type: 'vless',
+                            server: 'edge.example.com',
+                            port: 443,
+                            uuid,
+                            network: 'xhttp',
+                            tls: true,
+                            'packet-encoding': 'packetaddr',
+                            'xhttp-opts': xhttpOptions,
+                        },
+                    ],
+                }),
+                'singbox-json': JSON.stringify({
+                    outbounds: [
+                        {
+                            type: 'vless',
+                            tag: 'VLESS',
+                            server: 'edge.example.com',
+                            server_port: 443,
+                            uuid,
+                            packet_encoding: 'packetaddr',
+                            tls: { enabled: true, server_name: 'edge.example.com' },
+                            transport: { type: 'ws', path: '/ws' },
+                        },
+                    ],
+                }),
+            }[sourceFormat];
+            createAdapter.mockReturnValue(
+                createStorageAdapter({
+                    settings: {
+                        mytoken: 'stable-token',
+                        enableFlagEmoji: false,
+                        enableTrafficNode: false,
+                    },
+                    subscriptions: [
+                        {
+                            id: 'sub-a',
+                            name: 'Upstream',
+                            url: 'https://airport.example/sub',
+                            enabled: true,
+                        },
+                    ],
+                })
+            );
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => new Response(upstreamContent))
+            );
+            silenceExpectedRequestLogs();
+            const { handleMisubRequest } =
+                await import('../../functions/modules/subscription/main-handler.js');
+
+            for (const refresh of [true, false]) {
+                const response = await handleMisubRequest({
+                    request: new Request(
+                        `https://misub.example/stable-token?builtin=1${refresh ? '&refresh=1' : ''}`,
+                        { headers: { 'User-Agent': userAgent } }
+                    ),
+                    env: {},
+                    waitUntil: vi.fn(),
+                });
+                expect(response.status).toBe(200);
+                expect(response.headers.get('X-MiSub-Mode')).toBe('builtin-clash');
+                expect(response.headers.get('X-Cache-Status')).toBe(refresh ? 'MISS' : 'HIT');
+                const config = yaml.load(await response.text());
+                expect(config.proxies).toHaveLength(1);
+                expect(config.proxies[0]).toMatchObject({
+                    type: 'vless',
+                    'packet-encoding': 'packetaddr',
+                });
+                if (sourceFormat !== 'singbox-json') {
+                    expect(config.proxies[0]['xhttp-opts']).toMatchObject(xhttpOptions);
+                }
+                expect(config).toHaveProperty('rule-providers');
+            }
+            expect(fetch).toHaveBeenCalledTimes(1);
+        }
+    );
+
     it.each([
         ['stable-token', 'clash'],
         ['stable-token', 'singbox'],

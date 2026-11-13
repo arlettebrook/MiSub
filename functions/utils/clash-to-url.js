@@ -1,3 +1,8 @@
+import {
+    getVlessPacketEncoding,
+    clashXhttpOptionsToExtra,
+} from '../../src/utils/protocols/common/vless-params.js';
+
 function base64Encode(str) {
     return btoa(unescape(encodeURIComponent(str)));
 }
@@ -134,7 +139,11 @@ export function convertClashProxyToUrl(proxy) {
         if (type === 'vless') {
             const uuid = proxy.uuid || proxy.UUID;
             if (!uuid) return null;
-            const params = ['encryption=none'];
+            const params = [`encryption=${encodeURIComponent(proxy.encryption || 'none')}`];
+            const packetEncoding = getVlessPacketEncoding(proxy);
+            if (packetEncoding !== undefined) {
+                params.push(`packetEncoding=${encodeURIComponent(packetEncoding)}`);
+            }
             if (proxy.network) params.push(`type=${proxy.network}`);
             const wsOpts = proxy.wsOpts || proxy['ws-opts'];
             if (wsOpts) {
@@ -162,6 +171,10 @@ export function convertClashProxyToUrl(proxy) {
                 const xhttpHost = xhttpOpts.host || xhttpOpts.headers?.Host;
                 if (xhttpHost) params.push(`host=${encodeURIComponent(xhttpHost)}`);
                 if (xhttpOpts.mode) params.push(`mode=${encodeURIComponent(xhttpOpts.mode)}`);
+                const extra = clashXhttpOptionsToExtra(xhttpOpts);
+                if (Object.keys(extra).length > 0) {
+                    params.push(`extra=${encodeURIComponent(JSON.stringify(extra))}`);
+                }
             }
             const realityOpts = proxy['reality-opts'];
             if (realityOpts) {
@@ -176,6 +189,14 @@ export function convertClashProxyToUrl(proxy) {
                 params.push('security=tls');
             }
             if (proxy.flow) params.push(`flow=${proxy.flow}`);
+            if (proxy.alpn) {
+                const alpn = Array.isArray(proxy.alpn) ? proxy.alpn.join(',') : proxy.alpn;
+                params.push(`alpn=${encodeURIComponent(alpn)}`);
+            }
+            const skipCertVerify = proxy['skip-cert-verify'] ?? proxy.skipCertVerify;
+            if (skipCertVerify !== undefined) {
+                params.push(`allowInsecure=${skipCertVerify ? '1' : '0'}`);
+            }
             const sniVal = proxy.servername !== undefined ? proxy.servername : proxy.sni;
             if (sniVal !== undefined) params.push(`sni=${encodeURIComponent(sniVal)}`);
             if (proxy['client-fingerprint'])

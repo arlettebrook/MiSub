@@ -6,7 +6,7 @@
 
 import { urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
-import { isMetaCore } from './user-agent-utils.js';
+import { isMetaCore, isHiddifyAgent } from './user-agent-utils.js';
 import { DNS_PROXY_GROUP, resolveSafeDnsConfig } from './safe-dns.js';
 import {
     POLICY_GROUPS,
@@ -144,7 +144,7 @@ export function generateBuiltinClashConfig(nodeList, options = {}) {
     } = options;
     const enableMihomoSyntax =
         Boolean(options.isMeta) || isMetaCore(userAgent, options.searchParams);
-    const isHiddifyClient = hiddifyCompatible || /hiddify/i.test(userAgent || '');
+    const isHiddifyClient = hiddifyCompatible || isHiddifyAgent(userAgent);
     // Stash 通过 #SUBSCRIBED <url> 注释行识别订阅地址以支持自动更新
     const isStashClient = /stash/i.test(userAgent || '');
 
