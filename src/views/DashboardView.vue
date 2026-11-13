@@ -18,6 +18,7 @@
         shouldShowFullGuide,
     } from '../utils/dashboard-health.js';
     import { useI18n } from '../i18n/index.js';
+    import { useLazyModals } from '../composables/useLazyModals.js';
 
     const { t } = useI18n();
 
@@ -202,6 +203,7 @@
     // --- QRCode Modal Logic ---
     const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
     const showQRCodeModal = ref(false);
+    const mountedModals = useLazyModals({ logs: showLogModal, qrCode: showQRCodeModal });
     const qrCodeUrl = ref('');
     const qrCodeTitle = ref('');
 
@@ -595,9 +597,18 @@
                 size="2xl"
             />
 
-            <LogModal :show="showLogModal" @update:show="showLogModal = $event" />
+            <LogModal
+                v-if="mountedModals.has('logs')"
+                :show="showLogModal"
+                @update:show="showLogModal = $event"
+            />
 
-            <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
+            <QRCodeModal
+                v-if="mountedModals.has('qrCode')"
+                v-model:show="showQRCodeModal"
+                :url="qrCodeUrl"
+                :title="qrCodeTitle"
+            />
         </template>
     </div>
 </template>

@@ -136,6 +136,69 @@ describe('QR modal generation feedback', () => {
 });
 
 describe('public QR generation feedback', () => {
+  it('waits for the lazily mounted overlay to register a canvas', async () => {
+    wrapper = mount(PublicProfilesView, { global: options('en-US') });
+    await flushPromises();
+    const grid = wrapper.findComponent({ name: 'ProfileGrid' });
+    grid.vm.$emit('toggle-qr', { id: 'one', name: 'Demo' });
+    await flushPromises();
+    expect(grid.props('isQrExpanded')('one')).toBe(true);
+    expect(mocks.toCanvas).not.toHaveBeenCalled();
+    expect(mocks.showToast).not.toHaveBeenCalled();
+    const canvas = document.createElement('canvas');
+    grid.vm.$emit('register-canvas', 'one', canvas);
+    await vi.dynamicImportSettled();
+    await flushPromises();
+    expect(mocks.toCanvas).toHaveBeenCalledExactlyOnceWith(
+      canvas,
+      `${window.location.origin}/sample-token/one`,
+      expect.objectContaining({ width: 200 })
+    );
+    grid.vm.$emit('register-canvas', 'one', canvas);
+    await flushPromises();
+    expect(mocks.toCanvas).toHaveBeenCalledOnce();
+  });
+
+  it('does not generate a QR if the opening is cancelled before the canvas arrives', async () => {
+    wrapper = mount(PublicProfilesView, { global: options('en-US') });
+    await flushPromises();
+    const grid = wrapper.findComponent({ name: 'ProfileGrid' });
+    const profile = { id: 'one', name: 'Demo' };
+    grid.vm.$emit('toggle-qr', profile);
+    await flushPromises();
+    grid.vm.$emit('toggle-qr', profile);
+    grid.vm.$emit('register-canvas', 'one', document.createElement('canvas'));
+    await flushPromises();
+    expect(mocks.toCanvas).not.toHaveBeenCalled();
+    expect(mocks.showToast).not.toHaveBeenCalled();
+  });
+
+  it('loads the real public overlay on demand and generates once on each opening', async () => {
+    wrapper = mount(PublicProfilesView, {
+      global: { ...options('en-US'), stubs: { ...options('en-US').stubs, ProfileGrid: false } },
+    });
+    await vi.dynamicImportSettled();
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'QRCodeOverlay' }).exists()).toBe(false);
+    expect(mocks.toCanvas).not.toHaveBeenCalled();
+    const grid = wrapper.findComponent({ name: 'ProfileGrid' });
+    const profile = { id: 'one', name: 'Demo' };
+    grid.vm.$emit('toggle-qr', profile);
+    await vi.dynamicImportSettled();
+    await flushPromises();
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1);
+    expect(mocks.toCanvas).toHaveBeenCalledOnce();
+    grid.vm.$emit('toggle-qr', profile);
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    grid.vm.$emit('toggle-qr', profile);
+    await vi.dynamicImportSettled();
+    await flushPromises();
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1);
+    expect(mocks.toCanvas).toHaveBeenCalledTimes(2);
+    expect(mocks.showToast).not.toHaveBeenCalled();
+  });
+
   it('ignores a failure from an older request after reopening the same public QR', async () => {
     let rejectFirst;
     mocks.toCanvas.mockImplementationOnce(

@@ -1,8 +1,8 @@
 <script setup>
-    import { computed } from 'vue';
+    import { computed, defineAsyncComponent, reactive, watch } from 'vue';
     import ProfileCard from './ProfileCard.vue';
     import HeroProfileCard from './HeroProfileCard.vue';
-    import QRCodeOverlay from './QRCodeOverlay.vue';
+    const QRCodeOverlay = defineAsyncComponent(() => import('./QRCodeOverlay.vue'));
 
     const props = defineProps({
         profiles: {
@@ -31,6 +31,15 @@
     // 计算布局类型
     const isSingleProfile = computed(() => props.profiles.length === 1);
     const isTwoProfiles = computed(() => props.profiles.length === 2);
+    const mountedQRProfiles = reactive(new Set());
+    watch(
+        () => props.profiles.filter((profile) => props.isQrExpanded(profile.id)),
+        (profiles) => profiles.forEach((profile) => mountedQRProfiles.add(profile.id)),
+        { immediate: true, flush: 'sync' }
+    );
+    const qrOverlayProfiles = computed(() =>
+        props.profiles.filter((profile) => mountedQRProfiles.has(profile.id))
+    );
 
     // 动态网格类
     const gridClass = computed(() => {
@@ -91,7 +100,7 @@
     </div>
     <!-- Keep a single overlay per profile across the mobile and desktop card layouts. -->
     <QRCodeOverlay
-        v-for="profile in profiles"
+        v-for="profile in qrOverlayProfiles"
         :key="profile.id"
         :profile="profile"
         :is-expanded="isQrExpanded(profile.id)"

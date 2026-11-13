@@ -1,24 +1,55 @@
 <script setup>
-    import { ref, computed, nextTick, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
+    import {
+        ref,
+        computed,
+        nextTick,
+        onMounted,
+        onActivated,
+        onBeforeUnmount,
+        watch,
+        defineAsyncComponent,
+    } from 'vue';
     import { useRoute } from 'vue-router';
     import { useI18n } from '../i18n/index.js';
-    import MigrationModal from '../components/modals/MigrationModal.vue';
+    import { useLazyModals } from '../composables/useLazyModals.js';
     import { useSettingsLogic } from '../composables/useSettingsLogic.js';
     import SettingsLayout from '../components/layout/SettingsLayout.vue';
 
     import SettingsSidebar from '../components/settings/SettingsSidebar.vue';
     import SettingsSaveButton from '../components/settings/SettingsSaveButton.vue';
-    import BasicSettings from '../components/settings/sections/BasicSettings.vue';
-    import HomeSettings from '../components/settings/sections/HomeSettings.vue';
-    import ServiceSettings from '../components/settings/sections/ServiceSettings.vue';
-    import GlobalSettings from '../components/settings/sections/GlobalSettings.vue';
-
-    import SystemSettings from '../components/settings/sections/SystemSettings.vue';
-    import WebdavBackupSettings from '../components/settings/sections/WebdavBackupSettings.vue';
-    import ClientSettings from '../components/settings/sections/ClientSettings.vue';
-    import CustomPageSettings from '../components/settings/sections/CustomPageSettings.vue';
+    import SettingsSectionLoading from '../components/settings/SettingsSectionLoading.vue';
     import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
     import { createFloatingSavePosition } from '../utils/floating-save-position.js';
+
+    const lazySection = (loader) =>
+        defineAsyncComponent({ loader, loadingComponent: SettingsSectionLoading, delay: 100 });
+    const MigrationModal = defineAsyncComponent(
+        () => import('../components/modals/MigrationModal.vue')
+    );
+    const BasicSettings = lazySection(
+        () => import('../components/settings/sections/BasicSettings.vue')
+    );
+    const HomeSettings = lazySection(
+        () => import('../components/settings/sections/HomeSettings.vue')
+    );
+    const ServiceSettings = lazySection(
+        () => import('../components/settings/sections/ServiceSettings.vue')
+    );
+    const GlobalSettings = lazySection(
+        () => import('../components/settings/sections/GlobalSettings.vue')
+    );
+    const SystemSettings = lazySection(
+        () => import('../components/settings/sections/SystemSettings.vue')
+    );
+    const WebdavBackupSettings = lazySection(
+        () => import('../components/settings/sections/WebdavBackupSettings.vue')
+    );
+    const ClientSettings = lazySection(
+        () => import('../components/settings/sections/ClientSettings.vue')
+    );
+    const CustomPageSettings = lazySection(
+        () => import('../components/settings/sections/CustomPageSettings.vue')
+    );
 
     const props = defineProps({ sessionPaused: Boolean });
 
@@ -41,6 +72,7 @@
         exportBackup,
         importBackup,
     } = useSettingsLogic();
+    const mountedModals = useLazyModals({ migration: showMigrationModal });
 
     // 仅新布局需要的状态
     const settingsTabStorageKey = 'misub:settings-active-tab';
@@ -62,9 +94,12 @@
         }
     };
     const activeTab = ref(restoreActiveTab());
+    const visitedTabs = ref(new Set());
+    const mountedTabs = new Set();
     watch(
         activeTab,
         (tab) => {
+            visitedTabs.value.add(tab);
             try {
                 sessionStorage.setItem(settingsTabStorageKey, tab);
             } catch {
@@ -78,29 +113,44 @@
     const settingsRoutePath = route.path;
     const settingsPage = ref(null);
     const highlightedFocusId = ref('');
+    const focusHighlightedSetting = async () => {
+        const anchor = highlightedFocusId.value;
+        if (!anchor || isLoading.value || route.path !== settingsRoutePath) return;
+        await nextTick();
+        if (
+            highlightedFocusId.value !== anchor ||
+            route.path !== settingsRoutePath ||
+            isLoading.value
+        )
+            return;
+        settingsPage.value?.querySelector(`#${anchor}`)?.scrollIntoView?.({
+            behavior: 'smooth',
+            block: 'center',
+        });
+    };
     watch(
         [() => route.path, () => route.query?.focus, isLoading],
-        async ([path, focus, loading]) => {
+        ([path, focus]) => {
             if (path !== settingsRoutePath) return;
             const anchor = resolveSettingsFocusAnchor(focus);
             highlightedFocusId.value = anchor;
             if (!anchor) return;
             activeTab.value = 'basic';
-            if (loading) return;
-            await nextTick();
-            if (
-                highlightedFocusId.value !== anchor ||
-                route.path !== settingsRoutePath ||
-                isLoading.value
-            )
-                return;
-            settingsPage.value?.querySelector(`#${anchor}`)?.scrollIntoView?.({
-                behavior: 'smooth',
-                block: 'center',
-            });
+            void focusHighlightedSetting();
         },
         { immediate: true }
     );
+    visitedTabs.value.add(activeTab.value);
+    const notifyContentReady = () => {
+        if (!isLoading.value && mountedTabs.has(activeTab.value)) {
+            emit('content-ready', settingsRoutePath);
+        }
+    };
+    const handleSectionMounted = (tab) => {
+        mountedTabs.add(tab);
+        if (tab === 'basic') void focusHighlightedSetting();
+        notifyContentReady();
+    };
     const bottomSaveAction = ref(null);
     const isBottomSaveVisible = ref(true);
     const floatingSaveHeaderBottom = ref(0);
@@ -210,7 +260,7 @@
 
     const loadPageSettings = async () => {
         await loadSettings();
-        emit('content-ready', settingsRoutePath);
+        notifyContentReady();
     };
 
     const currentTabLabel = computed(() => {
@@ -335,17 +385,47 @@
                     </div>
                 </div>
                 <BasicSettings
+                    v-if="visitedTabs.has('basic')"
                     v-show="activeTab === 'basic'"
                     :settings="settings"
                     :disguiseConfig="disguiseConfig"
                     :highlighted-focus-id="highlightedFocusId"
+                    @vue:mounted="handleSectionMounted('basic')"
                 />
-                <HomeSettings v-show="activeTab === 'home'" :settings="settings" />
-                <GlobalSettings v-show="activeTab === 'global'" :settings="settings" />
-                <ServiceSettings v-show="activeTab === 'service'" :settings="settings" />
-                <ClientSettings v-show="activeTab === 'client'" />
-                <CustomPageSettings v-show="activeTab === 'custom-page'" :settings="settings" />
-                <div v-show="activeTab === 'system'" class="space-y-6">
+                <HomeSettings
+                    v-if="visitedTabs.has('home')"
+                    v-show="activeTab === 'home'"
+                    :settings="settings"
+                    @vue:mounted="handleSectionMounted('home')"
+                />
+                <GlobalSettings
+                    v-if="visitedTabs.has('global')"
+                    v-show="activeTab === 'global'"
+                    :settings="settings"
+                    @vue:mounted="handleSectionMounted('global')"
+                />
+                <ServiceSettings
+                    v-if="visitedTabs.has('service')"
+                    v-show="activeTab === 'service'"
+                    :settings="settings"
+                    @vue:mounted="handleSectionMounted('service')"
+                />
+                <ClientSettings
+                    v-if="visitedTabs.has('client')"
+                    v-show="activeTab === 'client'"
+                    @vue:mounted="handleSectionMounted('client')"
+                />
+                <CustomPageSettings
+                    v-if="visitedTabs.has('custom-page')"
+                    v-show="activeTab === 'custom-page'"
+                    :settings="settings"
+                    @vue:mounted="handleSectionMounted('custom-page')"
+                />
+                <div
+                    v-if="visitedTabs.has('system')"
+                    v-show="activeTab === 'system'"
+                    class="space-y-6"
+                >
                     <WebdavBackupSettings :settings="settings" />
                     <SystemSettings
                         :settings="settings"
@@ -353,6 +433,7 @@
                         :importBackup="importBackup"
                         :handleReset="handleReset"
                         @migrate="handleOpenMigrationModal"
+                        @vue:mounted="handleSectionMounted('system')"
                     />
                 </div>
             </div>
@@ -383,7 +464,11 @@
         </Teleport>
 
         <!-- Modals -->
-        <MigrationModal v-model:show="showMigrationModal" @success="handleMigrationSuccess" />
+        <MigrationModal
+            v-if="mountedModals.has('migration')"
+            v-model:show="showMigrationModal"
+            @success="handleMigrationSuccess"
+        />
     </div>
 </template>
 

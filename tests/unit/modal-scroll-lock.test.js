@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import Modal from '../../src/components/forms/Modal.vue';
 import FormModal from '../../src/components/shared/FormModal.vue';
 import QRCodeOverlay from '../../src/components/public/QRCodeOverlay.vue';
@@ -219,7 +219,8 @@ describe('dialog background scroll locking', () => {
       profiles: [{ id: 'p1', name: 'Demo' }],
       isQrExpanded: () => true,
     });
-    await nextTick();
+    await vi.dynamicImportSettled();
+    await flushPromises();
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   });
 });

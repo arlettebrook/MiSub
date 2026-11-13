@@ -36,7 +36,8 @@
             if (newVal) {
                 syncGroups();
             }
-        }
+        },
+        { immediate: true }
     );
 
     const handleClose = () => {

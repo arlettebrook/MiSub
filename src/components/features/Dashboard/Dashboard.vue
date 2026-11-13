@@ -11,6 +11,7 @@
     import { useNodeForms } from '../../../composables/useNodeForms.js';
     import { useBulkImportLogic } from '../../../composables/useBulkImportLogic.js';
     import { useBackupLogic } from '../../../composables/useBackupLogic.js';
+    import { useLazyModals } from '../../../composables/useLazyModals.js';
     import { storeToRefs } from 'pinia';
     import { useI18n } from '@/i18n/index.js';
 
@@ -22,11 +23,17 @@
     import SubscriptionPanel from '../../subscriptions/SubscriptionPanel.vue';
     import ManualNodePanel from '../../nodes/ManualNodePanel.vue';
     import Modal from '../../forms/Modal.vue';
-    import SubscriptionEditModal from '../../modals/SubscriptionEditModal.vue';
-    import ManualNodeEditModal from '../../modals/ManualNodeEditModal.vue';
-    import ManualNodeDedupModal from '../../modals/ManualNodeDedupModal.vue';
     import SkeletonLoader from '../../ui/SkeletonLoader.vue';
 
+    const SubscriptionEditModal = defineAsyncComponent(
+        () => import('../../modals/SubscriptionEditModal.vue')
+    );
+    const ManualNodeEditModal = defineAsyncComponent(
+        () => import('../../modals/ManualNodeEditModal.vue')
+    );
+    const ManualNodeDedupModal = defineAsyncComponent(
+        () => import('../../modals/ManualNodeDedupModal.vue')
+    );
     const SettingsModal = defineAsyncComponent(() => import('../../modals/SettingsModal.vue'));
     const BulkImportModal = defineAsyncComponent(() => import('../../modals/BulkImportModal.vue'));
     const ProfileModal = defineAsyncComponent(() => import('../../modals/ProfileModal.vue'));
@@ -236,6 +243,19 @@
 
     // 节点预览相关状态
     const showNodePreviewModal = ref(false);
+    const mountedModals = useLazyModals({
+        bulkImport: showBulkImportModal,
+        logs: showLogModal,
+        editNode: showNodeModal,
+        dedup: showDedupModal,
+        batchGroup: showBatchGroupModal,
+        groups: showGroupManagementModal,
+        editSubscription: showSubModal,
+        settings: () => uiStore.isSettingsModalVisible,
+        subscriptionImport: showSubscriptionImportModal,
+        preview: showNodePreviewModal,
+        qrCode: showQRCodeModal,
+    });
     const previewSubscriptionId = ref(null);
     const previewProfileId = ref(null);
     const previewSubscriptionName = ref('');
@@ -584,10 +604,11 @@
     </div>
 
     <BulkImportModal
+        v-if="mountedModals.has('bulkImport')"
         v-model:show="showBulkImportModal"
         @import="(txt, tag) => handleBulkImport(txt, tag)"
     />
-    <LogModal v-model:show="showLogModal" />
+    <LogModal v-if="mountedModals.has('logs')" v-model:show="showLogModal" />
     <Modal
         v-model:show="showDeleteSubsModal"
         confirm-variant="danger"
@@ -659,6 +680,7 @@
     />
 
     <ManualNodeEditModal
+        v-if="mountedModals.has('editNode')"
         v-model:show="showNodeModal"
         :is-new="isNewNode"
         :editing-node="editingNode"
@@ -667,6 +689,7 @@
         @input-url="handleNodeUrlInput"
     />
     <ManualNodeDedupModal
+        v-if="mountedModals.has('dedup')"
         v-model:show="showDedupModal"
         :plan="dedupPlan"
         @confirm="
@@ -677,12 +700,14 @@
     />
 
     <BatchGroupModal
+        v-if="mountedModals.has('batchGroup')"
         v-model:show="showBatchGroupModal"
         :groups="manualNodeGroups"
         @confirm="handleBatchGroupConfirm"
     />
 
     <GroupManagementModal
+        v-if="mountedModals.has('groups')"
         v-model:show="showGroupManagementModal"
         :groups="manualNodeGroups"
         @rename="handleGroupRename"
@@ -691,6 +716,7 @@
     />
 
     <SubscriptionEditModal
+        v-if="mountedModals.has('editSubscription')"
         v-model:show="showSubModal"
         :is-new="isNewSubscription"
         :editing-subscription="editingSubscription"
@@ -698,11 +724,13 @@
     />
 
     <SettingsModal
+        v-if="mountedModals.has('settings')"
         v-model:show="uiStore.isSettingsModalVisible"
         :export-backup="exportBackup"
         :import-backup="importBackup"
     />
     <SubscriptionImportModal
+        v-if="mountedModals.has('subscriptionImport')"
         :show="showSubscriptionImportModal"
         @update:show="showSubscriptionImportModal = $event"
         :add-nodes-from-bulk="addNodesFromBulk"
@@ -710,6 +738,7 @@
 
     <!-- Node preview modal -->
     <NodePreviewModal
+        v-if="mountedModals.has('preview')"
         :show="showNodePreviewModal"
         :subscription-id="previewSubscriptionId"
         :subscription-name="previewSubscriptionName"
@@ -719,7 +748,12 @@
         @update:show="showNodePreviewModal = $event"
     />
 
-    <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
+    <QRCodeModal
+        v-if="mountedModals.has('qrCode')"
+        v-model:show="showQRCodeModal"
+        :url="qrCodeUrl"
+        :title="qrCodeTitle"
+    />
 
     <CopyLinkModal
         v-if="showCopyModal && showCopyModalProfile"

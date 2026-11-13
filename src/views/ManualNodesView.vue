@@ -7,11 +7,21 @@
     import { extractNodeName } from '../lib/utils.js';
     import ManualNodePanel from '../components/nodes/ManualNodePanel.vue';
     import Modal from '../components/forms/Modal.vue';
-    import ManualNodeEditModal from '../components/modals/ManualNodeEditModal.vue';
-    import ManualNodeDedupModal from '../components/modals/ManualNodeDedupModal.vue';
-    import SubscriptionImportModal from '../components/modals/SubscriptionImportModal.vue';
-    import BatchGroupModal from '../components/modals/BatchGroupModal.vue'; // Added
+    import { useLazyModals } from '../composables/useLazyModals.js';
     import { useI18n } from '../i18n/index.js';
+
+    const ManualNodeEditModal = defineAsyncComponent(
+        () => import('../components/modals/ManualNodeEditModal.vue')
+    );
+    const ManualNodeDedupModal = defineAsyncComponent(
+        () => import('../components/modals/ManualNodeDedupModal.vue')
+    );
+    const SubscriptionImportModal = defineAsyncComponent(
+        () => import('../components/modals/SubscriptionImportModal.vue')
+    );
+    const BatchGroupModal = defineAsyncComponent(
+        () => import('../components/modals/BatchGroupModal.vue')
+    );
 
     const GroupManagementModal = defineAsyncComponent(
         () => import('../components/modals/GroupManagementModal.vue')
@@ -81,6 +91,13 @@
         handleUrlInput: handleNodeUrlInput,
         handleSave: handleSaveNode,
     } = useNodeForms({ addNode, updateNode });
+    const mountedModals = useLazyModals({
+        edit: showNodeModal,
+        dedup: showDedupModal,
+        import: showSubscriptionImportModal,
+        batchGroup: showBatchGroupModal,
+        groups: showGroupManagementModal,
+    });
 
     // Actions
     const setViewMode = (mode) => {
@@ -217,6 +234,7 @@
         />
 
         <ManualNodeEditModal
+            v-if="mountedModals.has('edit')"
             v-model:show="showNodeModal"
             :is-new="isNewNode"
             :editing-node="editingNode"
@@ -225,6 +243,7 @@
             @input-url="handleNodeUrlInput"
         />
         <ManualNodeDedupModal
+            v-if="mountedModals.has('dedup')"
             v-model:show="showDedupModal"
             :plan="dedupPlan"
             @confirm="
@@ -235,12 +254,14 @@
         />
 
         <BatchGroupModal
+            v-if="mountedModals.has('batchGroup')"
             v-model:show="showBatchGroupModal"
             :groups="manualNodeGroups"
             @confirm="handleBatchGroupConfirm"
         />
 
         <GroupManagementModal
+            v-if="mountedModals.has('groups')"
             v-model:show="showGroupManagementModal"
             :groups="manualNodeGroups"
             @rename="handleGroupRename"
@@ -275,6 +296,7 @@
         </Modal>
 
         <SubscriptionImportModal
+            v-if="mountedModals.has('import')"
             :show="showSubscriptionImportModal"
             @update:show="showSubscriptionImportModal = $event"
             :add-nodes-from-bulk="addNodesFromBulk"

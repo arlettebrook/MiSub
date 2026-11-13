@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, computed, onMounted, watch } from 'vue'; // Added watch
+    import { ref, computed, watch } from 'vue';
     import Modal from '../forms/Modal.vue';
     import { useToastStore } from '../../stores/toast';
     import { getClientInfo } from '../../lib/utils';
@@ -96,15 +96,14 @@
         }
     };
 
-    // Reset pagination when modal opens or closes?
-    // Maybe just watch 'show'
     watch(
         () => props.show,
         (newVal) => {
             if (newVal) {
                 fetchLogs();
             }
-        }
+        },
+        { immediate: true }
     );
 </script>
 

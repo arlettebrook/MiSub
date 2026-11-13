@@ -71,7 +71,8 @@
             if (newVal) {
                 resetForm();
             }
-        }
+        },
+        { immediate: true }
     );
 
     const closeModal = () => {

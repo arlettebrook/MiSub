@@ -62,6 +62,23 @@ async function mountDashboard({ loaded = true } = {}) {
 }
 
 describe('dashboard data failures', () => {
+    it('does not mount unused legacy dialogs or fetch logs when entering the dashboard', async () => {
+        await mountDashboard();
+        for (const name of [
+            'LogModal',
+            'NodePreviewModal',
+            'QRCodeModal',
+            'SettingsModal',
+            'BulkImportModal',
+            'SubscriptionImportModal',
+            'BatchGroupModal',
+            'GroupManagementModal',
+        ]) {
+            expect(wrapper.findComponent({ name }).exists()).toBe(false);
+        }
+        expect(apiGet).not.toHaveBeenCalled();
+    });
+
     it('keeps legacy drafts and blocks saving or discarding during session verification', async () => {
         const store = await mountDashboard();
         store.markDirty();

@@ -28,6 +28,52 @@ function normalizeExternalApiConfig(value) {
 function normalizeSettingsObject(source = {}) {
     const merged = JSON.parse(JSON.stringify({ ...DEFAULT_SETTINGS, ...source }));
     merged.externalApi = normalizeExternalApiConfig(source.externalApi ?? merged.externalApi);
+
+    // Lazy sections must receive their defaults before the saved baseline is captured.
+    for (const key of [
+        'defaultPrefixSettings',
+        'guestbook',
+        'webdavBackup',
+        'subconverter',
+        'customPage',
+    ]) {
+        if (!merged[key]) merged[key] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS[key]));
+    }
+    if (!Array.isArray(merged.defaultOperators)) merged.defaultOperators = [];
+    if (!Array.isArray(merged.regionOverrides)) merged.regionOverrides = [];
+    if (!merged.announcement) {
+        merged.announcement = {
+            enabled: false,
+            title: '',
+            content: '',
+            type: 'info',
+            dismissible: true,
+            updatedAt: null,
+        };
+    }
+    merged.customPage.type = 'html';
+    for (const key of [
+        'allowExternalStylesheets',
+        'allowScripts',
+        'hideBranding',
+        'hideHeader',
+        'hideFooter',
+    ]) {
+        if (typeof merged.customPage[key] !== 'boolean') merged.customPage[key] = false;
+    }
+    if (!merged.subconverter.defaultOptions) {
+        merged.subconverter.defaultOptions = { ...DEFAULT_SETTINGS.subconverter.defaultOptions };
+    }
+    if (merged.subconverter.engineMode === 'external') {
+        merged.builtinSkipCertVerify = false;
+        merged.builtinEnableUdp = false;
+        if (['builtin', 'custom_template'].includes(merged.transformConfigMode)) {
+            merged.transformConfigMode = 'preset';
+        }
+        if (/^(builtin|custom):/.test(String(merged.transformConfig || ''))) {
+            merged.transformConfig = '';
+        }
+    }
     return merged;
 }
 

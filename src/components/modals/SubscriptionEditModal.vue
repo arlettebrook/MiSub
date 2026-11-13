@@ -191,10 +191,11 @@
         });
     };
 
-    // 切换模式时更新文本
-    watch(ruleMode, () => {
+    // Only a user-selected mode writes the rules; initial parsing is read-only.
+    const setRuleMode = (mode) => {
+        ruleMode.value = mode;
         syncToText();
-    });
+    };
 
     // 监听弹窗显示，解析现有规则
     watch(
@@ -203,7 +204,8 @@
             if (newVal) {
                 parseFromText();
             }
-        }
+        },
+        { immediate: true }
     );
 
     // === 高级模式相关（保留原有逻辑） ===
@@ -384,7 +386,7 @@
                     :switch-to-advanced="switchToAdvanced"
                     :switch-to-visual="switchToVisual"
                     @toggle-expand="isRuleExpanded = !isRuleExpanded"
-                    @update:rule-mode="ruleMode = $event"
+                    @update:rule-mode="setRuleMode"
                     @update:custom-keyword="customKeyword = $event"
                 />
 

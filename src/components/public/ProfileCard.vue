@@ -1,5 +1,7 @@
 <script setup>
-    import QRCodeOverlay from './QRCodeOverlay.vue';
+    import { defineAsyncComponent } from 'vue';
+    import { useLazyModals } from '../../composables/useLazyModals.js';
+    const QRCodeOverlay = defineAsyncComponent(() => import('./QRCodeOverlay.vue'));
     import BaseIcon from '../ui/BaseIcon.vue';
     import { useI18n } from '../../i18n/index.js';
 
@@ -28,6 +30,9 @@
         'download-qr',
         'register-canvas',
     ]);
+    const mountedModals = useLazyModals({
+        qrCode: () => props.showQrOverlay && props.isQrExpanded,
+    });
 
     // Icon Paths
     const ICONS = {
@@ -116,7 +121,7 @@
         </div>
 
         <QRCodeOverlay
-            v-if="showQrOverlay"
+            v-if="showQrOverlay && mountedModals.has('qrCode')"
             :profile="profile"
             :is-expanded="isQrExpanded"
             @close="emit('toggle-qr', profile)"

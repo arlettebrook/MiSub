@@ -10,7 +10,7 @@
     } from 'vue';
     import { useToastStore } from '../stores/toast.js';
     import { hasStoredLocale, useI18n } from '../i18n/index.js';
-    import QRCode from 'qrcode';
+    import { useLazyModals } from '../composables/useLazyModals.js';
     import { api } from '../lib/http.js';
     import ProfileGrid from '../components/public/ProfileGrid.vue';
     import BaseIcon from '../components/ui/BaseIcon.vue';
@@ -226,6 +226,11 @@
     };
 
     const showPreviewModal = ref(false);
+    const mountedModals = useLazyModals({
+        preview: showPreviewModal,
+        guestbook: showGuestbookModal,
+        quickImport: showQuickImportModal,
+    });
     const previewProfileId = ref(null);
     const previewProfileName = ref('');
 
@@ -246,10 +251,38 @@
     const qrCanvasRefs = ref({});
     const qrRequests = new Map();
 
+    const generateQRCode = async (profileId, canvas, request) => {
+        if (request.canvas === canvas) return;
+        request.canvas = canvas;
+        const isCurrent = () =>
+            qrRequests.get(profileId) === request && qrCanvasRefs.value[profileId] === canvas;
+        const token = config.value.profileToken || 'profiles';
+        const identifier = request.profile.customId || profileId;
+        const link = `${window.location.origin}/${token}/${identifier}`;
+        try {
+            const { default: QRCode } = await import('qrcode');
+            if (!isCurrent()) return;
+            await QRCode.toCanvas(canvas, link, {
+                width: 200,
+                margin: 2,
+                color: { dark: '#000000', light: '#FFFFFF' },
+            });
+            if (isCurrent()) readyQRCards.value.add(profileId);
+        } catch (err) {
+            if (!isCurrent()) return;
+            console.error('Failed to generate QR code:', err);
+            expandedQRCards.value.delete(profileId);
+            qrRequests.delete(profileId);
+            showToast(t('publicProfiles.qrGenerateFailed'), 'error');
+        }
+    };
+
     const registerQrCanvas = (profileId, canvas) => {
         if (!canvas) return;
         if (qrCanvasRefs.value[profileId] !== canvas) readyQRCards.value.delete(profileId);
         qrCanvasRefs.value[profileId] = canvas;
+        const request = qrRequests.get(profileId);
+        if (request) void generateQRCode(profileId, canvas, request);
     };
 
     const toggleQRCode = async (profile) => {
@@ -259,45 +292,15 @@
             readyQRCards.value.delete(profileId);
             qrRequests.delete(profileId);
         } else {
-            const request = Symbol();
+            const request = { profile, canvas: null };
             qrRequests.set(profileId, request);
             expandedQRCards.value.add(profileId);
             readyQRCards.value.delete(profileId);
             await nextTick();
             if (qrRequests.get(profileId) !== request) return;
             const canvas = qrCanvasRefs.value[profileId];
-            if (canvas) {
-                const token = config.value.profileToken || 'profiles';
-                const identifier = profile.customId || profile.id;
-                const link = `${window.location.origin}/${token}/${identifier}`;
-                try {
-                    await QRCode.toCanvas(canvas, link, {
-                        width: 200,
-                        margin: 2,
-                        color: { dark: '#000000', light: '#FFFFFF' },
-                    });
-                    if (
-                        qrRequests.get(profileId) === request &&
-                        qrCanvasRefs.value[profileId] === canvas
-                    ) {
-                        readyQRCards.value.add(profileId);
-                    }
-                } catch (err) {
-                    if (
-                        qrRequests.get(profileId) !== request ||
-                        qrCanvasRefs.value[profileId] !== canvas
-                    )
-                        return;
-                    console.error('Failed to generate QR code:', err);
-                    expandedQRCards.value.delete(profileId);
-                    qrRequests.delete(profileId);
-                    showToast(t('publicProfiles.qrGenerateFailed'), 'error');
-                }
-            } else {
-                expandedQRCards.value.delete(profileId);
-                qrRequests.delete(profileId);
-                showToast(t('publicProfiles.qrGenerateFailed'), 'error');
-            }
+            // The async overlay can register its canvas after this render tick.
+            if (canvas) await generateQRCode(profileId, canvas, request);
         }
     };
 
@@ -734,7 +737,7 @@
 
         <!-- Modals -->
         <NodePreviewModal
-            v-if="showPreviewModal"
+            v-if="mountedModals.has('preview')"
             :show="showPreviewModal"
             @update:show="showPreviewModal = $event"
             :profile-id="previewProfileId"
@@ -743,12 +746,14 @@
         />
 
         <GuestbookModal
+            v-if="mountedModals.has('guestbook')"
             :show="showGuestbookModal"
             :config="guestbookConfig"
             @close="showGuestbookModal = false"
         />
 
         <QuickImportModal
+            v-if="mountedModals.has('quickImport')"
             :show="showQuickImportModal"
             :profile="selectedProfileForImport"
             :clients="clients"

@@ -72,6 +72,38 @@ describe('settings unsaved changes', () => {
         expect(hasUnsavedChanges.value).toBe(false);
     });
 
+    it('normalizes lazy section defaults without relying on section mounting', async () => {
+        fetchSettings.mockResolvedValueOnce({
+            success: true,
+            data: {
+                defaultOperators: null,
+                regionOverrides: null,
+                guestbook: null,
+                webdavBackup: null,
+                customPage: { type: 'iframe', allowScripts: null },
+                subconverter: { engineMode: 'external' },
+                transformConfigMode: 'builtin',
+                transformConfig: 'builtin:standard',
+                builtinEnableUdp: true,
+            },
+        });
+        const { settings, loadSettings, hasUnsavedChanges } = useSettingsLogic();
+        await loadSettings();
+        expect(settings.value.defaultOperators).toEqual([]);
+        expect(settings.value.regionOverrides).toEqual([]);
+        expect(settings.value.guestbook.enabled).toBe(false);
+        expect(settings.value.webdavBackup.remotePath).toBe('/MiSub');
+        expect(settings.value.customPage.type).toBe('html');
+        expect(settings.value.customPage.allowScripts).toBe(false);
+        expect(settings.value.subconverter.defaultOptions.udp).toBe(true);
+        expect(settings.value.transformConfigMode).toBe('preset');
+        expect(settings.value.transformConfig).toBe('');
+        expect(settings.value.builtinEnableUdp).toBe(false);
+        expect(hasUnsavedChanges.value).toBe(false);
+        settings.value.FileName = 'Edited';
+        expect(hasUnsavedChanges.value).toBe(true);
+    });
+
     it('keeps changes after a failed save and clears them after a successful save', async () => {
         const { settings, hasUnsavedChanges, loadSettings, handleSave } = useSettingsLogic();
         await loadSettings();

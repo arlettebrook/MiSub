@@ -14,6 +14,10 @@ import { loadLegacyDashboard } from '../../src/router/component-loaders.js';
 import { useSessionStore } from '../../src/stores/session.js';
 
 const sessionGate = vi.hoisted(() => ({ nextCheck: null }));
+const preloader = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn() }));
+vi.mock('../../src/router/navigation-preloader.js', () => ({
+    createNavigationPreloader: () => preloader,
+}));
 
 const legacyGate = vi.hoisted(() => {
     let resolve;
@@ -144,6 +148,8 @@ const mountApp = (router, layoutMode = 'modern', loginPath = '/login') => {
 afterEach(() => {
     wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
     sessionGate.nextCheck = null;
+    preloader.start.mockClear();
+    preloader.stop.mockClear();
 });
 
 describe('authenticated dashboard first render', () => {
@@ -300,6 +306,7 @@ describe('authenticated dashboard first render', () => {
             expect(wrapper.find('form').exists()).toBe(false);
             expect(wrapper.find('header-stub').exists()).toBe(false);
             expect(wrapper.find('footer').exists()).toBe(false);
+            expect(preloader.start).not.toHaveBeenCalled();
         }
     );
 
@@ -502,11 +509,14 @@ describe('authenticated dashboard first render', () => {
         expect(wrapper.findAll('main [aria-busy="true"]')).toHaveLength(0);
         expect(wrapper.find('footer').exists()).toBe(false);
 
+        expect(preloader.start).not.toHaveBeenCalled();
+
         finishRoute(panel);
         await router.isReady();
         await flushPromises();
         expect(wrapper.find('[data-testid="dashboard-panel"]').exists()).toBe(true);
         expect(wrapper.find('footer').exists()).toBe(true);
+        expect(preloader.start).toHaveBeenCalledWith('/dashboard');
     });
 
     it('does not reveal the footer for the home placeholder before dashboard redirection finishes', async () => {

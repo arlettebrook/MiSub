@@ -82,13 +82,11 @@ function mountView(view, locale = 'zh-CN', stubs = {}) {
 
 beforeEach(() => {
     preferences.ids = null;
-    preferences.get
-        .mockReset()
-        .mockImplementation(async () => ({
-            success: true,
-            initialized: preferences.ids != null,
-            data: { dismissedHealthItemIds: [...(preferences.ids || [])] },
-        }));
+    preferences.get.mockReset().mockImplementation(async () => ({
+        success: true,
+        initialized: preferences.ids != null,
+        data: { dismissedHealthItemIds: [...(preferences.ids || [])] },
+    }));
     preferences.post.mockReset().mockImplementation(async (body) => {
         let ids = preferences.ids || [];
         if (body.action === 'dismiss') ids = [...new Set([...ids, body.id])];
@@ -158,6 +156,78 @@ afterEach(async () => {
 });
 
 describe('dashboard action regressions', () => {
+    it.each([
+        [
+            MySubscriptionsView,
+            'ProfilePanel',
+            'p1',
+            ['LogModal', 'NodePreviewModal', 'QRCodeModal'],
+        ],
+        [
+            SubscriptionGroupsView,
+            'SubscriptionPanel',
+            'healthy',
+            ['NodePreviewModal', 'QRCodeModal'],
+        ],
+    ])(
+        'mounts subscription dialogs only after their action is used in %s',
+        async (view, panelName, id, dialogs) => {
+            useDataStore(pinia).settings.profileToken = 'test-token';
+            const stubs = Object.fromEntries(
+                dialogs.map((name) => [
+                    name,
+                    {
+                        name,
+                        props: ['show'],
+                        template: `<div data-testid="${name}" />`,
+                    },
+                ])
+            );
+            const wrapper = mountView(view, 'zh-CN', stubs);
+            await flushPromises();
+            for (const name of dialogs)
+                expect(wrapper.find(`[data-testid="${name}"]`).exists()).toBe(false);
+            const panel = wrapper.findComponent({ name: panelName });
+            panel.vm.$emit('preview', id);
+            await flushPromises();
+            expect(wrapper.findComponent({ name: 'NodePreviewModal' }).props('show')).toBe(true);
+            expect(wrapper.find('[data-testid="QRCodeModal"]').exists()).toBe(false);
+            if (dialogs.includes('LogModal')) {
+                expect(wrapper.find('[data-testid="LogModal"]').exists()).toBe(false);
+                panel.vm.$emit('viewLogs', id);
+                await flushPromises();
+                expect(wrapper.findComponent({ name: 'LogModal' }).props('show')).toBe(true);
+            }
+            panel.vm.$emit('qrcode', id);
+            await flushPromises();
+            expect(wrapper.findComponent({ name: 'QRCodeModal' }).props('show')).toBe(true);
+        }
+    );
+
+    it('keeps dashboard logs and QR dialogs unmounted until opened', async () => {
+        const stub = (name) => ({
+            name,
+            props: ['show'],
+            template: `<div data-testid="${name}" />`,
+        });
+        const wrapper = mountView(DashboardView, 'zh-CN', {
+            LogModal: stub('LogModal'),
+            QRCodeModal: stub('QRCodeModal'),
+        });
+        await flushPromises();
+        expect(wrapper.find('[data-testid="LogModal"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="QRCodeModal"]').exists()).toBe(false);
+        wrapper.vm.showLogModal = true;
+        await flushPromises();
+        expect(wrapper.findComponent({ name: 'LogModal' }).props('show')).toBe(true);
+        expect(wrapper.find('[data-testid="QRCodeModal"]').exists()).toBe(false);
+        wrapper
+            .findComponent({ name: 'RightPanel' })
+            .vm.$emit('qrcode', 'https://example.com/sub', 'Demo');
+        await flushPromises();
+        expect(wrapper.findComponent({ name: 'QRCodeModal' }).props('show')).toBe(true);
+    });
+
     it('restores one ignored issue while keeping other issues ignored across remounts', async () => {
         const store = useDataStore(pinia);
         store.subscriptions[0].userInfo = { expire: 1 };
@@ -727,7 +797,10 @@ describe('dashboard action regressions', () => {
                 await flushPromises();
                 expect(scroll).not.toHaveBeenCalled();
                 controls.logic.isLoading.value = false;
-                await flushPromises();
+                await vi.waitFor(() => {
+                    const input = wrapper.get(`#setting-${focus}`);
+                    expect(scroll.mock.contexts.at(-1)).toBe(input.element);
+                });
                 const input = wrapper.get(`#setting-${focus}`);
                 expect(input.element.tagName).toBe('INPUT');
                 expect(scroll.mock.contexts.at(-1)).toBe(input.element);

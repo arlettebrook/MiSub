@@ -9,13 +9,16 @@
     import { useBulkImportLogic } from '../composables/useBulkImportLogic.js'; // Added
     import SubscriptionPanel from '../components/subscriptions/SubscriptionPanel.vue';
     import Modal from '../components/forms/Modal.vue';
-    import SubscriptionEditModal from '../components/modals/SubscriptionEditModal.vue';
+    import { useLazyModals } from '../composables/useLazyModals.js';
     import { useToastStore } from '../stores/toast.js';
     import { useI18n } from '../i18n/index.js';
     import { useRoute, useRouter } from 'vue-router';
     import { resolveSubscriptionStatus } from '../utils/dashboard-deeplink.js';
 
     const dataStore = useDataStore();
+    const SubscriptionEditModal = defineAsyncComponent(
+        () => import('../components/modals/SubscriptionEditModal.vue')
+    );
     const { showToast } = useToastStore();
     const { markDirty } = dataStore;
     const { t } = useI18n();
@@ -138,6 +141,11 @@
     // QRCode
     const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
     const showQRCodeModal = ref(false);
+    const mountedModals = useLazyModals({
+        edit: showSubModal,
+        preview: showNodePreviewModal,
+        qrCode: showQRCodeModal,
+    });
     const qrCodeUrl = ref('');
     const qrCodeTitle = ref('');
 
@@ -185,6 +193,7 @@
 
         <!-- Dialogs -->
         <SubscriptionEditModal
+            v-if="mountedModals.has('edit')"
             v-model:show="showSubModal"
             :is-new="isNewSubscription"
             :editing-subscription="editingSubscription"
@@ -215,6 +224,7 @@
         />
 
         <NodePreviewModal
+            v-if="mountedModals.has('preview')"
             :show="showNodePreviewModal"
             :subscription-id="previewSubscriptionId"
             :subscription-name="previewSubscriptionName"
@@ -224,6 +234,11 @@
             @update:show="showNodePreviewModal = $event"
         />
 
-        <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
+        <QRCodeModal
+            v-if="mountedModals.has('qrCode')"
+            v-model:show="showQRCodeModal"
+            :url="qrCodeUrl"
+            :title="qrCodeTitle"
+        />
     </div>
 </template>

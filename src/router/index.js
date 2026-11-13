@@ -1,11 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-
-// Lazy load views for better performance
-const DashboardView = () => import('../views/DashboardView.vue');
-const SubscriptionGroupsView = () => import('../views/SubscriptionGroupsView.vue');
-const ManualNodesView = () => import('../views/ManualNodesView.vue');
-const MySubscriptionsView = () => import('../views/MySubscriptionsView.vue');
-const SettingsView = () => import('../views/SettingsView.vue');
+import { navigationLoaders } from './navigation-loaders.js';
 
 const HomeView = () => import('../views/HomeView.vue'); // [NEW] Wrapper View
 
@@ -25,31 +19,31 @@ const routes = [
     {
         path: '/dashboard',
         name: 'Dashboard',
-        component: DashboardView,
+        component: navigationLoaders['/dashboard'],
         meta: { title: '仪表盘', requiresAuth: true },
     },
     {
         path: '/dashboard/groups',
         name: 'SubscriptionGroups',
-        component: SubscriptionGroupsView,
+        component: navigationLoaders['/dashboard/groups'],
         meta: { title: '订阅组', requiresAuth: true },
     },
     {
         path: '/dashboard/nodes',
         name: 'ManualNodes',
-        component: ManualNodesView,
+        component: navigationLoaders['/dashboard/nodes'],
         meta: { title: '手动节点', requiresAuth: true },
     },
     {
         path: '/dashboard/subscriptions',
         name: 'MySubscriptions',
-        component: MySubscriptionsView,
+        component: navigationLoaders['/dashboard/subscriptions'],
         meta: { title: '我的订阅', requiresAuth: true },
     },
     {
         path: '/dashboard/settings',
         name: 'Settings',
-        component: SettingsView,
+        component: navigationLoaders['/dashboard/settings'],
         meta: { title: '设置', requiresAuth: true },
     },
     /* 

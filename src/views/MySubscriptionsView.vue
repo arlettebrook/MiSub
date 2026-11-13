@@ -10,6 +10,7 @@
     import { useManualNodes } from '../composables/useManualNodes.js';
     import { useToastStore } from '../stores/toast.js';
     import { useI18n } from '../i18n/index.js';
+    import { useLazyModals } from '../composables/useLazyModals.js';
 
     const { t } = useI18n();
 
@@ -125,6 +126,11 @@
     // QRCode
     const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
     const showQRCodeModal = ref(false);
+    const mountedModals = useLazyModals({
+        logs: showLogModal,
+        preview: showNodePreviewModal,
+        qrCode: showQRCodeModal,
+    });
     const qrCodeUrl = ref('');
     const qrCodeTitle = ref('');
     const { settings } = storeToRefs(dataStore); // Check if settings is already imported or available from dataStore
@@ -174,6 +180,7 @@
         />
 
         <LogModal
+            v-if="mountedModals.has('logs')"
             :show="showLogModal"
             @update:show="showLogModal = $event"
             :filter-profile-name="logProfileName"
@@ -204,6 +211,7 @@
         </Modal>
 
         <NodePreviewModal
+            v-if="mountedModals.has('preview')"
             :show="showNodePreviewModal"
             :subscription-id="null"
             :subscription-name="''"
@@ -213,7 +221,12 @@
             @update:show="showNodePreviewModal = $event"
         />
 
-        <QRCodeModal v-model:show="showQRCodeModal" :url="qrCodeUrl" :title="qrCodeTitle" />
+        <QRCodeModal
+            v-if="mountedModals.has('qrCode')"
+            v-model:show="showQRCodeModal"
+            :url="qrCodeUrl"
+            :title="qrCodeTitle"
+        />
 
         <CopyLinkModal
             v-if="showCopyModal && showCopyModalProfile"

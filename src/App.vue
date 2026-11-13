@@ -13,12 +13,14 @@
     import NavBar from './components/layout/NavBar.vue';
     import Footer from './components/layout/Footer.vue';
     import { loadLegacyDashboard } from './router/component-loaders.js';
+    import { createNavigationPreloader } from './router/navigation-preloader.js';
     import { detectLegacyD1 } from './lib/api.js';
     import { useI18n } from './i18n/index.js';
     import { normalizeLoginPath } from './utils/login-path.js';
     import { configureSessionRequestGuard, configureConnectionErrorHandler } from './lib/http.js';
     import SessionVerification from './components/ui/SessionVerification.vue';
     import { settleConfirm } from './composables/useConfirm.js';
+    import { useLazyModals } from './composables/useLazyModals.js';
 
     // Lazy components
     const DisguiseView = defineAsyncComponent(() => import('./views/DisguiseView.vue'));
@@ -69,6 +71,7 @@
     } = storeToRefs(versionStore);
 
     const isLoggedIn = computed(() => sessionState.value === 'loggedIn');
+    const navigationPreloader = createNavigationPreloader();
     const isPublicRoute = computed(() => route.meta.isPublic);
     const loginPath = computed(
         () =>
@@ -114,6 +117,31 @@
     const readyAuthenticatedContentKey = ref(null);
     const hasAuthenticatedContentMounted = computed(
         () => readyAuthenticatedContentKey.value === authenticatedContentKey.value
+    );
+    watch(
+        [
+            isLoggedIn,
+            isInitialRouteReady,
+            hasAuthenticatedContentMounted,
+            layoutMode,
+            isSessionLocked,
+            () => dataStore.isLoading,
+        ],
+        ([loggedIn, routeReady, contentReady, layout, locked, dataLoading]) => {
+            if (
+                loggedIn &&
+                routeReady &&
+                contentReady &&
+                layout === 'modern' &&
+                !locked &&
+                !dataLoading
+            ) {
+                navigationPreloader.start(route.path);
+            } else {
+                navigationPreloader.stop();
+            }
+        },
+        { flush: 'post' }
     );
     const isPageLoading = computed(
         () =>
@@ -216,6 +244,10 @@
     );
 
     const showLegacyD1MigrationModal = ref(false);
+    const mountedModals = useLazyModals({
+        migration: showLegacyD1MigrationModal,
+        changelog: showVersionChangelogModal,
+    });
     const legacyD1Details = ref({ hasLegacySubscriptions: false, hasLegacyProfiles: false });
     const pendingVersionModal = ref(false);
 
@@ -323,6 +355,7 @@
     });
 
     onUnmounted(() => {
+        navigationPreloader.stop();
         sessionStore.stopSessionSync();
         releaseRequestGuard();
         releaseConnectionHandler();
@@ -591,12 +624,14 @@
         <Toast />
         <ConfirmDialog />
         <LegacyD1MigrationModal
+            v-if="mountedModals.has('migration')"
             :show="showLegacyD1MigrationModal"
             :details="legacyD1Details"
             @update:show="handleLegacyD1MigrationClose"
             @success="handleLegacyD1MigrationSuccess"
         />
         <VersionChangelogModal
+            v-if="mountedModals.has('changelog')"
             :show="showVersionChangelogModal"
             :release="versionReleaseInfo || {}"
             :current-version="currentVersion"

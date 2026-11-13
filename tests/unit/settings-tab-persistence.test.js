@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { reactive, ref } from 'vue';
+import { h, reactive, ref } from 'vue';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createI18n } from '../../src/i18n/index.js';
 
@@ -23,6 +23,7 @@ const tabs = [
     ['client', '客户端管理'],
     ['system', '系统设置'],
 ];
+const sectionStub = (tag) => ({ render: () => h(tag) });
 
 describe('settings tab persistence', () => {
     let wrapper;
@@ -61,14 +62,14 @@ describe('settings tab persistence', () => {
             global: {
                 plugins: [createI18n({ initialLocale: 'zh-CN' })],
                 stubs: {
-                    BasicSettings: true,
-                    HomeSettings: true,
-                    GlobalSettings: true,
-                    ServiceSettings: true,
-                    ClientSettings: true,
-                    CustomPageSettings: true,
-                    WebdavBackupSettings: true,
-                    SystemSettings: true,
+                    BasicSettings: sectionStub('basic-settings-stub'),
+                    HomeSettings: sectionStub('home-settings-stub'),
+                    GlobalSettings: sectionStub('global-settings-stub'),
+                    ServiceSettings: sectionStub('service-settings-stub'),
+                    ClientSettings: sectionStub('client-settings-stub'),
+                    CustomPageSettings: sectionStub('custom-page-settings-stub'),
+                    WebdavBackupSettings: sectionStub('webdav-backup-settings-stub'),
+                    SystemSettings: sectionStub('system-settings-stub'),
                     MigrationModal: true,
                 },
             },
@@ -83,6 +84,43 @@ describe('settings tab persistence', () => {
             .find((button) => button.text() === label);
         await button.trigger('click');
     };
+
+    it('only mounts visited sections and preserves an existing section when switching back', async () => {
+        await mountPage();
+        expect(wrapper.find('basic-settings-stub').exists()).toBe(true);
+        expect(wrapper.find('client-settings-stub').exists()).toBe(false);
+        expect(wrapper.find('home-settings-stub').exists()).toBe(false);
+        expect(wrapper.find('system-settings-stub').exists()).toBe(false);
+        const basic = wrapper.get('basic-settings-stub').element;
+
+        await selectTab('客户端管理');
+        const client = wrapper.get('client-settings-stub').element;
+        expect(basic.style.display).toBe('none');
+        expect(wrapper.find('home-settings-stub').exists()).toBe(false);
+
+        await selectTab('基础设置');
+        expect(wrapper.get('basic-settings-stub').element).toBe(basic);
+        expect(wrapper.get('client-settings-stub').element).toBe(client);
+        expect(client.style.display).toBe('none');
+        expect(controls.logic.loadSettings).toHaveBeenCalledOnce();
+    });
+
+    it('mounts only the restored section on initial entry', async () => {
+        sessionStorage.setItem(storageKey, 'system');
+        await mountPage();
+        expect(wrapper.find('system-settings-stub').exists()).toBe(true);
+        expect(wrapper.find('webdav-backup-settings-stub').exists()).toBe(true);
+        expect(wrapper.find('basic-settings-stub').exists()).toBe(false);
+        expect(wrapper.find('client-settings-stub').exists()).toBe(false);
+    });
+
+    it('does not mount a saved tab when a Token deep link selects Basic Settings', async () => {
+        sessionStorage.setItem(storageKey, 'client');
+        controls.route.query = { focus: 'mytoken' };
+        await mountPage();
+        expect(wrapper.find('basic-settings-stub').exists()).toBe(true);
+        expect(wrapper.find('client-settings-stub').exists()).toBe(false);
+    });
 
     it.each(tabs)('restores the %s tab after the settings page is recreated', async (id, label) => {
         await mountPage();
