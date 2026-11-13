@@ -1,7 +1,7 @@
 <script setup>
-    import { defineAsyncComponent } from 'vue';
+    import { createLazyModal } from '../../utils/lazy-modal.js';
     import { useLazyModals } from '../../composables/useLazyModals.js';
-    const QRCodeOverlay = defineAsyncComponent(() => import('./QRCodeOverlay.vue'));
+    const QRCodeOverlay = createLazyModal('QRCodeOverlay');
     import BaseIcon from '../ui/BaseIcon.vue';
     import { useI18n } from '../../i18n/index.js';
 

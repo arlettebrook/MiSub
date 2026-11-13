@@ -1,4 +1,5 @@
 <script setup>
+    import { createLazyModal } from '../utils/lazy-modal.js';
     import {
         ref,
         computed,
@@ -17,39 +18,22 @@
 
     import SettingsSidebar from '../components/settings/SettingsSidebar.vue';
     import SettingsSaveButton from '../components/settings/SettingsSaveButton.vue';
+    import { settingsSectionLoaders } from '../utils/settings-section-loaders.js';
     import SettingsSectionLoading from '../components/settings/SettingsSectionLoading.vue';
     import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
     import { createFloatingSavePosition } from '../utils/floating-save-position.js';
 
     const lazySection = (loader) =>
-        defineAsyncComponent({ loader, loadingComponent: SettingsSectionLoading, delay: 100 });
-    const MigrationModal = defineAsyncComponent(
-        () => import('../components/modals/MigrationModal.vue')
-    );
-    const BasicSettings = lazySection(
-        () => import('../components/settings/sections/BasicSettings.vue')
-    );
-    const HomeSettings = lazySection(
-        () => import('../components/settings/sections/HomeSettings.vue')
-    );
-    const ServiceSettings = lazySection(
-        () => import('../components/settings/sections/ServiceSettings.vue')
-    );
-    const GlobalSettings = lazySection(
-        () => import('../components/settings/sections/GlobalSettings.vue')
-    );
-    const SystemSettings = lazySection(
-        () => import('../components/settings/sections/SystemSettings.vue')
-    );
-    const WebdavBackupSettings = lazySection(
-        () => import('../components/settings/sections/WebdavBackupSettings.vue')
-    );
-    const ClientSettings = lazySection(
-        () => import('../components/settings/sections/ClientSettings.vue')
-    );
-    const CustomPageSettings = lazySection(
-        () => import('../components/settings/sections/CustomPageSettings.vue')
-    );
+        defineAsyncComponent({ loader, loadingComponent: SettingsSectionLoading, delay: 0 });
+    const MigrationModal = createLazyModal('MigrationModal');
+    const BasicSettings = lazySection(settingsSectionLoaders['basic']);
+    const HomeSettings = lazySection(settingsSectionLoaders['home']);
+    const ServiceSettings = lazySection(settingsSectionLoaders['service']);
+    const GlobalSettings = lazySection(settingsSectionLoaders['global']);
+    const SystemSettings = lazySection(settingsSectionLoaders['system']);
+    const WebdavBackupSettings = lazySection(settingsSectionLoaders['webdav']);
+    const ClientSettings = lazySection(settingsSectionLoaders['client']);
+    const CustomPageSettings = lazySection(settingsSectionLoaders['custom-page']);
 
     const props = defineProps({ sessionPaused: Boolean });
 

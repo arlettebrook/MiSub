@@ -1,5 +1,6 @@
 <script setup>
-    import { ref, defineAsyncComponent } from 'vue';
+    import { createLazyModal } from '../utils/lazy-modal.js';
+    import { ref } from 'vue';
     import { useDataStore } from '../stores/useDataStore.js';
     import { useManualNodes } from '../composables/useManualNodes.js';
     import { useNodeForms } from '../composables/useNodeForms.js'; // Added
@@ -10,22 +11,12 @@
     import { useLazyModals } from '../composables/useLazyModals.js';
     import { useI18n } from '../i18n/index.js';
 
-    const ManualNodeEditModal = defineAsyncComponent(
-        () => import('../components/modals/ManualNodeEditModal.vue')
-    );
-    const ManualNodeDedupModal = defineAsyncComponent(
-        () => import('../components/modals/ManualNodeDedupModal.vue')
-    );
-    const SubscriptionImportModal = defineAsyncComponent(
-        () => import('../components/modals/SubscriptionImportModal.vue')
-    );
-    const BatchGroupModal = defineAsyncComponent(
-        () => import('../components/modals/BatchGroupModal.vue')
-    );
+    const ManualNodeEditModal = createLazyModal('ManualNodeEditModal');
+    const ManualNodeDedupModal = createLazyModal('ManualNodeDedupModal');
+    const SubscriptionImportModal = createLazyModal('SubscriptionImportModal');
+    const BatchGroupModal = createLazyModal('BatchGroupModal');
 
-    const GroupManagementModal = defineAsyncComponent(
-        () => import('../components/modals/GroupManagementModal.vue')
-    );
+    const GroupManagementModal = createLazyModal('GroupManagementModal');
 
     const dataStore = useDataStore();
     const { showToast } = useToastStore();

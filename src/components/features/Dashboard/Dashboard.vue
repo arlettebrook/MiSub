@@ -1,5 +1,6 @@
 <script setup>
-    import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, watch } from 'vue';
+    import { createLazyModal } from '../../../utils/lazy-modal.js';
+    import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
     import { formatBytes } from '../../../lib/utils.js';
     import { useToastStore } from '../../../stores/toast.js';
     import { useUIStore } from '../../../stores/ui.js';
@@ -25,32 +26,20 @@
     import Modal from '../../forms/Modal.vue';
     import SkeletonLoader from '../../ui/SkeletonLoader.vue';
 
-    const SubscriptionEditModal = defineAsyncComponent(
-        () => import('../../modals/SubscriptionEditModal.vue')
-    );
-    const ManualNodeEditModal = defineAsyncComponent(
-        () => import('../../modals/ManualNodeEditModal.vue')
-    );
-    const ManualNodeDedupModal = defineAsyncComponent(
-        () => import('../../modals/ManualNodeDedupModal.vue')
-    );
-    const SettingsModal = defineAsyncComponent(() => import('../../modals/SettingsModal.vue'));
-    const BulkImportModal = defineAsyncComponent(() => import('../../modals/BulkImportModal.vue'));
-    const ProfileModal = defineAsyncComponent(() => import('../../modals/ProfileModal.vue'));
-    const SubscriptionImportModal = defineAsyncComponent(
-        () => import('../../modals/SubscriptionImportModal.vue')
-    );
-    const LogModal = defineAsyncComponent(() => import('../../modals/LogModal.vue'));
-    const NodePreviewModal = defineAsyncComponent(
-        () => import('../../modals/NodePreview/NodePreviewModal.vue')
-    );
+    const SubscriptionEditModal = createLazyModal('SubscriptionEditModal');
+    const ManualNodeEditModal = createLazyModal('ManualNodeEditModal');
+    const ManualNodeDedupModal = createLazyModal('ManualNodeDedupModal');
+    const SettingsModal = createLazyModal('SettingsModal');
+    const BulkImportModal = createLazyModal('BulkImportModal');
+    const ProfileModal = createLazyModal('ProfileModal');
+    const SubscriptionImportModal = createLazyModal('SubscriptionImportModal');
+    const LogModal = createLazyModal('LogModal');
+    const NodePreviewModal = createLazyModal('NodePreviewModal');
 
-    const BatchGroupModal = defineAsyncComponent(() => import('../../modals/BatchGroupModal.vue'));
-    const GroupManagementModal = defineAsyncComponent(
-        () => import('../../modals/GroupManagementModal.vue')
-    );
-    const QRCodeModal = defineAsyncComponent(() => import('../../modals/QRCodeModal.vue'));
-    const CopyLinkModal = defineAsyncComponent(() => import('../../modals/CopyLinkModal.vue'));
+    const BatchGroupModal = createLazyModal('BatchGroupModal');
+    const GroupManagementModal = createLazyModal('GroupManagementModal');
+    const QRCodeModal = createLazyModal('QRCodeModal');
+    const CopyLinkModal = createLazyModal('CopyLinkModal');
 
     // --- 基礎 Props 和狀態 ---
     const props = defineProps({ data: Object, sessionPaused: Boolean });

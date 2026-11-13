@@ -1,5 +1,6 @@
 <script setup>
-    import { ref, defineAsyncComponent, computed } from 'vue';
+    import { createLazyModal } from '../utils/lazy-modal.js';
+    import { ref, computed } from 'vue';
     import { extractNodeName } from '../lib/utils.js';
     import { useDataStore } from '../stores/useDataStore.js';
     import { useSubscriptions } from '../composables/useSubscriptions.js';
@@ -16,9 +17,7 @@
     import { resolveSubscriptionStatus } from '../utils/dashboard-deeplink.js';
 
     const dataStore = useDataStore();
-    const SubscriptionEditModal = defineAsyncComponent(
-        () => import('../components/modals/SubscriptionEditModal.vue')
-    );
+    const SubscriptionEditModal = createLazyModal('SubscriptionEditModal');
     const { showToast } = useToastStore();
     const { markDirty } = dataStore;
     const { t } = useI18n();
@@ -115,9 +114,7 @@
     };
 
     // Preview
-    const NodePreviewModal = defineAsyncComponent(
-        () => import('../components/modals/NodePreview/NodePreviewModal.vue')
-    );
+    const NodePreviewModal = createLazyModal('NodePreviewModal');
     const showNodePreviewModal = ref(false);
     const previewSubscriptionId = ref(null);
     const previewSubscriptionName = ref('');
@@ -134,12 +131,10 @@
     };
 
     // Bulk Import Logic
-    const BulkImportModal = defineAsyncComponent(
-        () => import('../components/modals/BulkImportModal.vue')
-    );
+    const BulkImportModal = createLazyModal('BulkImportModal');
 
     // QRCode
-    const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
+    const QRCodeModal = createLazyModal('QRCodeModal');
     const showQRCodeModal = ref(false);
     const mountedModals = useLazyModals({
         edit: showSubModal,

@@ -1,4 +1,5 @@
 <script setup>
+    import { createLazyModal } from './utils/lazy-modal.js';
     import { defineAsyncComponent, onMounted, onUnmounted, watch, computed, ref } from 'vue';
     import RouteErrorBoundary from './components/ui/RouteErrorBoundary.vue';
     import ConfirmDialog from './components/ui/ConfirmDialog.vue';
@@ -21,6 +22,9 @@
     import SessionVerification from './components/ui/SessionVerification.vue';
     import { settleConfirm } from './composables/useConfirm.js';
     import { useLazyModals } from './composables/useLazyModals.js';
+    import { useIdlePreload } from './composables/useIdlePreload.js';
+    import { commonModalPreloads } from './utils/modal-loaders.js';
+    import { preloadPreferredSettingsSection } from './utils/settings-section-loaders.js';
 
     // Lazy components
     const DisguiseView = defineAsyncComponent(() => import('./views/DisguiseView.vue'));
@@ -29,12 +33,8 @@
     const Header = defineAsyncComponent(() => import('./components/layout/Header.vue'));
     const SavePrompt = defineAsyncComponent(() => import('./components/ui/SavePrompt.vue'));
     const ScrollToTop = defineAsyncComponent(() => import('./components/ui/ScrollToTop.vue'));
-    const LegacyD1MigrationModal = defineAsyncComponent(
-        () => import('./components/modals/LegacyD1MigrationModal.vue')
-    );
-    const VersionChangelogModal = defineAsyncComponent(
-        () => import('./components/modals/VersionChangelogModal.vue')
-    );
+    const LegacyD1MigrationModal = createLazyModal('LegacyD1MigrationModal');
+    const VersionChangelogModal = createLazyModal('VersionChangelogModal');
 
     const route = useRoute();
     const router = useRouter();
@@ -117,6 +117,15 @@
     const readyAuthenticatedContentKey = ref(null);
     const hasAuthenticatedContentMounted = computed(
         () => readyAuthenticatedContentKey.value === authenticatedContentKey.value
+    );
+    useIdlePreload(
+        () =>
+            isLoggedIn.value &&
+            isInitialRouteReady.value &&
+            hasAuthenticatedContentMounted.value &&
+            !isSessionLocked.value &&
+            !dataStore.isLoading,
+        { ...commonModalPreloads, settings: preloadPreferredSettingsSection }
     );
     watch(
         [

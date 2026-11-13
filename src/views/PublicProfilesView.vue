@@ -1,4 +1,5 @@
 <script setup>
+    import { createLazyModal } from '../utils/lazy-modal.js';
     import {
         ref,
         onMounted,
@@ -11,6 +12,8 @@
     import { useToastStore } from '../stores/toast.js';
     import { hasStoredLocale, useI18n } from '../i18n/index.js';
     import { useLazyModals } from '../composables/useLazyModals.js';
+    import { useIdlePreload } from '../composables/useIdlePreload.js';
+    import { publicModalPreloads, loadQRCodeLibrary } from '../utils/modal-loaders.js';
     import { api } from '../lib/http.js';
     import ProfileGrid from '../components/public/ProfileGrid.vue';
     import BaseIcon from '../components/ui/BaseIcon.vue';
@@ -18,18 +21,12 @@
 
     const isDev = import.meta.env.DEV;
 
-    const NodePreviewModal = defineAsyncComponent(
-        () => import('../components/modals/NodePreview/NodePreviewModal.vue')
-    );
+    const NodePreviewModal = createLazyModal('NodePreviewModal');
     const AnnouncementCard = defineAsyncComponent(
         () => import('../components/features/AnnouncementCard.vue')
     );
-    const GuestbookModal = defineAsyncComponent(
-        () => import('../components/modals/GuestbookModal.vue')
-    );
-    const QuickImportModal = defineAsyncComponent(
-        () => import('../components/modals/QuickImportModal.vue')
-    );
+    const GuestbookModal = createLazyModal('GuestbookModal');
+    const QuickImportModal = createLazyModal('QuickImportModal');
     const CustomPublicRenderer = defineAsyncComponent(
         () => import('../components/public/CustomPublicRenderer.vue')
     );
@@ -37,6 +34,7 @@
     const publicProfiles = ref([]);
     const loading = ref(true);
     const error = ref(null);
+    useIdlePreload(() => !loading.value && !error.value, publicModalPreloads);
     const { showToast } = useToastStore();
     const { t, setLocale } = useI18n();
     const config = ref({});
@@ -260,7 +258,7 @@
         const identifier = request.profile.customId || profileId;
         const link = `${window.location.origin}/${token}/${identifier}`;
         try {
-            const { default: QRCode } = await import('qrcode');
+            const { default: QRCode } = await loadQRCodeLibrary();
             if (!isCurrent()) return;
             await QRCode.toCanvas(canvas, link, {
                 width: 200,

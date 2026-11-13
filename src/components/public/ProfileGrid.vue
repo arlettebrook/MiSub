@@ -1,8 +1,9 @@
 <script setup>
-    import { computed, defineAsyncComponent, reactive, watch } from 'vue';
+    import { createLazyModal } from '../../utils/lazy-modal.js';
+    import { computed, reactive, watch } from 'vue';
     import ProfileCard from './ProfileCard.vue';
     import HeroProfileCard from './HeroProfileCard.vue';
-    const QRCodeOverlay = defineAsyncComponent(() => import('./QRCodeOverlay.vue'));
+    const QRCodeOverlay = createLazyModal('QRCodeOverlay');
 
     const props = defineProps({
         profiles: {

@@ -1,9 +1,10 @@
 <script setup>
-    import { ref, computed, watch } from 'vue';
+    import { ref, computed, watch, onUnmounted } from 'vue';
     import Modal from '../forms/Modal.vue';
     import { useToastStore } from '../../stores/toast';
     import { getClientInfo } from '../../lib/utils';
-    import { api } from '../../lib/http.js';
+    import { api, RequestCancelledError } from '../../lib/http.js';
+    import { timeLoad } from '../../utils/load-timing.js';
     import { useI18n } from '../../i18n/index.js';
     import { useConfirm } from '../../composables/useConfirm.js';
 
@@ -23,6 +24,15 @@
     const logs = ref([]);
     const isLoading = ref(false);
     const expandedLogId = ref(null);
+    let requestId = 0;
+    let controller;
+    const cancelFetch = () => {
+        requestId++;
+        controller?.abort(new RequestCancelledError());
+        controller = undefined;
+        isLoading.value = false;
+    };
+    onUnmounted(cancelFetch);
 
     // Pagination State
     const currentPage = ref(1);
@@ -43,17 +53,27 @@
     });
 
     const fetchLogs = async () => {
+        if (!props.show) return;
+        cancelFetch();
+        const id = requestId;
+        controller = new AbortController();
         isLoading.value = true;
         try {
-            // Cache busting with explicit timestamp
-            const data = await api.get(`/api/logs?t=${Date.now()}`);
+            const data = await timeLoad('misub:data:logs', () =>
+                api.get(`/api/logs?t=${Date.now()}`, { signal: controller.signal })
+            );
+            if (id !== requestId) return;
             logs.value = data.data || [];
             // Reset to first page on refresh
             currentPage.value = 1;
         } catch (e) {
+            if (id !== requestId || e.cancelled) return;
             showToast(t('logs.fetchFailed'), 'error');
         } finally {
-            isLoading.value = false;
+            if (id === requestId) {
+                isLoading.value = false;
+                controller = undefined;
+            }
         }
     };
 
@@ -66,6 +86,7 @@
 
         try {
             await api.del('/api/logs');
+            cancelFetch();
             logs.value = [];
             currentPage.value = 1;
             showToast(t('logs.clearSuccess'), 'success');
@@ -101,7 +122,7 @@
         (newVal) => {
             if (newVal) {
                 fetchLogs();
-            }
+            } else cancelFetch();
         },
         { immediate: true }
     );
@@ -122,6 +143,8 @@
                 <div class="flex gap-2">
                     <button
                         @click="fetchLogs"
+                        :disabled="isLoading"
+                        :aria-busy="isLoading"
                         class="touch-target text-xs px-2 py-1 misub-radius-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"
                     >
                         {{ t('common.refresh') }}
@@ -132,14 +155,35 @@
                     >
                         {{ t('common.clear') }}
                     </button>
+                    <button
+                        type="button"
+                        @click="emit('update:show', false)"
+                        :aria-label="t('common.close')"
+                        class="touch-target px-3 py-1 text-gray-500 dark:text-gray-400"
+                    >
+                        <span aria-hidden="true">×</span>
+                    </button>
                 </div>
             </div>
         </template>
 
         <template #body>
             <div class="flex flex-col h-[60vh]">
+                <p
+                    v-if="isLoading && logs.length"
+                    role="status"
+                    aria-live="polite"
+                    class="pb-3 text-sm text-gray-500 dark:text-gray-400"
+                >
+                    {{ t('loadingFeedback.logsRefreshing') }}
+                </p>
                 <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
-                    <div v-if="isLoading" class="py-12 text-center text-gray-500">
+                    <div
+                        v-if="isLoading && !logs.length"
+                        role="status"
+                        aria-live="polite"
+                        class="py-12 text-center text-gray-500"
+                    >
                         <svg
                             class="animate-spin h-8 w-8 mx-auto mb-2 text-indigo-500"
                             xmlns="http://www.w3.org/2000/svg"
@@ -160,7 +204,7 @@
                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                             ></path>
                         </svg>
-                        {{ t('common.loading') }}
+                        {{ t('loadingFeedback.logsLoading') }}
                     </div>
                     <div v-else-if="filteredLogs.length === 0" class="py-16 text-center">
                         <svg
@@ -362,6 +406,15 @@
                 </div>
             </div>
         </template>
+        <template #footer>
+            <button
+                type="button"
+                @click="emit('update:show', false)"
+                class="touch-target rounded bg-gray-100 px-4 py-2 text-sm dark:bg-gray-800"
+            >
+                {{ t('common.close') }}
+            </button>
+        </template>
     </Modal>
 </template>
 
@@ -389,25 +442,4 @@
             transform: translateY(0);
         }
     }
-
-    /* Override Modal Button styles via deep selector or global styles if needed,
-   but since we can't easily change the footer buttons in the shared Modal without props, 
-   we'll just let the "Confirm" button exist (maybe as a secondary "Refresh" if we link it? 
-   No, it closes the modal in the shared component). 
-   Let's just leave it and maybe use CSS to hide the footer if super picky, 
-   but "Cancel" / "Confirm" is okay for a modal even if viewing logs. 
-   Actually, "Confirm" is confusing for a read-only modal.
-   We can hide the footer using deep CSS selector since Modal.vue doesn't have a footer slot.
-*/
-    :deep(.modal-footer) {
-        display: none;
-    }
-    /* The Modal.vue classes:
-   .p-6.pt-4.flex.justify-end.space-x-3.shrink-0.border-t.border-gray-200
-   It doesn't have a specific class name. We might target it by structure or just accept it.
-   Wait, if I can't pass a slot for footer, I'm stuck with "Cancel" and "Confirm". 
-   Let's see if I can modify Modal.vue to optionally hide footer or use a slot.
-   But I should avoid modifying shared components if possible.
-   However, for this strict requirement avoiding new deps, a small tweak to shared Modal is better than broken build.
-*/
 </style>

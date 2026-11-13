@@ -1,5 +1,6 @@
-import { computed, nextTick, onScopeDispose, shallowRef, watch } from 'vue';
+import { computed, inject, nextTick, onScopeDispose, shallowRef, watch } from 'vue';
 import { lockModalScroll } from '../utils/modal-scroll-lock.js';
+import { modalTriggerKey } from './modal-trigger.js';
 
 const layers = shallowRef([]);
 const FOCUSABLE =
@@ -33,6 +34,7 @@ function focusLayer(layer) {
 }
 
 export function useModalFocus(panel, show, options = {}) {
+    const trigger = inject(modalTriggerKey, null);
     const layer = {
         panel,
         priority: options.priority || (() => 0),
@@ -110,7 +112,7 @@ export function useModalFocus(panel, show, options = {}) {
             if (!visible) return closeLayer();
             if (registered || typeof window === 'undefined') return;
             registered = true;
-            layer.previousFocus = document.activeElement;
+            layer.previousFocus = trigger?.value || document.activeElement;
             layers.value = [...layers.value, layer];
             releaseScroll = lockModalScroll(() => {
                 const panel = topLayer()?.panel.value;

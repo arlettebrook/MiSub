@@ -10,7 +10,8 @@ enableAutoUnmount(afterEach);
 
 const toastMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../src/lib/http.js', () => ({
+vi.mock('../../src/lib/http.js', async () => ({
+    ...(await vi.importActual('../../src/lib/http.js')),
     APIError: class APIError extends Error {},
     api: {
         post: vi.fn(async () => ({
@@ -160,6 +161,36 @@ describe('NodePreviewModal refresh', () => {
     };
 
     beforeEach(() => api.post.mockClear());
+
+    it('keeps the last nodes visible while reopening the same source and cancels a pending request on close', async () => {
+        const wrapper = mountPreview();
+        await flushPromises();
+        await wrapper.setProps({ show: false });
+        let finish;
+        api.post.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+        await wrapper.setProps({ show: true });
+        expect(wrapper.text()).toContain('Demo HK');
+        expect(wrapper.text()).toContain('Refreshing');
+        const signal = api.post.mock.calls.at(-1)[2].signal;
+        await wrapper.setProps({ show: false });
+        expect(signal.aborted).toBe(true);
+        finish({ success: true, nodes: [{ name: 'Obsolete', url: 'ss://obsolete' }] });
+        await flushPromises();
+        expect(wrapper.vm.allNodes[0].name).toBe('Demo HK');
+    });
+
+    it('clears the previous source immediately when switching to another source', async () => {
+        const wrapper = mountPreview();
+        await flushPromises();
+        let finish;
+        api.post.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+        await wrapper.setProps({ subscriptionId: 'source-2' });
+        expect(wrapper.text()).not.toContain('Demo HK');
+        expect(api.post.mock.calls.at(-1)[1].subscriptionId).toBe('source-2');
+        finish({ success: true, nodes: [{ name: 'Source 2', url: 'ss://source2' }] });
+        await flushPromises();
+        expect(wrapper.vm.allNodes[0].name).toBe('Source 2');
+    });
 
     it.each([
         { subscriptionId: 'source-1' },

@@ -11,6 +11,7 @@
     "test": "vitest --passWithNoTests",
     "test:run": "vitest run --passWithNoTests",
     "test:node-preview-scroll": "node tests/browser/node-preview-scroll.mjs",
+    "test:modal-loading": "node tests/browser/modal-loading.mjs",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "format": "prettier --write \"functions/**/*.js\" \"src/**/*.{js,vue}\" \"tests/**/*.js\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"functions/**/*.js\" \"src/**/*.{js,vue}\" \"tests/**/*.js\" \"docs/**/*.md\""

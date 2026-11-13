@@ -1,5 +1,6 @@
 <script setup>
-    import { ref, nextTick, watch, defineAsyncComponent } from 'vue';
+    import { createLazyModal } from '../utils/lazy-modal.js';
+    import { ref, nextTick, watch } from 'vue';
     import { useRoute } from 'vue-router';
     import { normalizeDashboardQuery } from '../utils/dashboard-deeplink.js';
     import { useDataStore } from '../stores/useDataStore.js';
@@ -77,9 +78,7 @@
         isProfileSorting.value = !isProfileSorting.value;
     };
 
-    const NodePreviewModal = defineAsyncComponent(
-        () => import('../components/modals/NodePreview/NodePreviewModal.vue')
-    );
+    const NodePreviewModal = createLazyModal('NodePreviewModal');
     const showNodePreviewModal = ref(false);
     const previewProfileId = ref(null);
     const previewProfileName = ref('');
@@ -93,13 +92,9 @@
         }
     };
 
-    const ProfileModal = defineAsyncComponent(
-        () => import('../components/modals/ProfileModal.vue')
-    );
-    const LogModal = defineAsyncComponent(() => import('../components/modals/LogModal.vue'));
-    const CopyLinkModal = defineAsyncComponent(
-        () => import('../components/modals/CopyLinkModal.vue')
-    );
+    const ProfileModal = createLazyModal('ProfileModal');
+    const LogModal = createLazyModal('LogModal');
+    const CopyLinkModal = createLazyModal('CopyLinkModal');
 
     const showLogModal = ref(false);
     const logProfileName = ref('');
@@ -124,7 +119,7 @@
     };
 
     // QRCode
-    const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
+    const QRCodeModal = createLazyModal('QRCodeModal');
     const showQRCodeModal = ref(false);
     const mountedModals = useLazyModals({
         logs: showLogModal,

@@ -1,7 +1,8 @@
 <script setup>
     import { DEFAULT_USER_AGENT } from '../../../../shared/user-agents.js';
     import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-    import { api, APIError } from '../../../lib/http.js';
+    import { api, APIError, RequestCancelledError } from '../../../lib/http.js';
+    import { timeLoad } from '../../../utils/load-timing.js';
     import { useToastStore } from '../../../stores/toast.js';
     import { useDataStore } from '../../../stores/useDataStore.js';
     import { useManualNodes } from '../../../composables/useManualNodes.js';
@@ -46,10 +47,21 @@
         () => loading.value && (!refreshing.value || !allNodes.value.length)
     );
     let loadRequestId = 0;
+    let controller;
+    let lastDataKey = '';
     const currentPage = ref(1);
     const pageSize = ref(24);
     const viewMode = ref('list'); // 'list' 或 'card'
     const showProcessed = ref(true); // 是否显示处理后的节点名称（默认显示处理后结果）
+    const requestKey = computed(() =>
+        JSON.stringify([
+            props.apiEndpoint,
+            props.profileId,
+            props.subscriptionId,
+            props.subscriptionUrl,
+            showProcessed.value,
+        ])
+    );
 
     // 响应式视图模式 - 移动端强制卡片视图
     const effectiveViewMode = computed(() => {
@@ -194,20 +206,16 @@
 
     const resetState = () => {
         loadRequestId++;
+        controller?.abort(new RequestCancelledError());
+        controller = undefined;
         loading.value = false;
         refreshing.value = false;
         currentPage.value = 1;
         protocolFilter.value = 'all';
         regionFilter.value = 'all';
         searchQuery.value = '';
-        showProcessed.value = false;
         error.value = '';
         warning.value = '';
-        allNodes.value = [];
-        protocolStats.value = {};
-        regionStats.value = {};
-        availableProtocols.value = [];
-        availableRegions.value = [];
         copiedNodeId.value = '';
         pickingMode.value = false;
         selectedUrls.value.clear();
@@ -219,8 +227,8 @@
 
     // 监听弹窗显示状态
     watch(
-        () => props.show,
-        (newVal) => {
+        () => [props.show, requestKey.value],
+        ([newVal]) => {
             if (newVal) {
                 loadNodes();
             } else {
@@ -237,7 +245,7 @@
     });
 
     onUnmounted(() => {
-        loadRequestId++;
+        resetState();
         window.removeEventListener('resize', handleResize);
     });
 
@@ -246,18 +254,24 @@
         currentPage.value = 1;
     });
 
-    // 监听 showProcessed 变化，重新加载节点
-    watch(showProcessed, () => {
-        loadNodes();
-    });
-
     // 加载节点数据
     const loadNodes = async (forceRefresh = false) => {
         if (!props.show) return;
 
         const requestId = ++loadRequestId;
+        controller?.abort(new RequestCancelledError());
+        controller = new AbortController();
+        const signal = controller.signal;
+        const key = requestKey.value;
+        if (key !== lastDataKey) {
+            allNodes.value = [];
+            protocolStats.value = {};
+            regionStats.value = {};
+            availableProtocols.value = [];
+            availableRegions.value = [];
+        }
         loading.value = true;
-        refreshing.value = forceRefresh;
+        refreshing.value = forceRefresh || allNodes.value.length > 0;
         error.value = '';
         warning.value = '';
 
@@ -283,7 +297,9 @@
                 console.debug('[Preview] Sending request to:', props.apiEndpoint, requestData);
             }
 
-            const data = await api.post(props.apiEndpoint, requestData);
+            const data = await timeLoad('misub:data:node-preview', () =>
+                api.post(props.apiEndpoint, requestData, { signal })
+            );
             if (requestId !== loadRequestId) return;
             if (isDev) {
                 console.debug('[Preview] Data received:', data);
@@ -294,6 +310,7 @@
             }
 
             allNodes.value = data.nodes || [];
+            lastDataKey = key;
             const failedSources = (data.subscriptions || []).filter((source) => !source.success);
             if (failedSources.length) {
                 warning.value = t('nodePreview.partialFetchFailed', {
@@ -357,11 +374,11 @@
             // 重置页码
             currentPage.value = 1;
         } catch (err) {
-            if (requestId !== loadRequestId) return;
+            if (requestId !== loadRequestId || err.cancelled) return;
             // 提供更友好的错误信息
             if (err instanceof APIError && err.status === 401) {
                 try {
-                    await api.get('/api/data');
+                    await api.get('/api/data', { signal });
                     if (requestId !== loadRequestId) return;
                     error.value = t('nodePreview.authAbnormal');
                 } catch (testErr) {
@@ -374,7 +391,7 @@
                 error.value = err.message || t('nodePreview.loadFailed');
             }
 
-            if (forceRefresh && allNodes.value.length) {
+            if (allNodes.value.length) {
                 warning.value = t('nodePreview.refreshFailed', { message: error.value });
                 error.value = '';
             } else {
@@ -384,6 +401,7 @@
             if (requestId === loadRequestId) {
                 loading.value = false;
                 refreshing.value = false;
+                controller = undefined;
             }
         }
     };
@@ -654,6 +672,14 @@
         </template>
 
         <template #body>
+            <p
+                v-if="refreshing && allNodes.length"
+                role="status"
+                aria-live="polite"
+                class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 sm:px-8"
+            >
+                {{ t('nodePreview.refreshingNodes') }}
+            </p>
             <div
                 v-if="warning"
                 role="alert"

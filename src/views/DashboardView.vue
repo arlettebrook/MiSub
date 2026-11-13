@@ -1,5 +1,6 @@
 <script setup>
-    import { computed, ref, defineAsyncComponent, onMounted, onUnmounted } from 'vue';
+    import { createLazyModal } from '../utils/lazy-modal.js';
+    import { computed, ref, onMounted, onUnmounted } from 'vue';
     import { useDataStore } from '../stores/useDataStore.js';
     import { useBulkImportLogic } from '../composables/useBulkImportLogic.js';
     import { storeToRefs } from 'pinia';
@@ -167,24 +168,20 @@
         showBulkImportModal.value = true;
     };
 
-    const BulkImportModal = defineAsyncComponent(
-        () => import('../components/modals/BulkImportModal.vue')
-    );
+    const BulkImportModal = createLazyModal('BulkImportModal');
 
     // --- Profile Modal Logic ---
     const { handleAddProfile, handleSaveProfile, editingProfile, isNewProfile, showProfileModal } =
         useProfiles(markDirty);
 
-    const ProfileModal = defineAsyncComponent(
-        () => import('../components/modals/ProfileModal.vue')
-    );
+    const ProfileModal = createLazyModal('ProfileModal');
 
     // --- Log Modal Logic ---
     const showLogModal = ref(false);
     const handleHealthSecondaryAction = (item) => {
         if (item.secondaryAction === 'openLog') showLogModal.value = true;
     };
-    const LogModal = defineAsyncComponent(() => import('../components/modals/LogModal.vue'));
+    const LogModal = createLazyModal('LogModal');
 
     const dismissHealthItemById = (id) => {
         void dashboardPreferences.dismiss(id);
@@ -201,7 +198,7 @@
     };
 
     // --- QRCode Modal Logic ---
-    const QRCodeModal = defineAsyncComponent(() => import('../components/modals/QRCodeModal.vue'));
+    const QRCodeModal = createLazyModal('QRCodeModal');
     const showQRCodeModal = ref(false);
     const mountedModals = useLazyModals({ logs: showLogModal, qrCode: showQRCodeModal });
     const qrCodeUrl = ref('');

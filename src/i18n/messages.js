@@ -1547,6 +1547,12 @@ export const messages = {
             pageNumber: '页码',
             selectRow: '选择此行',
         },
+        loadingFeedback: {
+            componentLoading: '正在准备弹窗…',
+            componentFailed: '弹窗加载失败，请重试。',
+            logsLoading: '正在读取日志…',
+            logsRefreshing: '正在刷新日志，当前显示上次结果…',
+        },
         logs: {
             title: '订阅访问日志',
             fetchFailed: '获取日志失败',
@@ -3185,6 +3191,12 @@ export const messages = {
             sortColumn: 'Sort by this column',
             pageNumber: 'Page number',
             selectRow: 'Select this row',
+        },
+        loadingFeedback: {
+            componentLoading: 'Preparing dialog…',
+            componentFailed: 'The dialog could not be loaded. Please retry.',
+            logsLoading: 'Fetching logs…',
+            logsRefreshing: 'Refreshing logs; showing the previous result…',
         },
         logs: {
             title: 'Subscription access logs',
