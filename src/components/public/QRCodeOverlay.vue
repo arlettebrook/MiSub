@@ -1,146 +1,81 @@
 <script setup>
-    import { ref } from 'vue';
-    import { useBackdropDismiss } from '../../composables/useBackdropDismiss.js';
-    import { useModalFocus } from '../../composables/useModalFocus.js';
+    import Modal from '../forms/Modal.vue';
     import { useI18n } from '../../i18n/index.js';
 
     const { t } = useI18n();
-
-    const props = defineProps({
-        profile: {
-            type: Object,
-            required: true,
-        },
-        isExpanded: {
-            type: Boolean,
-            default: false,
-        },
-    });
-
+    defineProps({ profile: { type: Object, required: true }, isExpanded: Boolean });
     const emit = defineEmits(['close', 'download', 'register-canvas']);
-    const panelRef = ref(null);
-    const { isTopModal } = useModalFocus(panelRef, () => props.isExpanded, {
-        onEscape: () => emit('close'),
-    });
-
-    const { handleBackdropPointerDown, handleBackdropClick } = useBackdropDismiss(() =>
-        emit('close')
-    );
 </script>
 
 <template>
-    <Teleport to="body">
-        <Transition name="qr-overlay">
-            <div
-                v-if="isExpanded"
-                data-modal-scroll-root
-                @pointerdown.capture="handleBackdropPointerDown"
-                @click.self="handleBackdropClick"
-                class="fixed inset-0 w-screen overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                :style="{ zIndex: 'var(--z-modal)' }"
-                role="dialog"
-                :aria-modal="isTopModal ? 'true' : 'false'"
-                :aria-hidden="isTopModal ? undefined : 'true'"
-                :inert="!isTopModal"
-            >
-                <div
-                    ref="panelRef"
-                    tabindex="-1"
-                    class="relative min-w-0 bg-white dark:bg-gray-800 misub-radius-lg p-6 sm:p-8 shadow-2xl max-w-sm w-full my-auto transform transition-all border border-gray-100 dark:border-gray-700 focus-visible:outline-none"
-                    @click.stop
+    <Modal :show="isExpanded" size="sm" @update:show="(show) => !show && emit('close')">
+        <template #title>
+            <div class="flex items-center justify-between gap-4">
+                <h4 class="text-xl font-bold text-gray-900 dark:text-white">{{ profile.name }}</h4>
+                <button
+                    type="button"
+                    @click="emit('close')"
+                    class="touch-target rounded-xl text-gray-500 dark:text-gray-400"
+                    :aria-label="t('common.close')"
                 >
-                    <!-- Close Button -->
-                    <button
-                        @click="emit('close')"
-                        class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                        :aria-label="t('common.close')"
+                    <svg
+                        aria-hidden="true"
+                        class="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                     >
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"
-                            />
-                        </svg>
-                    </button>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                        />
+                    </svg>
+                </button>
+            </div>
+        </template>
+        <template #body>
+            <div class="flex flex-col items-center pt-2">
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    {{ t('public.scanToImport') }}
+                </p>
 
-                    <div class="flex flex-col items-center pt-2">
-                        <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            {{ profile.name }}
-                        </h4>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            {{ t('public.scanToImport') }}
-                        </p>
-
-                        <div
-                            class="bg-white p-3 misub-radius-lg shadow-inner border border-gray-100 w-64 max-w-full aspect-square flex items-center justify-center"
-                        >
-                            <canvas
-                                :ref="
-                                    (el) => {
-                                        if (el) emit('register-canvas', profile.id, el);
-                                    }
-                                "
-                                class="qr-canvas max-w-full misub-radius-md"
-                            ></canvas>
-                        </div>
-
-                        <button
-                            @click="emit('download')"
-                            class="mt-8 w-full flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 misub-radius-lg transition-all shadow-lg shadow-primary-600/20 active:scale-95"
-                        >
-                            <svg
-                                class="w-5 h-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                />
-                            </svg>
-                            {{ t('public.downloadQr') }}
-                        </button>
-                    </div>
+                <div
+                    class="bg-white p-3 misub-radius-lg shadow-inner border border-gray-100 w-64 max-w-full aspect-square flex items-center justify-center"
+                >
+                    <canvas
+                        :ref="
+                            (el) => {
+                                if (el) emit('register-canvas', profile.id, el);
+                            }
+                        "
+                        class="qr-canvas max-w-full misub-radius-md"
+                    ></canvas>
                 </div>
             </div>
-        </Transition>
-    </Teleport>
+        </template>
+        <template #footer>
+            <button
+                @click="emit('download')"
+                class="w-full flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 misub-radius-lg transition-all shadow-lg shadow-primary-600/20 active:scale-95"
+            >
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                </svg>
+                {{ t('public.downloadQr') }}
+            </button>
+        </template>
+    </Modal>
 </template>
 
 <style scoped>
     .qr-canvas {
         height: auto !important;
-    }
-
-    .qr-overlay-enter-active .bg-white,
-    .qr-overlay-leave-active .bg-white,
-    .qr-overlay-enter-active .dark\:bg-gray-800,
-    .qr-overlay-leave-active .dark\:bg-gray-800 {
-        transition:
-            transform 0.3s ease,
-            opacity 0.3s ease;
-    }
-
-    .qr-overlay-enter-from {
-        opacity: 0;
-    }
-
-    .qr-overlay-enter-from > div {
-        transform: scale(0.9);
-        opacity: 0;
-    }
-
-    .qr-overlay-leave-to {
-        opacity: 0;
-    }
-
-    .qr-overlay-leave-to > div {
-        transform: scale(0.9);
-        opacity: 0;
     }
 </style>

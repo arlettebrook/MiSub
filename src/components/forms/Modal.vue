@@ -1,11 +1,15 @@
 <script setup>
-    import { ref, computed } from 'vue';
+    import { ref, computed, provide, useAttrs, useSlots } from 'vue';
     import { useI18n } from '@/i18n/index.js';
     import { useBackdropDismiss } from '@/composables/useBackdropDismiss.js';
     import { useModalFocus } from '@/composables/useModalFocus.js';
+    import { useModalShell } from '@/composables/useModalShell.js';
+    import { modalTriggerKey } from '@/composables/modal-trigger.js';
 
     const props = defineProps({
         show: Boolean,
+        shellHost: Boolean,
+        bodyMinHeight: String,
         confirmKeyword: String,
         size: {
             type: String,
@@ -48,6 +52,7 @@
     });
 
     const emit = defineEmits(['update:show', 'confirm']);
+    const delegated = useModalShell(props, useAttrs(), useSlots(), emit);
     const { t } = useI18n();
     const confirmLabel = computed(() => props.confirmText || t('actions.confirm'));
     const cancelLabel = computed(() => props.cancelText || t('actions.cancel'));
@@ -57,10 +62,16 @@
     const modalPanelRef = ref(null);
     const titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
 
-    const { isTopModal } = useModalFocus(modalPanelRef, () => props.show, {
-        priority: () => (props.layer === 'confirmation' ? 1 : 0),
-        onEscape: () => emit('update:show', false),
-    });
+    const { isTopModal, ensureFocus } = useModalFocus(
+        modalPanelRef,
+        () => props.show && !delegated,
+        {
+            priority: () => (props.layer === 'confirmation' ? 1 : 0),
+            onEscape: () => emit('update:show', false),
+        }
+    );
+    defineExpose({ ensureFocus });
+    provide(modalTriggerKey, null);
 
     const handleConfirm = () => {
         if (
@@ -80,7 +91,7 @@
 </script>
 
 <template>
-    <Teleport to="body">
+    <Teleport v-if="!delegated" to="body">
         <Transition name="modal-fade">
             <div
                 v-if="show"
@@ -125,7 +136,10 @@
                             </slot>
                         </div>
 
-                        <div class="px-6 pb-6 grow overflow-y-auto">
+                        <div
+                            class="px-6 pb-6 grow overflow-y-auto"
+                            :style="{ minHeight: bodyMinHeight }"
+                        >
                             <slot name="body">
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                     {{ t('common.confirmContinue') }}

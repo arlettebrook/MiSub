@@ -18,11 +18,20 @@ export async function timeLoad(name, load) {
 
 export function cachedLoader(name, load) {
     let pending;
-    return () => {
-        pending ||= timeLoad(name, load).catch((error) => {
-            pending = undefined;
-            throw error;
-        });
+    let resolved;
+    const loader = () => {
+        pending ||= timeLoad(name, load)
+            .then((module) => {
+                resolved = module;
+                return module;
+            })
+            .catch((error) => {
+                pending = undefined;
+                throw error;
+            });
         return pending;
     };
+    // A preloaded module can render synchronously without a loading placeholder.
+    loader.peek = () => resolved;
+    return loader;
 }

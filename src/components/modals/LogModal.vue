@@ -3,8 +3,8 @@
     import Modal from '../forms/Modal.vue';
     import { useToastStore } from '../../stores/toast';
     import { getClientInfo } from '../../lib/utils';
-    import { api, RequestCancelledError } from '../../lib/http.js';
-    import { timeLoad } from '../../utils/load-timing.js';
+    import { api } from '../../lib/http.js';
+    import { useModalData } from '../../composables/useModalData.js';
     import { useI18n } from '../../i18n/index.js';
     import { useConfirm } from '../../composables/useConfirm.js';
 
@@ -24,12 +24,12 @@
     const logs = ref([]);
     const isLoading = ref(false);
     const expandedLogId = ref(null);
+    const dataSource = useModalData('LogModal');
+    const descriptor = computed(() => dataSource.descriptor(props));
     let requestId = 0;
-    let controller;
     const cancelFetch = () => {
         requestId++;
-        controller?.abort(new RequestCancelledError());
-        controller = undefined;
+        dataSource.resource.cancel();
         isLoading.value = false;
     };
     onUnmounted(cancelFetch);
@@ -52,17 +52,15 @@
         return filteredLogs.value.slice(start, end);
     });
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (refresh = true) => {
         if (!props.show) return;
-        cancelFetch();
-        const id = requestId;
-        controller = new AbortController();
-        isLoading.value = true;
+        const id = ++requestId;
+        const request = dataSource.resource.read(descriptor.value, { refresh });
+        isLoading.value = !request.cached;
         try {
-            const data = await timeLoad('misub:data:logs', () =>
-                api.get(`/api/logs?t=${Date.now()}`, { signal: controller.signal })
-            );
+            const data = request.cached ? request.data : await request.promise;
             if (id !== requestId) return;
+            if (data?.success === false) throw new Error(t('logs.fetchFailed'));
             logs.value = data.data || [];
             // Reset to first page on refresh
             currentPage.value = 1;
@@ -72,7 +70,6 @@
         } finally {
             if (id === requestId) {
                 isLoading.value = false;
-                controller = undefined;
             }
         }
     };
@@ -87,6 +84,7 @@
         try {
             await api.del('/api/logs');
             cancelFetch();
+            dataSource.resource.invalidate();
             logs.value = [];
             currentPage.value = 1;
             showToast(t('logs.clearSuccess'), 'success');
@@ -118,10 +116,10 @@
     };
 
     watch(
-        () => props.show,
-        (newVal) => {
+        () => [props.show, descriptor.value.key],
+        ([newVal]) => {
             if (newVal) {
-                fetchLogs();
+                fetchLogs(false);
             } else cancelFetch();
         },
         { immediate: true }
@@ -142,7 +140,7 @@
                 }}</span>
                 <div class="flex gap-2">
                     <button
-                        @click="fetchLogs"
+                        @click="fetchLogs(true)"
                         :disabled="isLoading"
                         :aria-busy="isLoading"
                         class="touch-target text-xs px-2 py-1 misub-radius-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-gray-600 dark:text-gray-300"

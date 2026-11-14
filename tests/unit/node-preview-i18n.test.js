@@ -163,9 +163,11 @@ describe('NodePreviewModal refresh', () => {
     beforeEach(() => api.post.mockClear());
 
     it('keeps the last nodes visible while reopening the same source and cancels a pending request on close', async () => {
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
         const wrapper = mountPreview();
         await flushPromises();
         await wrapper.setProps({ show: false });
+        clock.mockReturnValue(31_001);
         let finish;
         api.post.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
         await wrapper.setProps({ show: true });
@@ -177,6 +179,7 @@ describe('NodePreviewModal refresh', () => {
         finish({ success: true, nodes: [{ name: 'Obsolete', url: 'ss://obsolete' }] });
         await flushPromises();
         expect(wrapper.vm.allNodes[0].name).toBe('Demo HK');
+        clock.mockRestore();
     });
 
     it('clears the previous source immediately when switching to another source', async () => {

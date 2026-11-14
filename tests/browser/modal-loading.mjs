@@ -63,28 +63,43 @@ try {
             await codeGate;
             await route.continue();
         });
+        let releasePreviewCode;
+        const previewCodeGate = new Promise((resolve) => (releasePreviewCode = resolve));
+        await page.route(
+            '**/src/components/modals/NodePreview/NodePreviewModal.vue*',
+            async (route) => {
+                await previewCodeGate;
+                await route.continue();
+            }
+        );
         let logRequests = 0;
         let releaseData;
         await page.route('**/api/logs*', async (route) => {
             logRequests++;
             const requestNumber = logRequests;
             await new Promise((resolve) => (releaseData = resolve));
-            await route.fulfill({
-                json: {
-                    data: [
-                        {
-                            id: String(requestNumber),
-                            profileName: requestNumber === 1 ? 'Previous log' : 'Updated log',
-                            timestamp: Date.now(),
-                            status: 'success',
-                            userAgent: 'test',
-                        },
-                    ],
-                },
-            });
+            await route
+                .fulfill({
+                    json: {
+                        data: [
+                            {
+                                id: String(requestNumber),
+                                profileName: requestNumber <= 2 ? 'Previous log' : 'Updated log',
+                                timestamp: Date.now(),
+                                status: 'success',
+                                userAgent: 'test',
+                            },
+                        ],
+                    },
+                })
+                .catch((error) => {
+                    if (requestNumber !== 1) throw error;
+                });
         });
-        await page.route('**/api/subscription_nodes', (route) =>
-            route.fulfill({
+        let previewRequests = 0;
+        await page.route('**/api/subscription_nodes', (route) => {
+            previewRequests++;
+            return route.fulfill({
                 json: {
                     success: true,
                     nodes: [
@@ -98,12 +113,18 @@ try {
                     ],
                     stats: { protocols: { vless: 1 }, regions: {} },
                 },
-            })
-        );
+            });
+        });
         await page.goto(`${server.resolvedUrls.local[0]}__modal-loading.html`);
+        const firstLogRequest = page.waitForRequest('**/api/logs*');
         await page.locator('#open-logs').click();
+        await firstLogRequest;
         await page.locator('[data-testid="modal-code-loading"]').waitFor();
-        assert.equal(logRequests, 0, 'Data requests must wait until the dialog module is ready');
+        assert.equal(
+            logRequests,
+            1,
+            'Data requests must start while the dialog code is still pending'
+        );
         assert.equal(await page.getByRole('button', { name: 'Close', exact: true }).count(), 2);
         assert.equal(await page.evaluate(() => document.body.style.position), 'fixed');
         assert.equal(
@@ -111,6 +132,7 @@ try {
             true
         );
         const ring = page.locator('.loading-ring');
+        await ring.waitFor();
         assert.match(
             await ring.evaluate((element) => getComputedStyle(element).animationName),
             /^loading-orbit(?:-|$)/
@@ -133,29 +155,85 @@ try {
         }
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        await page.waitForFunction(
+            () => performance.getEntriesByName('misub:data:logs').length > 0
+        );
+        releaseData();
         releaseCode();
         await page.waitForFunction(
             () => performance.getEntriesByName('misub:code:LogModal').length > 0
         );
-        assert.equal(logRequests, 0, 'Cancelling during code loading must not fetch logs');
+        assert.equal(
+            logRequests,
+            1,
+            'Cancelling during code loading must not restart the data request'
+        );
         await page.locator('#open-logs').click();
         await page.getByText('Fetching logs…', { exact: true }).waitFor();
         assert.equal(await page.locator('[data-testid="modal-code-loading"]').count(), 0);
         releaseData();
         await page.getByText('Previous log', { exact: true }).waitFor();
+        assert.equal(logRequests, 2);
         await page.getByRole('button', { name: 'Close', exact: true }).first().click();
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         await page.locator('#open-logs').click();
+        await page.getByText('Previous log', { exact: true }).waitFor();
+        assert.equal(logRequests, 2, 'Reopening fresh logs must reuse the recent result');
+        await page.getByRole('button', { name: 'Refresh', exact: true }).click();
         await page
             .getByText('Refreshing logs; showing the previous result…', { exact: true })
             .waitFor();
         assert.equal(await page.getByText('Previous log', { exact: true }).count(), 1);
         releaseData();
         await page.getByText('Updated log', { exact: true }).waitFor();
+        assert.equal(logRequests, 3, 'Manual refresh must bypass the recent result');
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         await page.locator('#open-preview').click();
+        await page.getByRole('dialog').waitFor();
+        await page.evaluate(() => {
+            window.previewBackdrop = document.querySelector('[role="dialog"]');
+            window.previewPanel = window.previewBackdrop.querySelector('[tabindex="-1"]');
+            window.previewTitleId = window.previewBackdrop.getAttribute('aria-labelledby');
+            window.previewWidth = window.previewPanel.offsetWidth;
+        });
+        await page.locator('.loading-ring').waitFor();
+        assert.equal(previewRequests, 1, 'Preview data must load before the preview code is ready');
+        releasePreviewCode();
         await page.getByText('Demo node', { exact: true }).first().waitFor();
+        assert.equal(previewRequests, 1, 'The loaded preview must adopt its existing request');
+        assert.equal(
+            await page.evaluate(
+                () => document.querySelector('[role="dialog"]') === window.previewBackdrop
+            ),
+            true
+        );
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    document.querySelector('[role="dialog"] [tabindex="-1"]') ===
+                    window.previewPanel
+            ),
+            true
+        );
+        assert.equal(
+            await page.evaluate(
+                () =>
+                    window.previewBackdrop.getAttribute('aria-labelledby') === window.previewTitleId
+            ),
+            true
+        );
+        // Wait for the original entrance transition before comparing the final width.
+        await page.waitForFunction(
+            () => !window.previewPanel.classList.contains('modal-inner-enter-active')
+        );
+        assert.equal(
+            await page.evaluate(() =>
+                Math.round(window.previewPanel.getBoundingClientRect().width)
+            ),
+            await page.evaluate(() => Math.round(window.previewWidth))
+        );
+        assert.equal(await page.evaluate(() => document.body.style.position), 'fixed');
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         assert.equal(await page.evaluate(() => document.activeElement.id), 'open-preview');

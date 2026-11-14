@@ -1,98 +1,76 @@
 <script setup>
-    import Modal from '../forms/Modal.vue';
+    import { onScopeDispose, ref, watch } from 'vue';
     import { useI18n } from '../../i18n/index.js';
 
-    defineProps({ show: Boolean, title: String, size: String, error: Boolean });
-    const emit = defineEmits(['close', 'retry']);
+    const props = defineProps({ show: Boolean, error: Boolean, minHeight: String });
+    const emit = defineEmits(['retry']);
     const { t } = useI18n();
+    const showFeedback = ref(false);
+    let timer;
+    watch(
+        () => [props.show, props.error],
+        ([show, error]) => {
+            clearTimeout(timer);
+            showFeedback.value = false;
+            if (show && !error) timer = setTimeout(() => (showFeedback.value = true), 150);
+        },
+        { immediate: true, flush: 'sync' }
+    );
+    onScopeDispose(() => clearTimeout(timer));
 </script>
 
 <template>
-    <Modal :show="show" :size="size" @update:show="emit('close')">
-        <template #title>
-            <div class="flex items-center justify-between gap-4">
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ title }}</h3>
-                <button
-                    type="button"
-                    class="touch-target flex shrink-0 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-2 focus-visible:outline-indigo-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                    :aria-label="t('common.close')"
-                    @click="emit('close')"
-                >
-                    <svg
-                        aria-hidden="true"
-                        class="h-5 w-5"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                    >
-                        <path d="m6 6 12 12M18 6 6 18" />
-                    </svg>
-                </button>
-            </div>
-        </template>
-        <template #body>
-            <div
-                class="flex min-h-44 flex-col items-center justify-center gap-5 py-5 text-center"
-                :role="error ? 'alert' : 'status'"
-                :aria-busy="!error"
-                aria-live="polite"
-                data-testid="modal-code-loading"
+    <div
+        class="flex min-h-44 flex-col items-center justify-center gap-5 py-5 text-center"
+        :style="{ minHeight }"
+        :role="error ? 'alert' : 'status'"
+        :aria-busy="!error"
+        aria-live="polite"
+        data-testid="modal-code-loading"
+    >
+        <div
+            v-if="showFeedback && !error"
+            class="loading-orbit text-indigo-500 dark:text-indigo-400"
+            aria-hidden="true"
+        >
+            <div class="loading-halo"></div>
+            <div class="loading-ring"></div>
+            <div class="loading-dots"><span></span><span></span><span></span></div>
+        </div>
+        <div
+            v-else-if="error"
+            class="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-500 dark:bg-rose-500/10 dark:text-rose-400"
+            aria-hidden="true"
+        >
+            <svg
+                class="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
             >
-                <div
-                    v-if="!error"
-                    class="loading-orbit text-indigo-500 dark:text-indigo-400"
-                    aria-hidden="true"
-                >
-                    <div class="loading-halo"></div>
-                    <div class="loading-ring"></div>
-                    <div class="loading-dots"><span></span><span></span><span></span></div>
-                </div>
-                <div
-                    v-else
-                    class="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-500 dark:bg-rose-500/10 dark:text-rose-400"
-                    aria-hidden="true"
-                >
-                    <svg
-                        class="h-6 w-6"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.8"
-                        stroke-linecap="round"
-                    >
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 7v6m0 4h.01" />
-                    </svg>
-                </div>
-                <p class="max-w-xs text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                    {{
-                        error
-                            ? t('loadingFeedback.componentFailed')
-                            : t('loadingFeedback.componentLoading')
-                    }}
-                </p>
-                <button
-                    v-if="error"
-                    type="button"
-                    class="touch-target rounded bg-indigo-600 px-4 py-2 text-white"
-                    @click="emit('retry')"
-                >
-                    {{ t('common.retry') }}
-                </button>
-            </div>
-        </template>
-        <template #footer>
-            <button
-                type="button"
-                class="touch-target rounded bg-gray-100 px-4 py-2 dark:bg-gray-800"
-                @click="emit('close')"
-            >
-                {{ t('common.close') }}
-            </button>
-        </template>
-    </Modal>
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v6m0 4h.01" />
+            </svg>
+        </div>
+        <p
+            v-if="showFeedback || error"
+            class="max-w-xs text-sm leading-relaxed text-gray-500 dark:text-gray-400"
+        >
+            {{
+                error ? t('loadingFeedback.componentFailed') : t('loadingFeedback.componentLoading')
+            }}
+        </p>
+        <button
+            v-if="error"
+            type="button"
+            class="touch-target rounded bg-indigo-600 px-4 py-2 text-white"
+            @click="emit('retry')"
+        >
+            {{ t('common.retry') }}
+        </button>
+    </div>
 </template>
 
 <style scoped>

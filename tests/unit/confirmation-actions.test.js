@@ -11,7 +11,8 @@ import { DEFAULT_SETTINGS } from '../../src/constants/default-settings.js';
 import { settleConfirm, useConfirmState } from '../../src/composables/useConfirm.js';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), del: vi.fn(), showToast: vi.fn() }));
-vi.mock('../../src/lib/http.js', () => ({
+vi.mock('../../src/lib/http.js', async () => ({
+    ...(await vi.importActual('../../src/lib/http.js')),
     api: { get: mocks.get, post: mocks.post, del: mocks.del },
 }));
 vi.mock('../../src/stores/toast.js', () => ({

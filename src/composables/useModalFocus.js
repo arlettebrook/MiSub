@@ -125,5 +125,15 @@ export function useModalFocus(panel, show, options = {}) {
         { immediate: true }
     );
     onScopeDispose(closeLayer);
-    return { isTopModal };
+    const ensureFocus = () => {
+        if (
+            registered &&
+            show() &&
+            isTopModal.value &&
+            !panel.value?.contains(document.activeElement)
+        ) {
+            focusLayer(layer);
+        }
+    };
+    return { isTopModal, ensureFocus };
 }

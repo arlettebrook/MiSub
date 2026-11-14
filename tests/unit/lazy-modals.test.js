@@ -84,7 +84,7 @@ describe('modal loading on first use', () => {
         expect(mounted).toHaveBeenCalledOnce();
     });
 
-    it('fetches logs on the initial lazy mount and refreshes once on each reopening', async () => {
+    it('fetches logs on the initial lazy mount and reuses a fresh result on reopening', async () => {
         mocks.get.mockResolvedValue({ data: [] });
         const visible = ref(false);
         const AsyncLogs = defineAsyncComponent(async () => LogModal);
@@ -107,7 +107,7 @@ describe('modal loading on first use', () => {
         expect(mocks.get).toHaveBeenCalledOnce();
         visible.value = true;
         await flushPromises();
-        expect(mocks.get).toHaveBeenCalledTimes(2);
+        expect(mocks.get).toHaveBeenCalledOnce();
     });
 
     it('does not fetch logs if the first opening is cancelled before the code finishes loading', async () => {

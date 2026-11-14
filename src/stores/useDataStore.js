@@ -29,6 +29,7 @@ export const useDataStore = defineStore('data', () => {
     const isLoading = ref(false);
     const saveState = ref('idle');
     const lastUpdated = ref(null);
+    const modalDataRevision = ref(0);
     const hasDataLoaded = computed(() => !!lastUpdated.value);
 
     // Derived Dirty State (from Editor)
@@ -50,6 +51,7 @@ export const useDataStore = defineStore('data', () => {
     // Data Hydration (avoid re-fetching if passed from outside)
     function hydrateFromData(data) {
         if (!data) return false;
+        modalDataRevision.value++;
 
         try {
             const cleanSubs = (data.misubs || []).map((sub) => ({ ...sub, isUpdating: false }));
@@ -151,6 +153,7 @@ export const useDataStore = defineStore('data', () => {
             }
 
             updateSnapshot();
+            modalDataRevision.value++;
 
             showToast(t('store.dataSaved'), 'success');
             lastUpdated.value = new Date();
@@ -260,6 +263,7 @@ export const useDataStore = defineStore('data', () => {
     }
 
     function resetSessionData() {
+        modalDataRevision.value++;
         clearCachedData();
         subscriptions.value = [];
         profiles.value = [];
@@ -427,6 +431,7 @@ export const useDataStore = defineStore('data', () => {
 
     // --- Dirty State Proxies ---
     function markDirty() {
+        modalDataRevision.value++;
         if (saveState.value === 'success') {
             saveState.value = 'idle';
         }
@@ -446,6 +451,7 @@ export const useDataStore = defineStore('data', () => {
         isLoading,
         saveState,
         lastUpdated,
+        modalDataRevision,
         hasDataLoaded,
         isDirty,
 

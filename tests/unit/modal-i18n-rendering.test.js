@@ -7,7 +7,8 @@ import ManualNodeEditModal from '../../src/components/modals/ManualNodeEditModal
 import { createI18n } from '../../src/i18n/index.js';
 import { createPinia, setActivePinia } from 'pinia';
 
-vi.mock('../../src/lib/http.js', () => ({
+vi.mock('../../src/lib/http.js', async () => ({
+    ...(await vi.importActual('../../src/lib/http.js')),
     api: {
         get: vi.fn(async () => ({ data: [] })),
         del: vi.fn(async () => ({})),

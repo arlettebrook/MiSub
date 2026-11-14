@@ -1,8 +1,7 @@
 <script setup>
-    import { DEFAULT_USER_AGENT } from '../../../../shared/user-agents.js';
     import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-    import { api, APIError, RequestCancelledError } from '../../../lib/http.js';
-    import { timeLoad } from '../../../utils/load-timing.js';
+    import { api, APIError } from '../../../lib/http.js';
+    import { useModalData } from '../../../composables/useModalData.js';
     import { useToastStore } from '../../../stores/toast.js';
     import { useDataStore } from '../../../stores/useDataStore.js';
     import { useManualNodes } from '../../../composables/useManualNodes.js';
@@ -47,21 +46,14 @@
         () => loading.value && (!refreshing.value || !allNodes.value.length)
     );
     let loadRequestId = 0;
-    let controller;
     let lastDataKey = '';
     const currentPage = ref(1);
     const pageSize = ref(24);
     const viewMode = ref('list'); // 'list' 或 'card'
-    const showProcessed = ref(true); // 是否显示处理后的节点名称（默认显示处理后结果）
-    const requestKey = computed(() =>
-        JSON.stringify([
-            props.apiEndpoint,
-            props.profileId,
-            props.subscriptionId,
-            props.subscriptionUrl,
-            showProcessed.value,
-        ])
-    );
+    const dataSource = useModalData('NodePreviewModal');
+    const showProcessed = dataSource.processed;
+    const descriptor = computed(() => dataSource.descriptor(props));
+    const requestKey = computed(() => descriptor.value?.key || 'missing');
 
     // 响应式视图模式 - 移动端强制卡片视图
     const effectiveViewMode = computed(() => {
@@ -206,8 +198,7 @@
 
     const resetState = () => {
         loadRequestId++;
-        controller?.abort(new RequestCancelledError());
-        controller = undefined;
+        dataSource.resource.cancel();
         loading.value = false;
         refreshing.value = false;
         currentPage.value = 1;
@@ -259,9 +250,7 @@
         if (!props.show) return;
 
         const requestId = ++loadRequestId;
-        controller?.abort(new RequestCancelledError());
-        controller = new AbortController();
-        const signal = controller.signal;
+        let signal;
         const key = requestKey.value;
         if (key !== lastDataKey) {
             allNodes.value = [];
@@ -276,30 +265,24 @@
         warning.value = '';
 
         try {
-            const requestData = {
-                userAgent: DEFAULT_USER_AGENT,
-                ...(forceRefresh ? { forceRefresh: true } : {}),
-            };
+            if (!descriptor.value) throw new Error(t('nodePreview.missingParams'));
+            const source = descriptor.value;
+            const requestData = { ...source.body, ...(forceRefresh ? { forceRefresh: true } : {}) };
 
-            if (props.profileId) {
-                requestData.profileId = props.profileId;
-                // 仅在订阅组模式下传递 applyTransform 参数
-                requestData.applyTransform = showProcessed.value;
-            } else if (props.subscriptionId) {
-                requestData.subscriptionId = props.subscriptionId;
-            } else if (props.subscriptionUrl) {
-                requestData.url = props.subscriptionUrl;
-            } else {
-                throw new Error(t('nodePreview.missingParams'));
-            }
-
+            const request = dataSource.resource.read(source, { refresh: forceRefresh });
             if (isDev) {
-                console.debug('[Preview] Sending request to:', props.apiEndpoint, requestData);
+                console.debug(
+                    request.cached
+                        ? '[Preview] Using recent result:'
+                        : '[Preview] Loading request:',
+                    props.apiEndpoint,
+                    requestData
+                );
             }
-
-            const data = await timeLoad('misub:data:node-preview', () =>
-                api.post(props.apiEndpoint, requestData, { signal })
-            );
+            signal = request.controller?.signal;
+            loading.value = !request.cached;
+            refreshing.value = !request.cached && (forceRefresh || allNodes.value.length > 0);
+            const data = request.cached ? request.data : await request.promise;
             if (requestId !== loadRequestId) return;
             if (isDev) {
                 console.debug('[Preview] Data received:', data);
@@ -401,7 +384,6 @@
             if (requestId === loadRequestId) {
                 loading.value = false;
                 refreshing.value = false;
-                controller = undefined;
             }
         }
     };

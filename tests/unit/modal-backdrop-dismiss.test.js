@@ -91,7 +91,7 @@ describe('modal backdrop dismiss behavior', () => {
 
         await nextTick();
         const backdrop = document.body.querySelector('.fixed.inset-0');
-        const panel = backdrop.querySelector('.relative');
+        const panel = backdrop.querySelector('[tabindex="-1"]');
 
         await dispatchBubbled(panel, 'pointerdown');
         await dispatchBubbled(backdrop, 'click');

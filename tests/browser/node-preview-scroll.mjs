@@ -7,10 +7,11 @@ const harnessPath = '/__node-preview-scroll.js';
 const harness = `
 import { createApp, h, ref } from 'vue';
 import { createPinia } from 'pinia';
-import NodePreviewModal from '/src/components/modals/NodePreview/NodePreviewModal.vue';
+import { createLazyModal } from '/src/utils/lazy-modal.js';
 import { createI18n } from '/src/i18n/index.js';
 import '/src/assets/main.css';
 const show = ref(true);
+const NodePreviewModal = createLazyModal('NodePreviewModal');
 const profile = new URLSearchParams(location.search).has('profile');
 document.body.style.minHeight = '2400px';
 window.scrollTo(0, 300);

@@ -14,7 +14,10 @@ beforeEach(() => {
     mocks.get.mockReset();
     mocks.toast.mockClear();
 });
-afterEach(() => wrapper?.unmount());
+afterEach(() => {
+    wrapper?.unmount();
+    vi.restoreAllMocks();
+});
 function open(show = true) {
     wrapper = mount(LogModal, {
         props: { show },
@@ -41,10 +44,12 @@ const log = (name) => ({
 
 describe('log dialog request feedback', () => {
     it('keeps previous logs visible while refreshing on reopen', async () => {
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
         mocks.get.mockResolvedValueOnce({ data: [log('Previous log')] });
         open();
         await flushPromises();
         await wrapper.setProps({ show: false });
+        clock.mockReturnValue(16_001);
         let finish;
         mocks.get.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
         await wrapper.setProps({ show: true });
@@ -54,6 +59,21 @@ describe('log dialog request feedback', () => {
         await flushPromises();
         expect(wrapper.text()).toContain('Updated log');
         expect(wrapper.text()).not.toContain('Previous log');
+    });
+
+    it('reuses fresh logs on reopen and fetches on manual refresh or a different filter', async () => {
+        mocks.get.mockResolvedValue({ data: [log('Daily')] });
+        open();
+        await flushPromises();
+        await wrapper.setProps({ show: false });
+        await wrapper.setProps({ show: true });
+        expect(wrapper.vm.isLoading).toBe(false);
+        expect(mocks.get).toHaveBeenCalledOnce();
+        await wrapper.vm.fetchLogs();
+        expect(mocks.get).toHaveBeenCalledTimes(2);
+        await wrapper.setProps({ filterProfileName: 'Daily' });
+        await flushPromises();
+        expect(mocks.get).toHaveBeenCalledTimes(3);
     });
 
     it('aborts a closed request and ignores its failure after a new opening', async () => {
