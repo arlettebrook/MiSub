@@ -1,6 +1,7 @@
 <script setup>
     import { ref, computed, watch, onUnmounted } from 'vue';
     import Modal from '../forms/Modal.vue';
+    import ModalLoading from './ModalLoading.vue';
     import { useToastStore } from '../../stores/toast';
     import { getClientInfo } from '../../lib/utils';
     import { api } from '../../lib/http.js';
@@ -131,14 +132,17 @@
         :show="show"
         @update:show="emit('update:show', $event)"
         size="4xl"
+        body-height="60vh"
         :confirm-disabled="true"
     >
         <template #title>
-            <div class="flex justify-between items-center w-full">
-                <span class="text-lg font-bold text-gray-900 dark:text-white">{{
+            <div
+                class="flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <span class="min-w-0 text-lg font-bold text-gray-900 dark:text-white">{{
                     t('logs.title')
                 }}</span>
-                <div class="flex gap-2">
+                <div class="flex shrink-0 gap-2 self-end sm:self-auto">
                     <button
                         @click="fetchLogs(true)"
                         :disabled="isLoading"
@@ -166,7 +170,7 @@
         </template>
 
         <template #body>
-            <div class="flex flex-col h-[60vh]">
+            <div class="flex h-full min-h-0 flex-col">
                 <p
                     v-if="isLoading && logs.length"
                     role="status"
@@ -175,35 +179,17 @@
                 >
                     {{ t('loadingFeedback.logsRefreshing') }}
                 </p>
-                <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
-                    <div
+                <div
+                    class="min-h-0 flex-1 overflow-y-auto custom-scrollbar"
+                    :class="{ 'pr-2': !isLoading || logs.length > 0 }"
+                >
+                    <ModalLoading
                         v-if="isLoading && !logs.length"
-                        role="status"
-                        aria-live="polite"
-                        class="py-12 text-center text-gray-500"
-                    >
-                        <svg
-                            class="animate-spin h-8 w-8 mx-auto mb-2 text-indigo-500"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                        >
-                            <circle
-                                class="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                stroke-width="4"
-                            ></circle>
-                            <path
-                                class="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                        </svg>
-                        {{ t('loadingFeedback.logsLoading') }}
-                    </div>
+                        :show="show"
+                        :fill="true"
+                        :message="t('loadingFeedback.logsLoading')"
+                        test-id="log-data-loading"
+                    />
                     <div v-else-if="filteredLogs.length === 0" class="py-16 text-center">
                         <svg
                             class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"

@@ -11,6 +11,7 @@
         size: String,
         error: Boolean,
         bodyMinHeight: String,
+        bodyHeight: String,
     });
     const emit = defineEmits(['close', 'retry']);
     const { t } = useI18n();
@@ -19,7 +20,8 @@
     const shellProps = computed(() => {
         revision.value;
         if (!content.value) return {};
-        const { show, size, shellHost, bodyMinHeight, ...controls } = content.value.props;
+        const { show, size, shellHost, bodyMinHeight, bodyHeight, ...controls } =
+            content.value.props;
         return { ...controls, ...content.value.attrs };
     });
     const forwardedSlots = computed(() => {
@@ -54,6 +56,7 @@
         :show="show"
         :size="size"
         :body-min-height="bodyMinHeight"
+        :body-height="bodyHeight"
         @update:show="handleClose"
         @confirm="content?.emit('confirm')"
     >
@@ -88,6 +91,7 @@
                 :show="show"
                 :error="error"
                 :min-height="bodyMinHeight"
+                :fill="Boolean(bodyHeight)"
                 @retry="emit('retry')"
             />
         </template>

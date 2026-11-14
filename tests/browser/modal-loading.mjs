@@ -15,12 +15,14 @@ const Logs = createLazyModal('LogModal');
 const Preview = createLazyModal('NodePreviewModal');
 createApp({ setup() {
     const logs = ref(false), preview = ref(false);
+    const previewSource = ref('source');
+    window.nextPreviewSource = () => previewSource.value = 'another-source';
     const mounted = useLazyModals({ logs, preview });
     return () => h('main', [
         h('button', { id: 'open-logs', onClick: () => logs.value = true }, 'Open logs'),
         h('button', { id: 'open-preview', onClick: () => preview.value = true }, 'Open preview'),
         mounted.has('logs') && h(Logs, { show: logs.value, 'onUpdate:show': value => logs.value = value }),
-        mounted.has('preview') && h(Preview, { show: preview.value, subscriptionId: 'source', subscriptionName: 'Test source', 'onUpdate:show': value => preview.value = value }),
+        mounted.has('preview') && h(Preview, { show: preview.value, subscriptionId: previewSource.value, subscriptionName: 'Test source', 'onUpdate:show': value => preview.value = value }),
     ]);
 } }).use(createPinia()).use(createI18n({ initialLocale: 'en-US' })).mount('#app');
 `;
@@ -44,6 +46,56 @@ const server = await createServer({
     ],
 });
 
+async function checkLoadingAlignment(page, testId) {
+    const indicator = page.locator(`[data-testid="${testId}"]`);
+    await indicator.locator('.loading-orbit').waitFor();
+    const geometry = await indicator.evaluate((element) => {
+        const body = element.closest('[data-modal-body]');
+        const bounds = body.getBoundingClientRect();
+        const style = getComputedStyle(body);
+        const animation = element.querySelector('.loading-orbit').getBoundingClientRect();
+        const message = element.querySelector('p').getBoundingClientRect();
+        const left = Math.min(animation.left, message.left);
+        const right = Math.max(animation.right, message.right);
+        return {
+            xOffset: (left + right) / 2 - (bounds.left + bounds.right) / 2,
+            yOffset:
+                (animation.top + message.bottom) / 2 -
+                (bounds.top +
+                    parseFloat(style.paddingTop) +
+                    bounds.bottom -
+                    parseFloat(style.paddingBottom)) /
+                    2,
+            scrollOverflow: body.scrollHeight - body.clientHeight,
+            horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+        };
+    });
+    assert.ok(
+        Math.abs(geometry.xOffset) <= 2,
+        `${testId} horizontal offset: ${JSON.stringify(geometry)}`
+    );
+    assert.ok(
+        Math.abs(geometry.yOffset) <= 2,
+        `${testId} vertical offset: ${JSON.stringify(geometry)}`
+    );
+    assert.ok(
+        geometry.scrollOverflow <= 1,
+        `Loading must not add a body scrollbar: ${JSON.stringify(geometry)}`
+    );
+    assert.ok(geometry.horizontalOverflow <= 0, 'Loading must fit the viewport');
+    if (process.env.MODAL_LOADING_SCREENSHOT) {
+        const screenshot = page.locator('[role="dialog"] > div');
+        await screenshot.screenshot({
+            path: `${process.env.MODAL_LOADING_SCREENSHOT}-${testId}-${page.viewportSize().width}-light.png`,
+        });
+        await page.evaluate(() => document.documentElement.classList.add('dark'));
+        await screenshot.screenshot({
+            path: `${process.env.MODAL_LOADING_SCREENSHOT}-${testId}-${page.viewportSize().width}-dark.png`,
+        });
+        await page.evaluate(() => document.documentElement.classList.remove('dark'));
+    }
+}
+
 let browser;
 try {
     await server.listen();
@@ -53,8 +105,13 @@ try {
             ? {}
             : { channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' }),
     });
-    for (const width of [1440, 390]) {
-        const page = await browser.newPage({ viewport: { width, height: 900 } });
+    for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 390, height: 844 },
+        { width: 320, height: 650 },
+    ]) {
+        const { width } = viewport;
+        const page = await browser.newPage({ viewport });
         const errors = [];
         page.on('pageerror', (error) => errors.push(error.message));
         let releaseCode;
@@ -170,6 +227,7 @@ try {
         );
         await page.locator('#open-logs').click();
         await page.getByText('Fetching logs…', { exact: true }).waitFor();
+        await checkLoadingAlignment(page, 'log-data-loading');
         assert.equal(await page.locator('[data-testid="modal-code-loading"]').count(), 0);
         releaseData();
         await page.getByText('Previous log', { exact: true }).waitFor();
@@ -198,7 +256,14 @@ try {
             window.previewWidth = window.previewPanel.offsetWidth;
         });
         await page.locator('.loading-ring').waitFor();
+        await checkLoadingAlignment(page, 'modal-code-loading');
         assert.equal(previewRequests, 1, 'Preview data must load before the preview code is ready');
+        let releasePreviewData;
+        const previewDataGate = new Promise((resolve) => (releasePreviewData = resolve));
+        await page.route('**/api/subscription_nodes', async (route) => {
+            await previewDataGate;
+            await route.fallback();
+        });
         releasePreviewCode();
         await page.getByText('Demo node', { exact: true }).first().waitFor();
         assert.equal(previewRequests, 1, 'The loaded preview must adopt its existing request');
@@ -234,6 +299,14 @@ try {
             await page.evaluate(() => Math.round(window.previewWidth))
         );
         assert.equal(await page.evaluate(() => document.body.style.position), 'fixed');
+        // Switching source clears the retained result and exercises the blocking data UI.
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        await page.evaluate(() => window.nextPreviewSource());
+        await page.locator('#open-preview').click();
+        await checkLoadingAlignment(page, 'node-data-loading');
+        releasePreviewData();
+        await page.getByText('Demo node', { exact: true }).first().waitFor();
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         assert.equal(await page.evaluate(() => document.activeElement.id), 'open-preview');

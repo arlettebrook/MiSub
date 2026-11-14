@@ -2,7 +2,14 @@
     import { onScopeDispose, ref, watch } from 'vue';
     import { useI18n } from '../../i18n/index.js';
 
-    const props = defineProps({ show: Boolean, error: Boolean, minHeight: String });
+    const props = defineProps({
+        show: Boolean,
+        error: Boolean,
+        minHeight: String,
+        fill: Boolean,
+        message: String,
+        testId: { type: String, default: 'modal-code-loading' },
+    });
     const emit = defineEmits(['retry']);
     const { t } = useI18n();
     const showFeedback = ref(false);
@@ -21,12 +28,13 @@
 
 <template>
     <div
-        class="flex min-h-44 flex-col items-center justify-center gap-5 py-5 text-center"
-        :style="{ minHeight }"
+        class="flex flex-col items-center justify-center gap-5 py-5 text-center"
+        :class="fill ? 'h-full min-h-0 flex-1' : 'min-h-44'"
+        :style="fill ? undefined : { minHeight }"
         :role="error ? 'alert' : 'status'"
         :aria-busy="!error"
         aria-live="polite"
-        data-testid="modal-code-loading"
+        :data-testid="testId"
     >
         <div
             v-if="showFeedback && !error"
@@ -59,7 +67,9 @@
             class="max-w-xs text-sm leading-relaxed text-gray-500 dark:text-gray-400"
         >
             {{
-                error ? t('loadingFeedback.componentFailed') : t('loadingFeedback.componentLoading')
+                error
+                    ? t('loadingFeedback.componentFailed')
+                    : message || t('loadingFeedback.componentLoading')
             }}
         </p>
         <button

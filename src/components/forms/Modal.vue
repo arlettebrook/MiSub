@@ -10,6 +10,7 @@
         show: Boolean,
         shellHost: Boolean,
         bodyMinHeight: String,
+        bodyHeight: String,
         confirmKeyword: String,
         size: {
             type: String,
@@ -137,8 +138,13 @@
                         </div>
 
                         <div
-                            class="px-6 pb-6 grow overflow-y-auto"
-                            :style="{ minHeight: bodyMinHeight }"
+                            data-modal-body
+                            class="min-h-0 grow overflow-y-auto px-6"
+                            :class="bodyHeight ? 'flex flex-col py-3' : 'pb-6'"
+                            :style="{
+                                minHeight: bodyHeight ? undefined : bodyMinHeight,
+                                height: bodyHeight,
+                            }"
                         >
                             <slot name="body">
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
