@@ -5,7 +5,10 @@ import {
     migrateProfileIds,
     base64EncodeUtf8,
 } from '../utils.js';
-import { generateCombinedNodeList } from '../../services/subscription-service.js';
+import {
+    generateCombinedNodeList,
+    buildSubscriptionFilterFingerprint,
+} from '../../services/subscription-service.js';
 import { fixNodeUrlEncoding } from '../../utils/node-utils.js';
 import { sendEnhancedTgNotification, tgEscape } from '../notifications.js';
 import {
@@ -21,6 +24,8 @@ import {
     setCache,
     isSuspiciousNodeCountDrop,
     isLikelyPartialAggregateNodeList,
+    isCacheFilterCompatible,
+    canAcceptFilteredNodeReduction,
 } from '../../services/node-cache-service.js';
 import { resolveRequestContext } from './request-context.js';
 import { resolveNodeListWithCache } from './cache-manager.js';
@@ -852,6 +857,26 @@ export async function handleMisubRequest(context) {
         profileIdentifier ? 'profile' : 'token',
         profileIdentifier || token
     );
+    const filterFingerprint = JSON.stringify([
+        targetMisubs.map((sub) => [sub.id, sub.url, buildSubscriptionFilterFingerprint(sub)]),
+        currentProfile
+            ? [
+                  buildSubscriptionFilterFingerprint(currentProfile),
+                  currentProfile.include,
+                  currentProfile.prefixSettings,
+                  currentProfile.nodeTransformPresetId,
+              ]
+            : null,
+        [
+            config.exclude,
+            config.include,
+            config.defaultOperators,
+            config.defaultNodeTransform,
+            config.nodeTransformPresets,
+            config.defaultPrefixSettings,
+        ],
+        [urlInclude, urlExclude, urlRename, urlEmoji],
+    ]);
 
     // 检查是否强制刷新（通过 URL 参数）
     const forceRefresh =
@@ -1007,7 +1032,21 @@ export async function handleMisubRequest(context) {
         // 如果没有 HTTP 订阅源（纯手动节点/过期订阅组），则始终写入缓存
         const stats = context.generationStats;
         if (!stats?.sourceCount || stats.upstreamSuccessCount > 0) {
-            const cacheSaved = await setCache(storageAdapter, cacheKey, freshNodes, sourceNames);
+            const cacheOptions = {
+                filterFingerprint,
+                upstreamNodeCount: stats?.upstreamNodeCount,
+                // 所有源都真实拉取成功时，才允许正常筛选结果替换较大的缓存。
+                filteredNodeReduction:
+                    stats?.filteredNodeReduction === true &&
+                    (!stats.sourceCount || stats.upstreamSuccessCount === stats.sourceCount),
+            };
+            const cacheSaved = await setCache(
+                storageAdapter,
+                cacheKey,
+                freshNodes,
+                sourceNames,
+                cacheOptions
+            );
             const freshNodeCount = freshNodes.split('\n').filter((line) => line.trim()).length;
             const existingCache = cacheSaved ? null : await storageAdapter.get(cacheKey);
             const existingNodeCount =
@@ -1017,6 +1056,8 @@ export async function handleMisubRequest(context) {
                     .filter((line) => line.trim()).length;
             if (
                 !cacheSaved &&
+                isCacheFilterCompatible(existingCache, filterFingerprint) &&
+                !canAcceptFilteredNodeReduction(existingCache, cacheOptions) &&
                 (isSuspiciousNodeCountDrop(existingNodeCount, freshNodeCount) ||
                     isLikelyPartialAggregateNodeList(freshNodes))
             ) {
@@ -1057,6 +1098,7 @@ export async function handleMisubRequest(context) {
         context,
         targetMisubsCount: targetMisubs.length,
         expectedNodeCount: expectedRemoteNodeCount,
+        filterFingerprint,
     });
 
     console.log(`[MiSub Nodes] Count/Length: ${combinedNodeList ? combinedNodeList.length : 0}`);

@@ -18,7 +18,7 @@ import {
 import { runOperatorChain } from '../utils/operator-runner.js';
 import { createTimeoutFetch } from '../modules/utils.js';
 import { assertPublicNetworkUrl } from '../modules/security-utils.js';
-import { isSuspiciousNodeCountDrop } from './node-cache-service.js';
+import { isSuspiciousNodeCountDrop, isCacheFilterCompatible } from './node-cache-service.js';
 
 /**
  * 订阅获取配置常量
@@ -88,29 +88,51 @@ export function buildSubscriptionNodeCacheKey(sub = {}) {
     return `node_cache_subscription_url_${Math.abs(hash).toString(36)}`;
 }
 
+/**
+ * 标识缓存节点应用过的过滤和算子配置，兼容 D1 返回的 JSON 算子字符串。
+ */
+export function buildSubscriptionFilterFingerprint(sub = {}) {
+    const operators = ensureArray(sub.operators);
+    return JSON.stringify([
+        typeof sub.exclude === 'string' ? sub.exclude.trim() : '',
+        operators.length
+            ? operators
+            : sub.nodeTransform?.enabled
+              ? ensureArray(sub.nodeTransform.operators)
+              : [],
+        sub.nodeTransform || null,
+    ]);
+}
+
 async function readSubscriptionNodeCache(storage, sub) {
     if (!storage?.get) return null;
     try {
         const cached = await storage.get(buildSubscriptionNodeCacheKey(sub));
         if (!cached || !Array.isArray(cached.nodes)) return null;
         const nodes = cached.nodes.filter(isRealProxyNode);
-        return nodes.length > 0 ? { ...cached, nodes } : null;
+        // 健康上游被规则主动筛空的结果也有效，不能在后续故障时复活旧节点。
+        return nodes.length > 0 ||
+            (cached.upstreamNodeCount > 0 && typeof cached.filterFingerprint === 'string')
+            ? { ...cached, nodes }
+            : null;
     } catch (error) {
         console.warn('[SubscriptionCache] Failed to read cache:', error);
         return null;
     }
 }
 
-async function writeSubscriptionNodeCache(storage, sub, nodes) {
+async function writeSubscriptionNodeCache(storage, sub, nodes, upstreamNodeCount = 0) {
     if (!storage?.put) return false;
     const realNodes = Array.isArray(nodes) ? nodes.filter(isRealProxyNode) : [];
-    if (realNodes.length === 0) return false;
+    if (realNodes.length === 0 && upstreamNodeCount === 0) return false;
 
     try {
         await storage.put(buildSubscriptionNodeCacheKey(sub), {
             nodes: realNodes,
             nodeCount: realNodes.length,
             updatedAt: new Date().toISOString(),
+            upstreamNodeCount,
+            filterFingerprint: buildSubscriptionFilterFingerprint(sub),
             sourceId: sub?.id || null,
             sourceName: sub?.name || '',
             sourceUrl: sub?.url || '',
@@ -377,6 +399,9 @@ export async function generateCombinedNodeList(
     const skipPrefixDueToRenaming =
         nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
 
+    let upstreamNodeCount = 0;
+    let filteredNodeReduction = false;
+
     // --- 阶段 1: 数据准备与手动节点处理 ---
 
     // [增强修复] 定义统一的订阅源级转换中枢
@@ -405,6 +430,8 @@ export async function generateCombinedNodeList(
 
         // 2. 应用传统的文本过滤规则 (exclude/include)
         currentNodes = applyFilterRules(currentNodes, subSource);
+
+        if (currentNodes.length < nodes.length) filteredNodeReduction = true;
 
         return currentNodes;
     };
@@ -436,6 +463,8 @@ export async function generateCombinedNodeList(
                 ? prependNodeName(processedUrl, manualNodePrefix)
                 : processedUrl;
 
+            upstreamNodeCount++;
+
             // [核心对齐] 对手动节点应用订阅源级转换（算子+过滤 + 组级诊断）
             const transformed = await applySubscriptionTransforms([finalRawUrl], sub);
             if (transformed.length > 0) {
@@ -452,6 +481,7 @@ export async function generateCombinedNodeList(
     );
     const limiter = createConcurrencyLimiter(FETCH_CONFIG.CONCURRENCY);
     let upstreamSuccessCount = 0; // 追踪真正从远程拉取成功的订阅数（不含 per-sub 缓存回退）
+    let acceptedEmptySourceCount = 0;
 
     /**
      * 获取单个订阅内容
@@ -470,10 +500,16 @@ export async function generateCombinedNodeList(
             recordCurrentRequestRuntimeInfo(context, sub, runtimeInfo);
             scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInfo);
         };
+        const filterFingerprint = buildSubscriptionFilterFingerprint(sub);
+        let cacheEntryPromise;
+        const readCacheEntry = () => {
+            if (!cacheEnabled) return Promise.resolve(null);
+            cacheEntryPromise ||= readSubscriptionNodeCache(storage, sub);
+            return cacheEntryPromise;
+        };
         const readCachedNodes = async () => {
-            if (!cacheEnabled) return [];
-            const cached = await readSubscriptionNodeCache(storage, sub);
-            return cached?.nodes || [];
+            const cached = await readCacheEntry();
+            return isCacheFilterCompatible(cached, filterFingerprint) ? cached?.nodes || [] : [];
         };
 
         try {
@@ -538,61 +574,52 @@ export async function generateCombinedNodeList(
             }
 
             let validNodes = fallbackParsedObjects.map((node) => node.url);
-
-            // --- 统一转换治理 (算子 + 过滤 + 组级诊断) ---
-            validNodes = await applySubscriptionTransforms(validNodes, sub);
-
-            const realNodes = validNodes.filter(isRealProxyNode);
+            const rawNodeCount = validNodes.filter(isRealProxyNode).length;
+            const cached = await readCacheEntry();
             const knownNodeCount = Math.max(
                 Number(sub?.lastGoodNodeCount) || 0,
-                Number(sub?.nodeCount) || 0
+                Number(sub?.nodeCount) || 0,
+                Number(cached?.upstreamNodeCount) || cached?.nodes.length || 0
             );
             if (
                 Number.isFinite(knownNodeCount) &&
-                isSuspiciousNodeCountDrop(knownNodeCount, realNodes.length)
+                isSuspiciousNodeCountDrop(knownNodeCount, rawNodeCount)
             ) {
                 const cachedNodes = await readCachedNodes();
                 console.warn(
-                    `[Subscription] Rejecting suspicious node-count drop for ${sub.id || sub.url} (${knownNodeCount} known -> ${realNodes.length} fetched)`
+                    `[Subscription] Rejecting suspicious node-count drop for ${sub.id || sub.url} (${knownNodeCount} known -> ${rawNodeCount} fetched)`
                 );
                 if (cachedNodes.length > 0) return cachedNodes.join('\n');
                 // Do not write nodeCount=0 here: this response is suspicious,
                 // not evidence that the subscription has no usable nodes.
                 return '';
             }
-            if (cacheEnabled && realNodes.length === 0) {
+            if (rawNodeCount === 0) {
+                recordEmptyRuntimeInfo();
                 return (await readCachedNodes()).join('\n');
             }
-            if (cacheEnabled) {
-                const cachedNodes = await readCachedNodes();
-                if (isSuspiciousNodeCountDrop(cachedNodes.length, realNodes.length)) {
-                    console.warn(
-                        `[SubscriptionCache] Refusing suspicious node-count drop for ${sub.id || sub.url} (${cachedNodes.length} -> ${realNodes.length})`
-                    );
-                    return cachedNodes.join('\n');
-                }
-            }
-            if (!cacheEnabled && realNodes.length === 0) {
-                recordEmptyRuntimeInfo();
-            }
+
+            // 用过滤前的上游数量判断截断，规则和算子造成的缩减是正常结果。
+            validNodes = await applySubscriptionTransforms(validNodes, sub);
+            const realNodes = validNodes.filter(isRealProxyNode);
+            upstreamNodeCount += rawNodeCount;
+            upstreamSuccessCount++;
+            if (validNodes.length === 0) acceptedEmptySourceCount++;
 
             if (cacheEnabled) {
-                await writeSubscriptionNodeCache(storage, sub, realNodes);
+                await writeSubscriptionNodeCache(storage, sub, realNodes, rawNodeCount);
             }
 
-            if (realNodes.length > 0) {
-                upstreamSuccessCount++;
-                const userInfo = parseSubscriptionUserInfoHeader(
-                    response.headers.get('subscription-userinfo')
-                );
-                const runtimeInfo = {
-                    nodeCount: realNodes.length,
-                    userInfo,
-                    ...(realNodes.length >= 10 ? { lastGoodNodeCount: realNodes.length } : {}),
-                };
-                recordCurrentRequestRuntimeInfo(context, sub, runtimeInfo);
-                scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInfo);
-            }
+            const userInfo = parseSubscriptionUserInfoHeader(
+                response.headers.get('subscription-userinfo')
+            );
+            const runtimeInfo = {
+                nodeCount: realNodes.length,
+                userInfo,
+                ...(rawNodeCount >= 10 ? { lastGoodNodeCount: rawNodeCount } : {}),
+            };
+            recordCurrentRequestRuntimeInfo(context, sub, runtimeInfo);
+            scheduleSubscriptionRuntimeInfoUpdate(context, storage, sub, runtimeInfo);
 
             // 判断是否启用订阅前缀（智能重命名启用时跳过）
             const shouldPrependSubscriptions = profilePrefixSettings?.enableSubscriptions ?? true;
@@ -619,6 +646,7 @@ export async function generateCombinedNodeList(
 
     // 去重，保留原始顺序中的第一次出现
     let currentLines = [...new Set(rawCombinedLines)];
+    const nodesBeforeGlobalTransforms = rawCombinedLines.length;
 
     if (!shouldKeepEmoji) {
         currentLines = currentLines.map((line) => removeFlagEmoji(line));
@@ -692,7 +720,8 @@ export async function generateCombinedNodeList(
     try {
         const endTime = Date.now();
         const totalNodes = finalLines.length;
-        const successCount = processedSubContents.filter((c) => c.length > 0).length;
+        const successCount =
+            processedSubContents.filter((c) => c.length > 0).length + acceptedEmptySourceCount;
         const failCount = httpSubs.length - successCount;
 
         // [Stats Export] Populate generation stats to context for use by handler (deferred logging)
@@ -703,6 +732,9 @@ export async function generateCombinedNodeList(
                 successCount,
                 failCount,
                 upstreamSuccessCount,
+                upstreamNodeCount,
+                filteredNodeReduction:
+                    filteredNodeReduction || finalLines.length < nodesBeforeGlobalTransforms,
                 duration: endTime - (context.startTime || Date.now()),
             };
         }

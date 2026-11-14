@@ -3,6 +3,7 @@ import {
     triggerBackgroundRefresh,
     createCacheHeaders,
     isLikelyPartialAggregateNodeList,
+    isCacheFilterCompatible,
 } from '../../services/node-cache-service.js';
 
 const refreshDebounce = new Map();
@@ -46,6 +47,7 @@ export async function resolveNodeListWithCache({
     context,
     targetMisubsCount,
     expectedNodeCount = 0,
+    filterFingerprint,
 }) {
     const { data: cachedData, status: cacheStatus } = forceRefresh
         ? { data: null, status: 'miss' }
@@ -53,12 +55,22 @@ export async function resolveNodeListWithCache({
 
     let combinedNodeList;
     let cacheHeaders = {};
+    const filtersMatch = isCacheFilterCompatible(cachedData, filterFingerprint);
+    const validatedFilteredCache =
+        filtersMatch &&
+        typeof filterFingerprint === 'string' &&
+        cachedData?.filterFingerprint === filterFingerprint &&
+        cachedData?.filteredNodeReduction === true &&
+        Number(cachedData.upstreamNodeCount) > 0;
     const cacheLooksIncomplete =
         cachedData &&
-        (isCacheFarBelowExpected(cachedData, expectedNodeCount) ||
-            isLikelyPartialAggregateNodeList(cachedData.nodes));
+        (isCacheFarBelowExpected(
+            validatedFilteredCache ? { nodeCount: cachedData.upstreamNodeCount } : cachedData,
+            expectedNodeCount
+        ) ||
+            (!validatedFilteredCache && isLikelyPartialAggregateNodeList(cachedData.nodes)));
     const canUseCachedData =
-        cachedData && hasUsableCachedNodes(cachedData) && !cacheLooksIncomplete;
+        cachedData && filtersMatch && hasUsableCachedNodes(cachedData) && !cacheLooksIncomplete;
 
     if (cacheLooksIncomplete) {
         console.warn(

@@ -29,6 +29,32 @@ export function isSuspiciousNodeCountDrop(previousCount, nextCount) {
     return next / previous < SHRINK_PROTECTION_MAX_RATIO;
 }
 
+export function isCacheFilterCompatible(entry, filterFingerprint) {
+    // 无指纹的旧缓存保留原有回退行为；新缓存必须匹配当前配置。
+    return (
+        typeof filterFingerprint !== 'string' ||
+        typeof entry?.filterFingerprint !== 'string' ||
+        entry.filterFingerprint === filterFingerprint
+    );
+}
+
+export function canAcceptFilteredNodeReduction(existing, options = {}) {
+    const upstreamCount = Number(options.upstreamNodeCount);
+    if (
+        options.filteredNodeReduction !== true ||
+        !Number.isFinite(upstreamCount) ||
+        upstreamCount <= 0
+    )
+        return false;
+    const previousCount =
+        Number(existing?.upstreamNodeCount) ||
+        Number(existing?.nodeCount) ||
+        String(existing?.nodes || '')
+            .split('\n')
+            .filter((line) => line.trim()).length;
+    return !isSuspiciousNodeCountDrop(previousCount, upstreamCount);
+}
+
 export function isLikelyPartialAggregateNodeList(nodes) {
     const lines = String(nodes || '')
         .split(/\r?\n+/)
@@ -69,6 +95,9 @@ function isSubscriptionNodeCacheKey(key) {
  * @property {number} timestamp - 缓存时间戳
  * @property {number} nodeCount - 节点数量
  * @property {string[]} sources - 来源订阅名称列表
+ * @property {string} [filterFingerprint] - 节点生成时的过滤配置
+ * @property {number} [upstreamNodeCount] - 过滤前的上游节点数量
+ * @property {boolean} [filteredNodeReduction] - 是否已验证为正常筛选缩减
  */
 
 /**
@@ -108,24 +137,26 @@ export async function getCache(storageAdapter, cacheKey) {
  * @param {string} cacheKey - 缓存键
  * @param {string} nodes - 节点列表字符串
  * @param {string[]} sources - 来源订阅名称列表
+ * @param {Object} options - 上游原始数量、过滤指纹和已验证的筛选结果
  * @returns {Promise<boolean>}
  */
-export async function setCache(storageAdapter, cacheKey, nodes, sources = []) {
+export async function setCache(storageAdapter, cacheKey, nodes, sources = [], options = {}) {
     try {
         const nodeCount = nodes.split('\n').filter((line) => line.trim()).length;
-        if (isLikelyPartialAggregateNodeList(nodes)) {
+        const existing = await storageAdapter.get(cacheKey);
+        const acceptFilteredReduction = canAcceptFilteredNodeReduction(existing, options);
+        if (!acceptFilteredReduction && isLikelyPartialAggregateNodeList(nodes)) {
             console.warn(
                 `[Cache] Refusing to cache a likely partial aggregate node list for ${cacheKey}`
             );
             return false;
         }
-        const existing = await storageAdapter.get(cacheKey);
         const existingNodeCount =
             existing?.nodeCount ||
             String(existing?.nodes || '')
                 .split('\n')
                 .filter((line) => line.trim()).length;
-        if (nodeCount === 0) {
+        if (!acceptFilteredReduction && nodeCount === 0) {
             if (existingNodeCount > 0) {
                 console.warn(
                     `[Cache] Refusing to overwrite non-empty cache ${cacheKey} with empty node list`
@@ -133,7 +164,7 @@ export async function setCache(storageAdapter, cacheKey, nodes, sources = []) {
                 return false;
             }
         }
-        if (isSuspiciousNodeCountDrop(existingNodeCount, nodeCount)) {
+        if (!acceptFilteredReduction && isSuspiciousNodeCountDrop(existingNodeCount, nodeCount)) {
             console.warn(
                 `[Cache] Refusing to overwrite cache ${cacheKey} after suspicious node-count drop (${existingNodeCount} -> ${nodeCount})`
             );
@@ -145,6 +176,13 @@ export async function setCache(storageAdapter, cacheKey, nodes, sources = []) {
             timestamp: Date.now(),
             nodeCount,
             sources,
+            ...(typeof options.filterFingerprint === 'string'
+                ? {
+                      filterFingerprint: options.filterFingerprint,
+                      upstreamNodeCount: Number(options.upstreamNodeCount) || 0,
+                      filteredNodeReduction: acceptFilteredReduction,
+                  }
+                : {}),
         };
 
         // 计算 TTL（秒），使用 MAX_AGE 作为过期时间
