@@ -1548,7 +1548,7 @@ export const messages = {
             selectRow: '选择此行',
         },
         loadingFeedback: {
-            componentLoading: '正在准备弹窗…',
+            componentLoading: '正在加载…',
             componentFailed: '弹窗加载失败，请重试。',
             logsLoading: '正在读取日志…',
             logsRefreshing: '正在刷新日志，当前显示上次结果…',
@@ -3193,7 +3193,7 @@ export const messages = {
             selectRow: 'Select this row',
         },
         loadingFeedback: {
-            componentLoading: 'Preparing dialog…',
+            componentLoading: 'Loading…',
             componentFailed: 'The dialog could not be loaded. Please retry.',
             logsLoading: 'Fetching logs…',
             logsRefreshing: 'Refreshing logs; showing the previous result…',

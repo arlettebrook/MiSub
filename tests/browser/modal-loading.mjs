@@ -110,6 +110,27 @@ try {
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
             true
         );
+        const ring = page.locator('.loading-ring');
+        assert.match(
+            await ring.evaluate((element) => getComputedStyle(element).animationName),
+            /^loading-orbit(?:-|$)/
+        );
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        assert.equal(
+            await ring.evaluate((element) => getComputedStyle(element).animationName),
+            'none'
+        );
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        if (process.env.MODAL_LOADING_SCREENSHOT) {
+            await page
+                .locator('[role="dialog"] > div')
+                .screenshot({ path: `${process.env.MODAL_LOADING_SCREENSHOT}-${width}-light.png` });
+            await page.evaluate(() => document.documentElement.classList.add('dark'));
+            await page
+                .locator('[role="dialog"] > div')
+                .screenshot({ path: `${process.env.MODAL_LOADING_SCREENSHOT}-${width}-dark.png` });
+            await page.evaluate(() => document.documentElement.classList.remove('dark'));
+        }
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         releaseCode();
