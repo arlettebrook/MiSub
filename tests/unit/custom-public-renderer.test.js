@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// DOMPurify 的安全断言使用其支持的 jsdom 环境验证。
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia } from 'pinia';

@@ -75,7 +75,7 @@ It is designed for personal and small-team usage: simple operations, clear clien
 
 - A GitHub account
 - A Cloudflare account
-- Node.js 20+ for local development
+- Node.js 22.12+ (22.x) or 24+ for local development and builds
 
 ### Deploy to Cloudflare Pages
 
@@ -87,6 +87,7 @@ It is designed for personal and small-team usage: simple operations, clear clien
    - Framework preset: `Vue`
    - Build command: `npm run build`
    - Build output directory: `dist`
+   - Node.js version: 22.12+ (22.x) or 24+; set `NODE_VERSION` if the build environment uses an older version
 6. Deploy the project.
 7. Bind storage before production use.
 

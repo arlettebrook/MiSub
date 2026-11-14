@@ -65,6 +65,34 @@ js-yaml 在本项目直接处理订阅与模板内容，其 CPU 消耗类公告�
 
 公告与数据来源：[DOMPurify](https://github.com/advisories/GHSA-cg2g-xh64-v4q7)、[js-yaml](https://github.com/advisories/GHSA-2883-xcg3-v3hh)、[Vitest](https://github.com/advisories/GHSA-5xrq-8626-4rwp)，以及本次官方 npm audit JSON。版本建议只代表本次查询快照。
 
+**实施进度（2026-11-14）：P1 依赖安全更新已完成并验证，官方 npm 审计已清零。** 首次审计为 22 个受影响依赖包；更新后 `npm audit --registry=https://registry.npmjs.org --json` 返回 0 个。通过官方 npm registry 更新版本和重新安装，没有修改全局 npm registry。
+
+| 依赖                                                 | 更新前锁定版本 | 更新后锁定版本 |
+| ---------------------------------------------------- | -------------- | -------------- |
+| DOMPurify                                            | 3.4.5          | 3.4.17         |
+| js-yaml                                              | 4.1.1          | 4.3.2          |
+| Vue 及 compiler / runtime / server-renderer / shared | 3.5.18         | 3.5.45         |
+| Vite                                                 | 7.3.3          | 7.3.8          |
+| Vitest 及配套包                                      | 4.0.16         | 4.1.12         |
+| Happy DOM                                            | 20.9.0         | 21.0.4         |
+| Vue Test Utils                                       | 2.4.6          | 2.4.11         |
+| Wrangler                                             | 4.93.1         | 4.116.0        |
+| Miniflare                                            | 4.20260520.0   | 4.20260730.0   |
+
+Happy DOM 20.x 没有覆盖全部公告的修复版本，因此升级到 21.0.4。Wrangler 使用 `~4.116.0`，与 Miniflare 4.x 配套，避免此次修复引入 Miniflare 5 beta；Vue Test Utils 使用兼容的 2.4.x 补丁版本。DOMPurify、js-yaml、Vue、Vite、Vitest 保持原主版本。
+
+对父包尚未放开安全版本的间接依赖，增加限定范围的 npm overrides：`js-beautify → glob ^14.0.6`、`editorconfig → minimatch ^11.0.8`、`miniflare → sharp ^0.35.5 / undici ^7.30.2`。其他间接修复包括 PostCSS、nanoid、source-map-js、ws、esbuild。overrides 只作用于这些依赖路径；后续父包原生支持安全版本时可移除。
+
+`package.json` 明确要求 Node.js `^22.12.0 || >=24.0.0`，中英文 README 同步本地开发和 Cloudflare 构建版本要求。本次使用 Node.js 24.9.0 验证。
+
+HTML 清洗测试改用 jsdom 28.1.0，仅对 `custom-public-renderer.test.js` 指定 jsdom 环境，保持原有脚本、事件属性、iframe 和占位符安全断言。DOMPurify 的[官方说明](https://github.com/cure53/DOMPurify#running-dompurify-on-the-server)不推荐与 Happy DOM 组合使用；此次升级后的 Happy DOM 对这组输入的清洗结果与真实浏览器不一致。切换后 7 个用例全部通过，真实 Chromium 浏览器同样正确移除脚本和事件属性。没有修改生产清洗逻辑。
+
+最终锁文件经 `npm ci --prefer-offline --registry=https://registry.npmjs.org --no-audit --no-fund` 干净安装通过，加入 jsdom 后的官方审计仍为 0。依赖树检查及 Node.js 22.12.0 / 24.0.0 / 本机 24.9.0 的依赖版本约束检查通过。
+
+全量测试 170 个文件、1499 个用例全部通过；命令为 `node node_modules/vitest/vitest.mjs run --passWithNoTests --reporter=dot --maxWorkers=2`。本机较高并发运行曾有一条动态导入订阅生成测试超时，单独复查该文件的 25 个用例通过；最终使用两个 worker 完成全量，维持原有的测试断言和 5 秒超时门槛。
+
+YAML 正常合并与异常规模 / 空来源重复合并限制、HTML 格式化、EditorConfig / glob、Sharp 图像编码、Undici HTTP、本地 Miniflare Worker/KV、`npm run build`、Pages Functions 构建，以及桌面 / 手机 / 小屏弹窗和节点预览 / 刷新浏览器回归均已通过。临时验证记录保存在忽略目录 `tmp/p1-*.log` 和 `tmp/p1-*.json`，不纳入版本管理。
+
 ### 3. P1：过滤导致节点减少，被误判成上游截断，已复现
 
 本地位置：`functions/services/subscription-service.js:543`、`:552`、`:563`。
