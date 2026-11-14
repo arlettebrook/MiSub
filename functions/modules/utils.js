@@ -163,6 +163,7 @@ export async function getCookieSecret(env) {
  * 优先顺序：环境变量 ADMIN_PASSWORD → KV → 默认值 'admin'
  * @param {Object} env - 运行时环境对象
  * @returns {Promise<string>} 密码
+ * @throws {Error} KV 密码读取失败，调用方必须拒绝登录
  */
 export async function getAdminPassword(env) {
     const runtimeAdminPassword = getRuntimeEnvValue(env, 'ADMIN_PASSWORD');
@@ -172,7 +173,8 @@ export async function getAdminPassword(env) {
 
     const kv = getKV(env);
     if (kv) {
-        const kvPassword = await safeKvGet(kv, 'SYSTEM_ADMIN_PASSWORD');
+        // 密码读取失败必须向上抛错，不能将存储故障当成尚未设置密码。
+        const kvPassword = await kv.get('SYSTEM_ADMIN_PASSWORD');
         if (kvPassword) return String(kvPassword).trim();
     }
 
@@ -241,11 +243,14 @@ export async function isUsingDefaultPassword(env) {
 
 /**
  * 设置管理员密码
- * 有 KV 时持久化到 KV；无 KV 时抛出提示
+ * 使用 KV 密码时持久化；环境变量控制密码或无 KV 时抛出提示
  * @param {Object} env - 运行时环境对象
  * @param {string} newPassword - 新密码
  */
 export async function setAdminPassword(env, newPassword) {
+    if (getRuntimeEnvValue(env, 'ADMIN_PASSWORD')) {
+        throw new Error('当前部署通过环境变量 ADMIN_PASSWORD 设置密码，请在平台控制台修改该变量');
+    }
     const kv = getKV(env);
     if (!kv) {
         throw new Error('当前部署未绑定 KV，请在平台控制台通过环境变量 ADMIN_PASSWORD 修改密码');
