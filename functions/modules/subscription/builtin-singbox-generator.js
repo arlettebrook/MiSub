@@ -77,7 +77,7 @@ function buildOutbound(proxy) {
         outbound.uuid = proxy.uuid || '';
         outbound.security = proxy.cipher || 'auto';
         outbound.alter_id = Number.isFinite(Number(proxy.alterId)) ? Number(proxy.alterId) : 0;
-        if (proxy.tls || proxy.sni || proxy.servername || proxy['skip-cert-verify']) {
+        if (proxy.tls || proxy.sni || proxy.servername) {
             outbound.tls = {
                 enabled: true,
                 server_name: proxy.sni || proxy.servername || server,
@@ -85,15 +85,32 @@ function buildOutbound(proxy) {
             if (proxy['skip-cert-verify'] === true || proxy.skipCertVerify === true) {
                 outbound.tls.insecure = true;
             }
+            if (proxy.alpn)
+                outbound.tls.alpn = Array.isArray(proxy.alpn) ? proxy.alpn : [proxy.alpn];
         }
-        outbound.transport = {
-            type: proxy.network === 'ws' ? 'ws' : 'tcp',
-        };
-        if (proxy['ws-opts']?.path || proxy.wsOpts?.path) {
-            outbound.transport.path = proxy['ws-opts']?.path || proxy.wsOpts?.path;
+        // 普通 TCP 不需要 V2Ray transport；sing-box 不接受 transport.type=tcp。
+        if (proxy.network === 'ws') {
+            const wsOpts = proxy['ws-opts'] || proxy.wsOpts;
+            outbound.transport = {
+                type: 'ws',
+                path: wsOpts?.path || '/',
+                headers: wsOpts?.headers || {},
+            };
+        } else if (proxy.network === 'grpc') {
+            const grpcOpts = proxy['grpc-opts'] || proxy.grpcOpts;
+            outbound.transport = {
+                type: 'grpc',
+                service_name: grpcOpts?.['grpc-service-name'] || grpcOpts?.serviceName || 'grpc',
+            };
+        } else if (proxy.network === 'h2' || proxy.network === 'http') {
+            const opts = proxy[`${proxy.network}-opts`] || proxy[`${proxy.network}Opts`];
+            const host = opts?.host || opts?.headers?.Host;
+            outbound.transport = {
+                type: 'http',
+                host: host ? (Array.isArray(host) ? host : [host]) : [],
+                path: opts?.path || '/',
+            };
         }
-        const host = proxy['ws-opts']?.headers?.Host || proxy.wsOpts?.headers?.Host;
-        if (host) outbound.transport.headers = { Host: host };
     } else if (type === 'vless') {
         outbound.type = 'vless';
         outbound.server = server;
@@ -249,7 +266,11 @@ function buildOutbound(proxy) {
         return null;
     }
 
-    if (proxy['skip-cert-verify'] === true || proxy.skipCertVerify === true) {
+    // VMess 的证书校验选项只能作用于节点已启用的 TLS。
+    if (
+        (proxy['skip-cert-verify'] === true || proxy.skipCertVerify === true) &&
+        (type !== 'vmess' || outbound.tls?.enabled)
+    ) {
         outbound.tls = outbound.tls || {};
         outbound.tls.enabled = true;
         outbound.tls.insecure = true;

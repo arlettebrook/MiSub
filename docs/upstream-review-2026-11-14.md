@@ -123,6 +123,14 @@ YAML 正常合并与异常规模 / 空来源重复合并限制、HTML 格式化�
 
 验收：按协议断言合法字段；最好用用户支持的稳定客户端版本执行配置检查，而不仅验证 JSON 可解析。
 
+**实施进度（2026-11-14）：P1 VMess 无效字段问题已修复并验证。** 模板模型和 INI 输出不再为 VMess 添加 `udp_relay_mode`、`congestion_control`；这两个字段继续用于支持它们的 TUIC。内置生成不再输出非法的 `transport.type=tcp`，普通 TCP 省略 transport，WebSocket / gRPC / HTTP 分别使用对应声明，HTTP/2 映射到 sing-box 的 `http` 传输。
+
+VMess 的 UUID、加密方式、alterId、TLS server_name、ALPN、WS path / Host、gRPC service_name、HTTP host / path 保留。跳过证书校验只影响 VMess 已启用的 TLS，不会替普通 TCP 节点启用 TLS；其他协议原有处理保持不变。
+
+新增 `tests/unit/singbox-vmess-fields.test.js`，覆盖内置生成、模板模型和 INI 三条入口，共 27 个回归用例；相关 5 个文件、81 个用例通过。使用官方 sing-box v1.14.4 Windows amd64 二进制，按 GitHub 发布资产 SHA256 校验后执行 `sing-box check`：10 个 VMess 出站配置（两种生成路径 × TCP / WS / gRPC / H2 / HTTP）和 2 个 TUIC 配置均通过；分别加入两个非法 VMess 字段的反例均被客户端拒绝。
+
+客户端检查使用仅包含目标出站的最小配置，不联网下载规则、不建立代理连接；不代表其他完整订阅模板已做全量客户端兼容性验证。全量单测 172 个文件、1547 个用例全部通过，`npm run build` 与 Pages Functions 构建通过，源码 / 测试 / 本文格式检查和 `git diff --check` 通过。临时二进制、JSON 和验证日志位于忽略目录 `tmp/`。
+
 ### 5. P1：IPv6 节点导出丢失地址边界，已复现
 
 本地位置：`functions/utils/clash-to-url.js:29`、`:136`、`:206`、`:229`。

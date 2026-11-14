@@ -69,8 +69,6 @@ function buildOutbound(proxy) {
             server_port: serverPort,
             uuid: proxy.uuid || '',
             security: proxy.cipher || 'auto',
-            udp_relay_mode: proxy['udp-relay-mode'] || 'native',
-            congestion_control: proxy['congestion-control'] || 'cubic',
             alter_id: Number.isFinite(Number(proxy.alterId)) ? Number(proxy.alterId) : 0,
         };
 
@@ -90,9 +88,10 @@ function buildOutbound(proxy) {
             };
         } else if (network === 'h2' || network === 'http') {
             const opts = proxy[`${network}-opts`] || proxy[`${network}Opts`];
+            const host = opts?.host || opts?.headers?.Host;
             outbound.transport = {
-                type: network === 'h2' ? 'h2' : 'http',
-                host: opts?.host ? (Array.isArray(opts.host) ? opts.host : [opts.host]) : [],
+                type: 'http',
+                host: host ? (Array.isArray(host) ? host : [host]) : [],
                 path: opts?.path || '/',
             };
         }
