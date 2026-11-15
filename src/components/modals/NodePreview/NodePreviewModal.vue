@@ -7,7 +7,6 @@
     import { useManualNodes } from '../../../composables/useManualNodes.js';
     import { useI18n } from '../../../i18n/index.js';
     import Modal from '../../forms/Modal.vue';
-    import ModalLoading from '../ModalLoading.vue';
     import NodePreviewToolbar from './NodePreviewToolbar.vue';
     import NodeFilters from './components/NodeFilters.vue';
     import NodeList from './components/NodeList.vue';
@@ -607,6 +606,9 @@
         :show="show"
         size="6xl"
         body-height="60vh"
+        :body-loading="blockingLoading"
+        :body-loading-message="t('nodePreview.loadingNodes')"
+        body-loading-test-id="node-data-loading"
         @update:show="(value) => !value && closeModal()"
     >
         <template #title>
@@ -623,14 +625,7 @@
         </template>
 
         <template #body>
-            <ModalLoading
-                v-if="blockingLoading"
-                :show="show"
-                :fill="true"
-                :message="t('nodePreview.loadingNodes')"
-                test-id="node-data-loading"
-            />
-            <div v-else class="shrink-0">
+            <div class="shrink-0">
                 <p
                     v-if="refreshing && allNodes.length"
                     role="status"

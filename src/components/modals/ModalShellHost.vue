@@ -1,7 +1,6 @@
 <script setup>
     import { computed, defineComponent, h, nextTick, inject, ref, watch } from 'vue';
     import Modal from '../forms/Modal.vue';
-    import ModalLoading from './ModalLoading.vue';
     import NodePreviewToolbar from './NodePreview/NodePreviewToolbar.vue';
     import { modalShellKey } from '../../composables/useModalShell.js';
     import { useI18n } from '../../i18n/index.js';
@@ -31,6 +30,14 @@
         revision.value;
         return { ...content.value?.slots };
     });
+    const bodyLoading = computed(() => !content.value || shellProps.value.bodyLoading);
+    const bodyLoadingMessage = computed(() =>
+        content.value
+            ? shellProps.value.bodyLoadingMessage
+            : props.preview
+              ? t('nodePreview.loadingNodes')
+              : undefined
+    );
     const SlotContent = defineComponent({
         props: { name: String },
         setup(slotProps) {
@@ -60,8 +67,13 @@
         :size="size"
         :body-min-height="bodyMinHeight"
         :body-height="bodyHeight"
+        :body-loading="bodyLoading"
+        :body-loading-message="bodyLoadingMessage"
+        :body-loading-error="!content && error"
+        :body-loading-test-id="content ? shellProps.bodyLoadingTestId : 'modal-code-loading'"
         @update:show="handleClose"
         @confirm="content?.emit('confirm')"
+        @retry="emit('retry')"
     >
         <template v-if="!content || forwardedSlots.title" #title>
             <SlotContent v-if="content" name="title" />
@@ -99,17 +111,8 @@
                 </button>
             </div>
         </template>
-        <template v-if="!content || forwardedSlots.body" #body>
-            <SlotContent v-if="content" name="body" />
-            <ModalLoading
-                v-else
-                :show="show"
-                :error="error"
-                :min-height="bodyMinHeight"
-                :fill="Boolean(bodyHeight)"
-                :message="preview ? t('nodePreview.loadingNodes') : undefined"
-                @retry="emit('retry')"
-            />
+        <template v-if="content && forwardedSlots.body" #body>
+            <SlotContent name="body" />
         </template>
         <template v-if="!content || forwardedSlots.footer" #footer>
             <SlotContent v-if="content" name="footer" />

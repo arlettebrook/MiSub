@@ -175,6 +175,32 @@ describe('NodePreviewModal refresh', () => {
         expect(wrapper.find('[data-testid="node-data-loading"]').exists()).toBe(false);
     });
 
+    it('keeps the loading ring when switching sources before either response completes', async () => {
+        vi.useFakeTimers();
+        let finishFirst, finishSecond;
+        try {
+            api.post
+                .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+                .mockImplementationOnce(() => new Promise((resolve) => (finishSecond = resolve)));
+            const wrapper = mountPreview();
+            await vi.advanceTimersByTimeAsync(150);
+            const ring = wrapper.get('.loading-ring').element;
+            const firstSignal = api.post.mock.calls[0][2].signal;
+            await wrapper.setProps({ subscriptionId: 'source-2' });
+            expect(firstSignal.aborted).toBe(true);
+            expect(wrapper.get('.loading-ring').element).toBe(ring);
+            finishFirst({ success: true, nodes: [{ name: 'Obsolete' }] });
+            await flushPromises();
+            expect(wrapper.get('.loading-ring').element).toBe(ring);
+            expect(wrapper.vm.loading).toBe(true);
+            finishSecond({ success: true, nodes: [] });
+            await flushPromises();
+            expect(wrapper.find('.loading-ring').exists()).toBe(false);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     const cachedResult = () => ({
         success: true,
         fromCache: true,

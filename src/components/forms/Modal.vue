@@ -5,12 +5,17 @@
     import { useModalFocus } from '@/composables/useModalFocus.js';
     import { useModalShell } from '@/composables/useModalShell.js';
     import { modalTriggerKey } from '@/composables/modal-trigger.js';
+    import ModalLoading from '../modals/ModalLoading.vue';
 
     const props = defineProps({
         show: Boolean,
         shellHost: Boolean,
         bodyMinHeight: String,
         bodyHeight: String,
+        bodyLoading: Boolean,
+        bodyLoadingMessage: String,
+        bodyLoadingError: Boolean,
+        bodyLoadingTestId: { type: String, default: 'modal-code-loading' },
         confirmKeyword: String,
         size: {
             type: String,
@@ -52,7 +57,7 @@
         },
     });
 
-    const emit = defineEmits(['update:show', 'confirm']);
+    const emit = defineEmits(['update:show', 'confirm', 'retry']);
     const delegated = useModalShell(props, useAttrs(), useSlots(), emit);
     const { t } = useI18n();
     const confirmLabel = computed(() => props.confirmText || t('actions.confirm'));
@@ -146,7 +151,18 @@
                                 height: bodyHeight,
                             }"
                         >
-                            <slot name="body">
+                            <!-- Keep the animation in this shell across code/data handoffs. -->
+                            <ModalLoading
+                                v-if="bodyLoading"
+                                :show="show"
+                                :fill="Boolean(bodyHeight)"
+                                :min-height="bodyMinHeight"
+                                :message="bodyLoadingMessage"
+                                :error="bodyLoadingError"
+                                :test-id="bodyLoadingTestId"
+                                @retry="emit('retry')"
+                            />
+                            <slot v-else name="body">
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                     {{ t('common.confirmContinue') }}
                                 </p>

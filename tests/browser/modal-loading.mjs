@@ -279,6 +279,33 @@ try {
                     .classList.contains('modal-inner-enter-active')
         );
         const loadingBounds = await page.locator('[role="dialog"] > div').boundingBox();
+        await page.waitForFunction(
+            () => document.querySelector('.loading-ring').getAnimations()[0]?.currentTime >= 100
+        );
+        await page.evaluate(() => {
+            const ring = document.querySelector('.loading-ring');
+            const animation = ring.getAnimations()[0];
+            window.previewAnimation = {
+                ring,
+                animation,
+                startTime: animation.startTime,
+                time: animation.currentTime,
+                frames: 0,
+                failures: [],
+                active: true,
+            };
+            const checkFrame = () => {
+                const state = window.previewAnimation;
+                if (!state.active) return;
+                state.frames++;
+                if (document.querySelector('.loading-ring') !== state.ring)
+                    state.failures.push('ring replaced or hidden');
+                if (state.ring.getAnimations()[0] !== state.animation)
+                    state.failures.push('CSS animation restarted');
+                requestAnimationFrame(checkFrame);
+            };
+            requestAnimationFrame(checkFrame);
+        });
         assert.equal(previewRequests, 1, 'Preview data must load before the preview code is ready');
         let releasePreviewData;
         const previewDataGate = new Promise((resolve) => (releasePreviewData = resolve));
@@ -294,6 +321,37 @@ try {
             'The indicator must stay visible when code hands off to data loading'
         );
         const dataBounds = await page.locator('[role="dialog"] > div').boundingBox();
+        await page.waitForFunction(
+            () =>
+                window.previewAnimation.animation.currentTime >= window.previewAnimation.time + 100
+        );
+        const animationContinuity = await page.evaluate(() => {
+            const state = window.previewAnimation;
+            state.active = false;
+            return {
+                frames: state.frames,
+                failures: state.failures,
+                sameRing:
+                    document.querySelector('[data-testid="node-data-loading"] .loading-ring') ===
+                    state.ring,
+                sameAnimation: state.ring.getAnimations()[0] === state.animation,
+                sameStart: state.animation.startTime === state.startTime,
+                advanced: state.animation.currentTime > state.time,
+            };
+        });
+        assert.ok(animationContinuity.frames > 0);
+        assert.deepEqual(
+            animationContinuity.failures,
+            [],
+            'No frame may hide or replace the loading animation'
+        );
+        assert.ok(
+            animationContinuity.sameRing &&
+                animationContinuity.sameAnimation &&
+                animationContinuity.sameStart &&
+                animationContinuity.advanced,
+            `The CSS animation must keep its original timeline: ${JSON.stringify(animationContinuity)}`
+        );
         for (const key of ['x', 'y', 'width', 'height']) {
             assert.ok(
                 Math.abs(dataBounds[key] - loadingBounds[key]) <= 1,
