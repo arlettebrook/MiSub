@@ -11,6 +11,7 @@ export const messages = {
             name: 'MiSub',
             home: '首页',
             language: '语言',
+            manualResourceReload: '页面资源加载失败，自动恢复暂不可用。请手动刷新页面后重试。',
         },
         nav: {
             dashboard: '仪表盘',
@@ -1596,6 +1597,8 @@ export const messages = {
             name: 'MiSub',
             home: 'Home',
             language: 'Language',
+            manualResourceReload:
+                'Page resources failed to load and automatic recovery is unavailable. Please refresh the page manually and try again.',
         },
         nav: {
             dashboard: 'Dashboard',

@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { navigationLoaders } from './navigation-loaders.js';
+import { CHUNK_RELOAD_KEY, claimReload, isChunkLoadError } from '../utils/chunk-reload.js';
+import { handleError } from '../utils/errorHandler.js';
 
 const HomeView = () => import('../views/HomeView.vue'); // [NEW] Wrapper View
 
@@ -79,15 +81,14 @@ const router = createRouter({
 
 // 自动恢复动态 chunk 加载失败导致的白屏
 router.onError((error) => {
-    const message = error?.message || '';
-    if (
-        message.includes('Failed to fetch dynamically imported module') ||
-        message.includes('error loading dynamically imported module')
-    ) {
-        const reloadKey = 'misub:chunk-reload';
-        if (sessionStorage.getItem(reloadKey) !== '1') {
-            sessionStorage.setItem(reloadKey, '1');
+    if (isChunkLoadError(error)) {
+        const recovery = claimReload(CHUNK_RELOAD_KEY);
+        if (recovery === 'ready') {
             window.location.reload();
+        } else {
+            handleError(error, 'Chunk Load Error', {
+                recoveryBlocked: recovery === 'unavailable',
+            });
         }
     }
 });

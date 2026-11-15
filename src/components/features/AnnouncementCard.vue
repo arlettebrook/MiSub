@@ -2,6 +2,7 @@
     import { ref, computed, watch } from 'vue';
     import DOMPurify from 'dompurify';
     import { useI18n } from '@/i18n/index.js';
+    import { readStorage, writeStorage } from '../../utils/browser-storage.js';
 
     const { t } = useI18n();
 
@@ -42,23 +43,14 @@
     const dismiss = (e) => {
         e.stopPropagation();
         isVisible.value = false;
-        try {
-            if (props.announcement.updatedAt) {
-                localStorage.setItem(
-                    `announcement_dismissed_${props.announcement.updatedAt}`,
-                    'true'
-                );
-            }
-        } catch (e) {
-            console.warn('LocalStorage access failed', e);
+        if (props.announcement.updatedAt) {
+            writeStorage(`announcement_dismissed_${props.announcement.updatedAt}`, 'true');
         }
     };
 
     const checkVisibility = () => {
         if (props.announcement?.dismissible && props.announcement?.updatedAt) {
-            const dismissed = localStorage.getItem(
-                `announcement_dismissed_${props.announcement.updatedAt}`
-            );
+            const dismissed = readStorage(`announcement_dismissed_${props.announcement.updatedAt}`);
             if (dismissed) {
                 isVisible.value = false;
             } else {

@@ -4,6 +4,7 @@
  */
 
 import { request } from '../lib/http.js';
+import { t } from '../i18n/index.js';
 
 let toastHandler = null;
 let monitoringEndpoint = null;
@@ -177,6 +178,10 @@ class ErrorHandler {
      */
     getUserFriendlyMessage(errorInfo) {
         const { message, context } = errorInfo;
+
+        if (errorInfo.additionalData?.recoveryBlocked) {
+            return t('app.manualResourceReload');
+        }
 
         if (message.includes('timeout')) {
             return '请求超时，请稍后重试';

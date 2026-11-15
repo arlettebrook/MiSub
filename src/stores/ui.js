@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { readStorage, writeStorage } from '../utils/browser-storage.js';
 
 export const useUIStore = defineStore('ui', () => {
     const isSettingsModalVisible = ref(false);
-    const layoutMode = ref(localStorage.getItem('layoutMode') || 'modern');
+    const layoutMode = ref(readStorage('layoutMode') || 'modern');
 
     function show() {
         isSettingsModalVisible.value = true;
@@ -15,7 +16,10 @@ export const useUIStore = defineStore('ui', () => {
 
     function toggleLayout() {
         const nextMode = layoutMode.value === 'modern' ? 'legacy' : 'modern';
-        localStorage.setItem('layoutMode', nextMode);
+        if (!writeStorage('layoutMode', nextMode)) {
+            layoutMode.value = nextMode;
+            return;
+        }
 
         // Navigate immediately WITHOUT modifying the reactive ref first.
         // Setting layoutMode.value before window.location.href triggers Vue

@@ -10,6 +10,7 @@
     import Modal from '../components/forms/Modal.vue';
     import { useLazyModals } from '../composables/useLazyModals.js';
     import { useI18n } from '../i18n/index.js';
+    import { readStorage, writeStorage } from '../utils/browser-storage.js';
 
     const ManualNodeEditModal = createLazyModal('ManualNodeEditModal');
     const ManualNodeDedupModal = createLazyModal('ManualNodeDedupModal');
@@ -25,7 +26,7 @@
 
     // Component Logic Reuse
     const isSortingNodes = ref(false);
-    const manualNodeViewMode = ref(localStorage.getItem('manualNodeViewMode') || 'card');
+    const manualNodeViewMode = ref(readStorage('manualNodeViewMode') || 'card');
     const showDeleteNodesModal = ref(false);
     const showBatchDeleteModal = ref(false);
     const batchDeleteIds = ref([]);
@@ -93,7 +94,7 @@
     // Actions
     const setViewMode = (mode) => {
         manualNodeViewMode.value = mode;
-        localStorage.setItem('manualNodeViewMode', mode);
+        writeStorage('manualNodeViewMode', mode);
     };
 
     const handleDeleteNodeWithCleanup = (nodeId) => {

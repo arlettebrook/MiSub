@@ -15,6 +15,7 @@ import {
     normalizeManualNodeGroupName,
 } from './manual-nodes/groups.js';
 import { t } from '../i18n/index.js';
+import { readStorage, writeStorage } from '../utils/browser-storage.js';
 
 export function useManualNodes(markDirty) {
     const { showToast } = useToastStore();
@@ -30,11 +31,11 @@ export function useManualNodes(markDirty) {
     });
 
     const manualNodesCurrentPage = ref(1);
-    const manualNodesPerPage = ref(parseInt(localStorage.getItem('manualNodesPPS')) || 24);
+    const manualNodesPerPage = ref(parseInt(readStorage('manualNodesPPS')) || 24);
     const searchTerm = ref('');
 
     watch(manualNodesPerPage, (newVal) => {
-        localStorage.setItem('manualNodesPPS', newVal);
+        writeStorage('manualNodesPPS', newVal);
         manualNodesCurrentPage.value = 1;
     });
 

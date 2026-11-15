@@ -15,6 +15,7 @@
     import { useLazyModals } from '../../../composables/useLazyModals.js';
     import { storeToRefs } from 'pinia';
     import { useI18n } from '@/i18n/index.js';
+    import { readStorage, writeStorage } from '../../../utils/browser-storage.js';
 
     const isDev = import.meta.env.DEV;
 
@@ -281,7 +282,7 @@
     onMounted(() => {
         initializeState();
         window.addEventListener('beforeunload', handleBeforeUnload);
-        const savedViewMode = localStorage.getItem('manualNodeViewMode');
+        const savedViewMode = readStorage('manualNodeViewMode');
         if (savedViewMode) {
             manualNodeViewMode.value = savedViewMode;
         }
@@ -307,7 +308,7 @@
 
     const setViewMode = (mode) => {
         manualNodeViewMode.value = mode;
-        localStorage.setItem('manualNodeViewMode', mode);
+        writeStorage('manualNodeViewMode', mode);
     };
 
     // --- 其他 JS 逻辑 (省略) ---

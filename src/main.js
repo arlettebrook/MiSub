@@ -9,6 +9,12 @@ import { i18n } from './i18n/index.js';
 import { useToastStore } from './stores/toast.js';
 import { isLocalHost, isSameOriginUrl } from './utils/url-origin.js';
 import { configureUnauthorizedHandler } from './lib/http.js';
+import {
+    ASSET_RELOAD_KEY,
+    CHUNK_RELOAD_KEY,
+    claimReload,
+    isChunkLoadError,
+} from './utils/chunk-reload.js';
 
 // 全局错误处理
 if (typeof window !== 'undefined') {
@@ -20,19 +26,15 @@ if (typeof window !== 'undefined') {
             event.preventDefault();
             return;
         }
-        const message = event.reason?.message || '';
-        if (
-            message.includes('Failed to fetch dynamically imported module') ||
-            message.includes('error loading dynamically imported module')
-        ) {
-            const reloadKey = 'misub:chunk-reload';
-            if (sessionStorage.getItem(reloadKey) !== '1') {
-                sessionStorage.setItem(reloadKey, '1');
-                window.location.reload();
-            }
+        let recoveryBlocked = false;
+        if (isChunkLoadError(event.reason)) {
+            const recovery = claimReload(CHUNK_RELOAD_KEY);
+            recoveryBlocked = recovery === 'unavailable';
+            if (recovery === 'ready') window.location.reload();
         }
         handleError(event.reason, 'Unhandled Promise Rejection', {
             type: 'promise_rejection',
+            ...(recoveryBlocked ? { recoveryBlocked: true } : {}),
         });
         event.preventDefault();
     });
@@ -55,7 +57,6 @@ if (typeof window !== 'undefined') {
     });
 
     // 处理资源加载错误（忽略第三方资源）
-    const assetReloadKey = 'misub:asset-reload';
     const currentOrigin = window.location.origin;
     const localHost = isLocalHost(window.location.hostname);
     const isSameOriginResource = (resourceUrl) =>
@@ -69,27 +70,11 @@ if (typeof window !== 'undefined') {
             return false;
         }
     };
-    const hasAssetReloaded = () => {
-        try {
-            return sessionStorage.getItem(assetReloadKey) === '1';
-        } catch (error) {
-            console.warn('[Resource Load] Failed to read sessionStorage:', error);
-            return false;
-        }
-    };
-    const markAssetReloaded = () => {
-        try {
-            sessionStorage.setItem(assetReloadKey, '1');
-        } catch (error) {
-            console.warn('[Resource Load] Failed to write sessionStorage:', error);
-        }
-    };
-
     const tryRecoverAssetLoad = async (resourceUrl) => {
-        if (!isSameOriginResource(resourceUrl) || !isAppAssetResource(resourceUrl)) return false;
-        if (hasAssetReloaded()) return false;
-
-        markAssetReloaded();
+        if (!isSameOriginResource(resourceUrl) || !isAppAssetResource(resourceUrl))
+            return 'ignored';
+        const recovery = claimReload(ASSET_RELOAD_KEY);
+        if (recovery !== 'ready') return recovery;
         try {
             if ('caches' in window) {
                 const cacheKeys = await caches.keys();
@@ -102,7 +87,7 @@ if (typeof window !== 'undefined') {
         const reloadUrl = new URL(window.location.href);
         reloadUrl.searchParams.set('__misub_reload', Date.now().toString());
         window.location.replace(reloadUrl.toString());
-        return true;
+        return 'recovered';
     };
 
     window.addEventListener(
@@ -140,9 +125,13 @@ if (typeof window !== 'undefined') {
                     return;
                 }
 
-                tryRecoverAssetLoad(resourceUrl).then((recovered) => {
-                    if (recovered) return;
-                    if (localHost && isAppAssetResource(resourceUrl)) {
+                tryRecoverAssetLoad(resourceUrl).then((recovery) => {
+                    if (recovery === 'recovered') return;
+                    if (
+                        localHost &&
+                        isAppAssetResource(resourceUrl) &&
+                        recovery !== 'unavailable'
+                    ) {
                         console.debug('[Resource Load] Local asset error suppressed:', resourceUrl);
                         return;
                     }
@@ -152,6 +141,7 @@ if (typeof window !== 'undefined') {
                         {
                             tagName: event.target.tagName,
                             src: resourceUrl,
+                            ...(recovery === 'unavailable' ? { recoveryBlocked: true } : {}),
                         }
                     );
                 });

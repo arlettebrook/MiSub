@@ -1,5 +1,6 @@
 import { computed, inject, readonly, ref } from 'vue';
 import { messages } from './messages.js';
+import { readStorage, writeStorage } from '../utils/browser-storage.js';
 
 export const DEFAULT_LOCALE = 'zh-CN';
 export const LOCALE_STORAGE_KEY = 'misub:locale';
@@ -11,26 +12,12 @@ export const SUPPORTED_LOCALES = [
 const supportedCodes = new Set(SUPPORTED_LOCALES.map((item) => item.code));
 const I18N_KEY = Symbol('misub-i18n');
 
-function canUseLocalStorage() {
-    return typeof localStorage !== 'undefined';
-}
-
 function readStoredLocale() {
-    if (!canUseLocalStorage()) return '';
-    try {
-        return localStorage.getItem(LOCALE_STORAGE_KEY) || '';
-    } catch {
-        return '';
-    }
+    return readStorage(LOCALE_STORAGE_KEY) || '';
 }
 
 function writeStoredLocale(locale) {
-    if (!canUseLocalStorage()) return;
-    try {
-        localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-    } catch {
-        // Ignore storage failures in private/incognito contexts.
-    }
+    writeStorage(LOCALE_STORAGE_KEY, locale);
 }
 
 export function hasStoredLocale() {

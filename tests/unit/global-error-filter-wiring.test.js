@@ -18,6 +18,7 @@ vi.mock('../../src/utils/errorHandler.js', () => ({
 
 let listeners;
 let originalUrl;
+let originalStorage;
 beforeAll(async () => {
     originalUrl = window.location.href;
     window.happyDOM.setURL('https://misub.example/dashboard');
@@ -32,9 +33,13 @@ beforeEach(() => {
     sessionStorage.clear();
     vi.spyOn(window.location, 'reload').mockImplementation(reload);
     reload.mockClear();
+    originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(globalThis, 'sessionStorage', originalStorage);
+});
 
 afterAll(() => {
     for (const [type, callback, options] of listeners) {
@@ -70,6 +75,33 @@ const resourceError = async (resourceUrl, tagName = 'SCRIPT') => {
     });
     await Promise.resolve();
 };
+
+function blockStorage(failure) {
+    const real = sessionStorage;
+    const storage = {
+        getItem: (key) => real.getItem(key),
+        setItem: (key, value) => real.setItem(key, value),
+    };
+    Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: storage });
+    if (failure === 'getter') {
+        Object.defineProperty(globalThis, 'sessionStorage', {
+            configurable: true,
+            get() {
+                throw new DOMException('Blocked', 'SecurityError');
+            },
+        });
+    } else if (failure === 'read') {
+        vi.spyOn(storage, 'getItem').mockImplementation(() => {
+            throw new Error('Blocked');
+        });
+    } else if (failure === 'write') {
+        vi.spyOn(storage, 'setItem').mockImplementation(() => {
+            throw new DOMException('Full', 'QuotaExceededError');
+        });
+    } else {
+        vi.spyOn(storage, 'setItem').mockImplementation(() => {});
+    }
+}
 
 describe('global error filtering', () => {
     it.each([
@@ -149,6 +181,70 @@ describe('global error filtering', () => {
         rejection(reason);
         expect(reload).toHaveBeenCalledTimes(1);
         expect(sessionStorage.getItem('misub:chunk-reload')).toBe('1');
+    });
+
+    it.each(['getter', 'read', 'write', 'dropped'])(
+        'reports chunk errors without reloading on %s storage failures',
+        (failure) => {
+            blockStorage(failure);
+            const reason = errorFrom(
+                `${window.location.origin}/assets/index.js`,
+                'Failed to fetch dynamically imported module'
+            );
+            const event = rejection(reason);
+            rejection(reason);
+            expect(event.defaultPrevented).toBe(true);
+            expect(reload).not.toHaveBeenCalled();
+            expect(handleError).toHaveBeenCalledWith(reason, 'Unhandled Promise Rejection', {
+                type: 'promise_rejection',
+                recoveryBlocked: true,
+            });
+        }
+    );
+
+    it.each(['getter', 'read', 'write', 'dropped'])(
+        'reports asset failures without clearing caches or reloading on %s storage failures',
+        async (failure) => {
+            blockStorage(failure);
+            const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+            const keys = vi.fn();
+            vi.stubGlobal('caches', { keys });
+            try {
+                await resourceError('/assets/app.js');
+                await resourceError('/assets/app.js');
+                expect(replace).not.toHaveBeenCalled();
+                expect(keys).not.toHaveBeenCalled();
+                expect(handleError).toHaveBeenCalledWith(expect.any(Error), 'Resource Load Error', {
+                    tagName: 'SCRIPT',
+                    src: '/assets/app.js',
+                    recoveryBlocked: true,
+                });
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        }
+    );
+
+    it('claims asset recovery before clearing caches so concurrent failures reload once', async () => {
+        const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+        let release;
+        const pending = new Promise((resolve) => {
+            release = resolve;
+        });
+        const keys = vi.fn(() => pending);
+        const remove = vi.fn().mockResolvedValue(true);
+        vi.stubGlobal('caches', { keys, delete: remove });
+        try {
+            await resourceError('/assets/app.js');
+            expect(sessionStorage.getItem('misub:asset-reload')).toBe('1');
+            await resourceError('/assets/other.js');
+            expect(keys).toHaveBeenCalledTimes(1);
+            release(['app-cache']);
+            await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+            expect(remove).toHaveBeenCalledWith('app-cache');
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('reports a same-origin resource failure without throwing another error', async () => {
