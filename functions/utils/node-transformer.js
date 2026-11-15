@@ -1,3 +1,5 @@
+import { splitUriHostPort } from '../../shared/proxy-address.js';
+
 /**
  * 节点统一转换管道
  * 支持：正则过滤、正则重命名、模板重命名、智能去重、排序
@@ -150,19 +152,7 @@ function setFragment(url, name) {
 }
 
 function parseHostPort(hostPort) {
-    const s = String(hostPort || '').trim();
-    if (!s) return { server: '', port: '' };
-    if (s.startsWith('[') && s.includes(']')) {
-        const end = s.indexOf(']');
-        const host = s.slice(1, end);
-        const rest = s.slice(end + 1);
-        return { server: host, port: rest.startsWith(':') ? rest.slice(1) : '' };
-    }
-    const lastColon = s.lastIndexOf(':');
-    if (lastColon === -1) return { server: s, port: '' };
-    const host = s.slice(0, lastColon);
-    if (host.includes(':')) return { server: s, port: '' };
-    return { server: host, port: s.slice(lastColon + 1) };
+    return splitUriHostPort(hostPort);
 }
 
 // ============ 节点解析 ============

@@ -1,4 +1,5 @@
 import { base64Encode } from '../common/base64.js';
+import { formatUriHost, normalizeProxyHost } from '../../../../shared/proxy-address.js';
 
 /**
  * Shadowsocks配置转换为URL
@@ -21,12 +22,12 @@ export function convertShadowsocksToUrl(proxy) {
         if (isSS2022) {
             // SS2022 格式: ss://method:password@server:port
             // 密码通常是 base64 格式，需要 URL 编码
-            url = `ss://${encodeURIComponent(cipher)}:${encodeURIComponent(password)}@${proxy.server}:${proxy.port}`;
+            url = `ss://${encodeURIComponent(cipher)}:${encodeURIComponent(password)}@${formatUriHost(proxy.server)}:${proxy.port}`;
         } else {
             // 传统格式: ss://base64(method:password)@server:port
             const userinfo = `${cipher}:${password}`;
             const encodedUserinfo = base64Encode(userinfo);
-            url = `ss://${encodedUserinfo}@${proxy.server}:${proxy.port}`;
+            url = `ss://${encodedUserinfo}@${formatUriHost(proxy.server)}:${proxy.port}`;
         }
 
         // 插件参数
@@ -97,7 +98,7 @@ export function convertShadowsocksRToUrl(proxy) {
         const remarks64 = base64Encode(proxy.name || 'SSR');
 
         const baseStr = [
-            proxy.server,
+            normalizeProxyHost(proxy.server),
             proxy.port,
             proxy.protocol || 'origin',
             proxy.cipher || 'rc4-md5',

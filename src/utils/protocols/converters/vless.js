@@ -3,6 +3,7 @@
  * 支持 TLS、Reality、WebSocket、gRPC、HTTP/2、HTTPUpgrade 和 XHTTP 参数。
  */
 import { getVlessPacketEncoding, clashXhttpOptionsToExtra } from '../common/vless-params.js';
+import { formatUriHost } from '../../../../shared/proxy-address.js';
 
 export function convertVlessToUrl(proxy) {
     try {
@@ -191,7 +192,7 @@ export function convertVlessToUrl(proxy) {
         }
 
         // 构建 URL
-        const url = `vless://${uuid}@${proxy.server}:${proxy.port}?${params.toString()}`;
+        const url = `vless://${uuid}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}`;
 
         // Fragment (节点名称)
         if (proxy.name) {

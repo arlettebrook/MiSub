@@ -1,4 +1,5 @@
 import { base64Encode } from '../common/base64.js';
+import { normalizeProxyHost } from '../../../../shared/proxy-address.js';
 
 /**
  * VMess配置转换为URL
@@ -15,7 +16,7 @@ export function convertVmessToUrl(proxy) {
         const config = {
             v: '2',
             ps: proxy.name || proxy['server-name'] || 'VMess',
-            add: proxy.server,
+            add: normalizeProxyHost(proxy.server),
             port: String(proxy.port),
             id: uuid || proxy['client-id'] || '',
             aid: String(proxy.alterId || proxy['alter-id'] || 0),

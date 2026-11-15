@@ -141,6 +141,14 @@ VMess 的 UUID、加密方式、alterId、TLS server_name、ALPN、WS path / Hos
 
 验收：每种受影响协议都有 IPv4 / 域名 / IPv6 往返样例，地址与端口保持一致。
 
+**实施进度：P1 IPv6 导出地址边界已修复并验证。** 新增 `shared/proxy-address.js`，前后端 Clash 导出、sing-box 转链接、节点解析和预览元数据共用主机格式化 / 端点拆分规则。URI 中的 IPv6 只包一层方括号，并保持单独的端口；已带括号的地址不会重复包裹，IPv4 和域名保留原有形式。
+
+VMess 的 JSON `add` 字段使用不带 URI 括号的主机值。SSR 继续使用原有编码结构，并从末尾五个固定字段区分端口、协议、加密、混淆和密码，避免把 IPv6 的冒号当成字段边界。WireGuard 保留本地 IPv4 / IPv6 地址和 CIDR 前缀，不对这些本地地址套 URI 括号；sing-box 导入的 TUIC 认证字符使用 URI 编码，避免干扰主机边界。
+
+可兼容本项目旧版带末尾端口的无括号 IPv6 链接：仅在剩余主机是合法 IPv6、后缀是有效十进制端口时恢复解析；规范无端口 IPv6 URI 仍使用方括号。旧版 VMess JSON 中已带括号的地址会规范化。缺失地址及 `false` / `0` 等空值继续按原有约定拒绝。
+
+新增 `tests/unit/ipv6-address-boundaries.test.js` 的 151 个回归用例，覆盖压缩 / 展开 / IPv4 映射的 IPv6、已有括号、IPv4、域名、SS / SS2022、VLESS、Trojan、HY2、TUIC、AnyTLS、SOCKS5、WireGuard、VMess / SSR 编码结构、旧链接、YAML 导入、算子处理及无效地址输入。相关 5 个文件、201 个用例通过；全量 173 个文件、1698 个用例通过，`npm run build` 与 Pages Functions 构建通过，源码 / 测试 / 本文格式检查和 `git diff --check` 通过。通过官方 sing-box v1.14.4 检查的 21 个最小出站配置也验证了三种导出来源的 IPv6 server / port。客户端检查不联网，不代表所有完整规则模板的客户端兼容性。临时验证资料保存在忽略目录 `tmp/ipv6-*.log`、`tmp/ipv6-*.json`。
+
 ### 6. P1：浏览器存储异常可能阻断页面或引发重复恢复
 
 本地位置：`src/main.js:29`、`:74`、`:80`、`:104`，`src/router/index.js:88`，`src/composables/useManualNodes.js:33`。

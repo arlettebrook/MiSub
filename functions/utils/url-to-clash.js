@@ -4,6 +4,7 @@
 
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
+import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address.js';
 import {
     getVlessPacketEncoding,
     xhttpExtraToClashOptions,
@@ -102,22 +103,8 @@ function base64Decode(str) {
  * @returns {{server: string, port: number}}
  */
 function parseHostPort(hostPort) {
-    // 处理 IPv6: [::1]:port
-    if (hostPort.startsWith('[')) {
-        const closeBracket = hostPort.indexOf(']');
-        if (closeBracket !== -1) {
-            const server = hostPort.substring(1, closeBracket);
-            const after = hostPort.substring(closeBracket + 1);
-            const port = after.startsWith(':') ? parseInt(after.substring(1)) : 443;
-            return { server, port };
-        }
-    }
-
-    const parts = hostPort.split(':');
-    return {
-        server: parts[0],
-        port: parseInt(parts[1]) || 443,
-    };
+    const parsed = splitUriHostPort(hostPort);
+    return { server: parsed.server, port: parseInt(parsed.port) || 443 };
 }
 
 /**
@@ -440,7 +427,7 @@ function parseVmessUrl(url) {
         const proxy = {
             name: config.ps || `VMess-${config.add}`,
             type: 'vmess',
-            server: config.add || config.host || config.sni || '',
+            server: normalizeProxyHost(config.add || config.host || config.sni || ''),
             port: parseInt(config.port),
             uuid: config.id,
             alterId: parseInt(config.aid) || 0,
@@ -1357,19 +1344,15 @@ function parseSsrUrl(url) {
         const decoded = base64Decode(b64);
 
         // server:port:protocol:method:obfs:password_base64/?params
-        const mainParts = decoded.split(':');
+        const queryIndex = decoded.indexOf('/?');
+        const mainPayload = queryIndex === -1 ? decoded : decoded.slice(0, queryIndex);
+        const mainParts = mainPayload.split(':');
         if (mainParts.length < 6) return null;
 
-        const server = mainParts[0];
-        const port = parseInt(mainParts[1]);
-        const protocol = mainParts[2];
-        const cipher = mainParts[3];
-        const obfs = mainParts[4];
-
-        const passwordPart = mainParts[5];
-        const passwordEndIndex = passwordPart.indexOf('/');
-        const passwordBase64 =
-            passwordEndIndex !== -1 ? passwordPart.substring(0, passwordEndIndex) : passwordPart;
+        // The last five SSR fields have fixed positions; IPv6 belongs to the prefix.
+        const server = normalizeProxyHost(mainParts.slice(0, -5).join(':'));
+        const [portText, protocol, cipher, obfs, passwordBase64] = mainParts.slice(-5);
+        const port = parseInt(portText);
         const password = base64Decode(passwordBase64);
 
         const proxy = {
@@ -1384,8 +1367,8 @@ function parseSsrUrl(url) {
             udp: true,
         };
 
-        if (passwordEndIndex !== -1) {
-            const paramsStr = passwordPart.substring(passwordEndIndex + 2); // skip /?
+        if (queryIndex !== -1) {
+            const paramsStr = decoded.substring(queryIndex + 2);
             const params = new URLSearchParams(paramsStr);
 
             if (params.get('obfsparam'))

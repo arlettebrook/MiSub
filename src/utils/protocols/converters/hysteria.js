@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * Hysteria/Hysteria2配置转换为URL
  * 支持完整参数：TLS、端口跳跃、混淆、带宽限制
@@ -26,7 +28,7 @@ export function convertHysteriaToUrl(proxy) {
         }
 
         // 构建基础 URL
-        let url = `${protocol}://${encodeURIComponent(auth)}@${proxy.server}:${portStr}`;
+        let url = `${protocol}://${encodeURIComponent(auth)}@${formatUriHost(proxy.server)}:${portStr}`;
 
         const params = new URLSearchParams();
 

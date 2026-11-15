@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * TUIC配置转换为URL
  * 支持完整参数：TUIC v4/v5、TLS、拥塞控制、UDP中继
@@ -26,7 +28,7 @@ export function convertTuicToUrl(proxy) {
             auth = encodeURIComponent(uuid);
         }
 
-        let url = `tuic://${auth}@${proxy.server}:${proxy.port}`;
+        let url = `tuic://${auth}@${formatUriHost(proxy.server)}:${proxy.port}`;
 
         const params = new URLSearchParams();
 

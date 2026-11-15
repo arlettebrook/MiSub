@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * WireGuard配置转换为URL
  * 采用标准格式，支持 reserved、preshared-key、IPv6
@@ -18,13 +20,11 @@ export function convertWireguardToUrl(proxy) {
         }
 
         // 本地地址 (支持 IPv4 和 IPv6)
-        if (proxy.ip || proxy['local-address']) {
-            let addresses = proxy.ip || proxy['local-address'];
-            if (Array.isArray(addresses)) {
-                addresses = addresses.join(',');
-            }
-            params.set('address', addresses);
-        }
+        const localAddresses = [proxy.ip || proxy['local-address'], proxy.ipv6]
+            .flat()
+            .filter(Boolean);
+        if (localAddresses.length > 0)
+            params.set('address', [...new Set(localAddresses)].join(','));
 
         // 允许的 IP 范围
         if (proxy['allowed-ips'] || proxy.allowedIPs) {
@@ -95,11 +95,7 @@ export function convertWireguardToUrl(proxy) {
         }
 
         // 处理服务器地址 (支持 IPv6)
-        let serverAddr = proxy.server;
-        if (serverAddr.includes(':') && !serverAddr.startsWith('[')) {
-            // IPv6 地址需要加方括号
-            serverAddr = `[${serverAddr}]`;
-        }
+        const serverAddr = formatUriHost(proxy.server);
 
         // 构建 URL
         // 格式: wireguard://privatekey@server:port?params#name

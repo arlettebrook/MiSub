@@ -1,3 +1,5 @@
+import { normalizeProxyHost, splitUriHostPort } from '../../../shared/proxy-address.js';
+
 /**
  * 地理识别工具模块
  * 提供节点地区识别和相关功能
@@ -513,21 +515,7 @@ function parseHostPort(value) {
     const cut = segment.search(/[/?#]/);
     if (cut !== -1) segment = segment.slice(0, cut);
 
-    if (segment.startsWith('[')) {
-        const closeBracket = segment.indexOf(']');
-        if (closeBracket !== -1) {
-            const server = segment.slice(1, closeBracket);
-            const after = segment.slice(closeBracket + 1);
-            const port = after.startsWith(':') ? after.slice(1).split('/')[0] : '';
-            return { server, port };
-        }
-    }
-
-    const parts = segment.split(':');
-    if (parts.length >= 2) {
-        return { server: parts[0], port: parts[1].split('/')[0] };
-    }
-    return { server: segment, port: '' };
+    return splitUriHostPort(segment);
 }
 
 /**
@@ -707,7 +695,7 @@ export function parseNodeInfo(nodeUrl) {
                     const decodedStr = new TextDecoder('utf-8').decode(bytes);
 
                     const config = JSON.parse(decodedStr);
-                    server = config.add || config.host || '';
+                    server = normalizeProxyHost(config.add || config.host || '');
                     port = config.port || '';
                     // [Fix] 提取名称
                     if (config.ps) {
@@ -761,22 +749,11 @@ export function parseNodeInfo(nodeUrl) {
                     // server 可能是 IPv6 [::1]
                     let ssrServer = '',
                         ssrPort = '';
-                    if (decoded.startsWith('[')) {
-                        // IPv6 格式: [ipv6]:port:...
-                        const closeBracket = decoded.indexOf(']');
-                        if (closeBracket !== -1) {
-                            ssrServer = decoded.substring(1, closeBracket);
-                            const afterBracket = decoded.substring(closeBracket + 1);
-                            const portMatch = afterBracket.match(/^:(\d+):/);
-                            if (portMatch) ssrPort = portMatch[1];
-                        }
-                    } else {
-                        // IPv4/domain 格式: host:port:...
-                        const colonParts = decoded.split(':');
-                        if (colonParts.length >= 2) {
-                            ssrServer = colonParts[0];
-                            ssrPort = colonParts[1];
-                        }
+                    const mainPayload = decoded.split('/?')[0];
+                    const colonParts = mainPayload.split(':');
+                    if (colonParts.length >= 6) {
+                        ssrServer = normalizeProxyHost(colonParts.slice(0, -5).join(':'));
+                        ssrPort = colonParts.at(-5);
                     }
                     server = ssrServer;
                     port = ssrPort;
@@ -839,23 +816,7 @@ export function parseNodeInfo(nodeUrl) {
                 const qIndex = serverPart.indexOf('?');
                 const addrPart = qIndex !== -1 ? serverPart.substring(0, qIndex) : serverPart;
 
-                // 处理 IPv6
-                if (addrPart.startsWith('[')) {
-                    const closeBracket = addrPart.indexOf(']');
-                    if (closeBracket !== -1) {
-                        server = addrPart.substring(1, closeBracket);
-                        const afterBracket = addrPart.substring(closeBracket + 1);
-                        if (afterBracket.startsWith(':')) {
-                            port = afterBracket.substring(1);
-                        }
-                    }
-                } else {
-                    const parts = addrPart.split(':');
-                    if (parts.length >= 2) {
-                        server = parts[0];
-                        port = parts[1];
-                    }
-                }
+                ({ server, port } = parseHostPort(addrPart));
             }
         } else {
             // 通用格式: protocol://user@host:port... 或 protocol://host:port...
@@ -897,23 +858,7 @@ export function parseNodeInfo(nodeUrl) {
                 }
             }
 
-            // 处理 IPv6 [::1]:port
-            if (serverPart.startsWith('[')) {
-                const closeBracket = serverPart.indexOf(']');
-                if (closeBracket !== -1) {
-                    server = serverPart.substring(1, closeBracket);
-                    const afterBracket = serverPart.substring(closeBracket + 1);
-                    if (afterBracket.startsWith(':')) {
-                        port = afterBracket.substring(1).split('/')[0];
-                    }
-                }
-            } else {
-                const parts = serverPart.split(':');
-                if (parts.length >= 2) {
-                    server = parts[0];
-                    port = parts[1].split('/')[0];
-                }
-            }
+            ({ server, port } = parseHostPort(serverPart));
         }
     } catch (e) {
         console.error('Error extracting server/port:', e);

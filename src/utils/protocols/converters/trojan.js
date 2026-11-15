@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * Trojan配置转换为URL
  * 支持完整参数：TLS、Reality、WebSocket、gRPC、fingerprint
@@ -109,7 +111,7 @@ export function convertTrojanToUrl(proxy) {
         }
 
         // 构建 URL
-        let url = `trojan://${encodeURIComponent(proxy.password)}@${proxy.server}:${proxy.port}`;
+        let url = `trojan://${encodeURIComponent(proxy.password)}@${formatUriHost(proxy.server)}:${proxy.port}`;
 
         // 添加参数
         const paramsStr = params.toString();

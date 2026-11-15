@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * AnyTLS配置转换为URL
  * 支持：TLS、SNI、ALPN、跳过证书验证
@@ -27,7 +29,7 @@ export function convertAnytlsToUrl(proxy) {
         }
 
         // 构建 URL
-        let url = `anytls://${encodeURIComponent(proxy.password)}@${proxy.server}:${proxy.port}`;
+        let url = `anytls://${encodeURIComponent(proxy.password)}@${formatUriHost(proxy.server)}:${proxy.port}`;
 
         // 添加参数
         const paramsStr = params.toString();

@@ -9,6 +9,7 @@
  */
 
 import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
+import { formatUriHost, normalizeProxyHost } from '../../../shared/proxy-address.js';
 
 function toArray(value) {
     if (value === undefined || value === null) return [];
@@ -68,10 +69,11 @@ function buildQuery(params) {
 export function singboxOutboundToUrl(ob) {
     if (!ob || typeof ob !== 'object') return null;
     const type = String(ob.type || '').toLowerCase();
-    const server = ob.server;
+    const server = normalizeProxyHost(ob.server);
+    const uriServer = formatUriHost(server);
     const port = ob.server_port ?? ob.port;
     const name = ob.tag || '';
-    if (!server || !port) return null;
+    if (!ob.server || !server || !port) return null;
 
     const hash = name ? `#${encodeURIComponent(name)}` : '';
 
@@ -82,7 +84,7 @@ export function singboxOutboundToUrl(ob) {
             if (packetEncoding !== undefined) params.push(['packetEncoding', packetEncoding]);
             if (ob.encryption) params.push(['encryption', ob.encryption]);
             else params.push(['encryption', 'none']);
-            return `vless://${ob.uuid}@${server}:${port}${buildQuery(params)}${hash}`;
+            return `vless://${ob.uuid}@${uriServer}:${port}${buildQuery(params)}${hash}`;
         }
         case 'vmess': {
             const obj = {
@@ -104,7 +106,7 @@ export function singboxOutboundToUrl(ob) {
         }
         case 'trojan': {
             const params = tlsParams(ob);
-            return `trojan://${encodeURIComponent(ob.password || '')}@${server}:${port}${buildQuery(params)}${hash}`;
+            return `trojan://${encodeURIComponent(ob.password || '')}@${uriServer}:${port}${buildQuery(params)}${hash}`;
         }
         case 'shadowsocks': {
             const method = ob.method || 'aes-256-gcm';
@@ -113,7 +115,7 @@ export function singboxOutboundToUrl(ob) {
                 /=+$/,
                 ''
             );
-            return `ss://${userinfo}@${server}:${port}${hash}`;
+            return `ss://${userinfo}@${uriServer}:${port}${hash}`;
         }
         case 'hysteria2':
         case 'hy2': {
@@ -122,17 +124,17 @@ export function singboxOutboundToUrl(ob) {
                 params.push(['obfs', ob.obfs.type]);
                 if (ob.obfs.password) params.push(['obfs-password', ob.obfs.password]);
             }
-            return `hysteria2://${encodeURIComponent(ob.password || '')}@${server}:${port}${buildQuery(params)}${hash}`;
+            return `hysteria2://${encodeURIComponent(ob.password || '')}@${uriServer}:${port}${buildQuery(params)}${hash}`;
         }
         case 'tuic': {
             const params = tlsParams(ob);
             if (ob.congestion_control) params.push(['congestion_control', ob.congestion_control]);
-            const auth = `${ob.uuid || ''}:${ob.password || ''}`;
-            return `tuic://${auth}@${server}:${port}${buildQuery(params)}${hash}`;
+            const auth = `${encodeURIComponent(ob.uuid || '')}:${encodeURIComponent(ob.password || '')}`;
+            return `tuic://${auth}@${uriServer}:${port}${buildQuery(params)}${hash}`;
         }
         case 'anytls': {
             const params = tlsParams(ob);
-            return `anytls://${encodeURIComponent(ob.password || '')}@${server}:${port}${buildQuery(params)}${hash}`;
+            return `anytls://${encodeURIComponent(ob.password || '')}@${uriServer}:${port}${buildQuery(params)}${hash}`;
         }
         default:
             return null;

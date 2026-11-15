@@ -1,3 +1,5 @@
+import { formatUriHost } from '../../../../shared/proxy-address.js';
+
 /**
  * SOCKS5代理转换为URL
  * 支持完整参数：认证、TLS、UDP
@@ -9,10 +11,7 @@ export function convertSocks5ToUrl(proxy) {
         }
 
         // 处理服务器地址 (支持 IPv6)
-        let serverAddr = proxy.server;
-        if (serverAddr.includes(':') && !serverAddr.startsWith('[')) {
-            serverAddr = `[${serverAddr}]`;
-        }
+        const serverAddr = formatUriHost(proxy.server);
 
         // 用户认证
         let userinfo = '';
