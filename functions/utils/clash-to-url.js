@@ -5,6 +5,7 @@ import {
 } from '../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../shared/proxy-address.js';
 import { convertHttpToUrl } from '../../src/utils/protocols/converters/http.js';
+import { convertMieruToUrl } from '../../src/utils/protocols/common/mieru.js';
 import {
     getHysteria2CertificatePin,
     getHysteria2HopInterval,
@@ -33,6 +34,7 @@ function appendHysteria2RealmParams(params, realmOpts) {
 export function convertClashProxyToUrl(proxy) {
     try {
         const type = (proxy.type || '').toLowerCase();
+        if (type === 'mieru') return convertMieruToUrl(proxy);
         const name = proxy.name || 'Untitled';
         const server = normalizeProxyHost(proxy.server);
         const uriServer = formatUriHost(server);

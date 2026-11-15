@@ -21,6 +21,7 @@ import yaml from 'js-yaml';
 import { urlsToClashProxies } from '../utils/url-to-clash.js';
 import { resolveSafeDnsConfig } from '../modules/subscription/safe-dns.js';
 import { applyMihomoChainProxyToClashConfig } from '../modules/subscription/mihomo-chain-proxy.js';
+import { assertMieruTargetSupported } from '../../src/utils/protocols/common/mieru.js';
 
 function getTemplateExtension(templateUrl) {
     const raw = typeof templateUrl === 'string' ? templateUrl.trim() : '';
@@ -89,6 +90,7 @@ export function renderClashYamlProfileTemplate(templateText, nodeList, options =
         .filter((line) => line && !line.startsWith('#'));
     const proxies = urlsToClashProxies(nodeUrls, options).map(stripInternalProxyFields);
     deduplicateProxyNames(proxies);
+    assertMieruTargetSupported(proxies, 'clash', options.isMeta);
     config = applyMihomoChainProxyToClashConfig(
         { ...config, proxies },
         {

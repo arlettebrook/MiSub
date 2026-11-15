@@ -6,6 +6,8 @@ import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
 import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address.js';
 import { parseHttpProxyEndpoint } from '../../shared/node-source.js';
+import { parseMieruLinks, convertMieruToUrl } from '../../src/utils/protocols/common/mieru.js';
+import { parseV2rayNLink } from '../modules/utils/v2rayn-parser.js';
 import {
     getHysteria2CertificatePin,
     getHysteria2HopInterval,
@@ -1469,6 +1471,14 @@ export function urlToClashProxy(url) {
     if (!url || typeof url !== 'string') return null;
 
     const lowerUrl = url.toLowerCase();
+    if (lowerUrl.startsWith('v2rayn://')) {
+        const converted = parseV2rayNLink(url);
+        return converted ? urlToClashProxy(converted) : null;
+    }
+    if (/^mierus?:\/\//i.test(url)) {
+        const proxies = parseMieruLinks(url);
+        return proxies.length === 1 ? proxies[0] : null;
+    }
 
     if (lowerUrl.startsWith('vless://')) {
         return parseVlessUrl(url);
@@ -1512,6 +1522,11 @@ export function urlToClashProxy(url) {
  */
 export function urlsToClashProxies(urls, options = {}) {
     if (!Array.isArray(urls)) return [];
+    urls = urls.flatMap((url) =>
+        /^mierus?:\/\//i.test(url || '')
+            ? parseMieruLinks(url).map(convertMieruToUrl).filter(Boolean)
+            : [url]
+    );
 
     const manualProxyIdentities = new Set(
         (Array.isArray(options.manualNodeUrls) ? options.manualNodeUrls : [])

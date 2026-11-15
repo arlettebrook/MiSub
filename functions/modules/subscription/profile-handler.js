@@ -1,7 +1,11 @@
 import { StorageFactory } from '../../storage-adapter.js';
 import { createJsonResponse } from '../utils.js';
 import { parseNodeInfo } from '../utils/geo-utils.js';
-import { calculateProtocolStats, calculateRegionStats } from '../utils/node-parser.js';
+import {
+    calculateProtocolStats,
+    calculateRegionStats,
+    parseNodeList,
+} from '../utils/node-parser.js';
 import { applyNodeTransformPipeline } from '../../utils/node-transformer.js';
 import { runOperatorChain } from '../../utils/operator-runner.js';
 import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS } from '../config.js';
@@ -179,19 +183,20 @@ export async function handleProfileMode(
         const effectiveUrl = customName ? applyManualNodeName(node.url, customName) : node.url;
 
         const nodeInfo = parseNodeInfo(effectiveUrl);
+        const expanded = /^(v2rayn|mierus?):\/\//i.test(node.url)
+            ? parseNodeList(node.url)
+            : [nodeInfo];
         return {
             subscriptionName: node.name || '手工节点',
             group: node.group || '',
             url: effectiveUrl,
             success: true,
-            nodes: [
-                {
-                    ...nodeInfo,
-                    url: effectiveUrl,
-                    subscriptionName: node.name || '手工节点',
-                    group: node.group || '',
-                },
-            ],
+            nodes: expanded.map((parsed) => ({
+                ...parsed,
+                url: /^(v2rayn|mierus?):\/\//i.test(node.url) ? parsed.url : effectiveUrl,
+                subscriptionName: node.name || '手工节点',
+                group: node.group || '',
+            })),
             error: null,
             isManualNode: true,
         };

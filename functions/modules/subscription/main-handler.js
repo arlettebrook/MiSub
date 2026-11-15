@@ -1228,7 +1228,10 @@ export async function handleMisubRequest(context) {
                     return new Response(rendered.content, { headers: responseHeaders });
                 }
             } catch (err) {
-                if (err.code === 'MIHOMO_CHAIN_CONFIG_ERROR') {
+                if (
+                    err.code === 'MIHOMO_CHAIN_CONFIG_ERROR' ||
+                    err.code === 'MIERU_UNSUPPORTED_TARGET'
+                ) {
                     return new Response(JSON.stringify({ error: err.message }), {
                         status: 422,
                         headers: {
@@ -1482,7 +1485,8 @@ export async function handleMisubRequest(context) {
             if (
                 e.code === 'HY2_UNSUPPORTED_CERT_PIN' ||
                 e.code === 'HY2_UNSUPPORTED_HOP_RANGE' ||
-                e.code === 'MIHOMO_CHAIN_CONFIG_ERROR'
+                e.code === 'MIHOMO_CHAIN_CONFIG_ERROR' ||
+                e.code === 'MIERU_UNSUPPORTED_TARGET'
             ) {
                 return new Response(JSON.stringify({ error: e.message }), {
                     status: 422,

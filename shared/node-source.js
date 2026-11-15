@@ -1,5 +1,5 @@
 const NODE_SCHEME =
-    /^(ss|ssr|vmess|vless|trojan|hysteria2?|hy|hy2|tuic|anytls|socks5|socks|snell|wireguard|naive\+https?|naive\+quic):\/\//i;
+    /^(ss|ssr|vmess|vless|trojan|hysteria2?|hy|hy2|tuic|anytls|socks5|socks|snell|wireguard|naive\+https?|naive\+quic|mierus?|v2rayn):\/\//i;
 const HTTP_PROXY_PARAMS = new Set([
     'proxy',
     'sni',

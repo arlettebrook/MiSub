@@ -198,7 +198,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | HTTP / HTTPS 代理            | 2026-11-15 已补齐 HTTP / TLS HTTP 代理的解析、导入导出和来源识别，已保存代理不再作为订阅地址抓取                                          | 实施和歧义地址处理详见下文；参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`                                                    |
 | `.mrs` 规则 provider         | 2026-11-15 已补齐 INI / 统一模型输出的 mrs format、behavior 和缓存路径，原有远程 Clash YAML 显式配置继续保留                              | 实施及推断规则详见下文；参考 `44d39ef5`                                                                                                        |
 | Mihomo 自定义链式代理        | 2026-11-15 已支持自定义 INI / 远程 YAML 的链式声明、落地副本和安全入口选择，普通 Clash 保留选择组降级                                     | 实施及用法详见下文；参考 `4b13ca2f`、`f59ce91c`、`f9342cde`                                                                                    |
-| v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                              |
+| v2rayN 完整配置链接、Mieru   | 2026-11-15 已支持可转换的 v2rayN JSON profile 链接、Mieru 官方简单 / 完整分享链接，以及 Mihomo Mieru YAML 导入和输出                      | 已按官方字段核验；支持范围和不能等价转换的配置详见下文                                                                                         |
 | 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                           |
 | 组合订阅嵌套                 | 上游 `0719f5a3` 新增 subProfiles；本项目没有对应 UI / 完整聚合逻辑                                                                        | 有复用订阅组需求再做。需一起处理 `36d5d056` 的初始化错误修复，并补环检测、重复节点、禁用子组、预览、删除和导入兼容                             |
 | SettingsContent 共享         | 本项目 SettingsView 与 SettingsPanel 仍重复维护，后者仍静态导入分区                                                                       | 可借鉴 `19c9575b` 的共享结构，继续保留本项目按需加载、加载反馈和浮动保存逻辑                                                                   |
@@ -276,6 +276,26 @@ Mihomo 的 MRS 仅支持 `domain` 与 `ipcidr`，不能使用 `classical`。按�
 新增 `tests/unit/mihomo-chain-proxy.test.js` 的 38 个回归用例，覆盖 INI / YAML 声明、Meta capability、普通 Clash 降级、缺失组、前缀与命名碰撞、多链共享入口、重复渲染、深拷贝、嵌套选择、过滤、已有 dialer、循环、无节点和正式请求 HTTP 422。相关 5 个文件、109 个用例通过；当前工作区全量 182 个文件、2034 个用例全部通过，`npm run build`、Pages Functions 构建、本次源码 / 测试 / 文档格式检查及 `git diff --check` 通过。
 
 使用此前经官方发布资产 SHA256 核验的 Mihomo v1.19.34，验证 INI / YAML × Meta / 普通 Clash，共 4 份配置检查通过。随后实际运行受控客户端，通过本机 HTTP CONNECT 请求验证两种 Meta 模板均经过“前置 HTTP 代理 → 落地 HTTP 代理 → 本机测试服务”，并从客户端 API 确认前置组仅包含原始入口；两个普通 Clash 模板直接走原始落地，没有新建链式跳转。全部网络连接仅访问 localhost，测试进程退出，不涉及生产节点。临时配置、请求记录和日志位于忽略目录 `tmp/chain-client-configs/`、`tmp/mihomo-chain-*`。
+
+### v2rayN 完整配置链接、Mieru（2026-11-15）
+
+**实施进度：配置链接导入与 Mieru 节点链路已完成。** 新增 `functions/modules/utils/v2rayn-parser.js`，支持 `v2rayn://<protocol>/<base64url(JSON)>`，解码后转成项目现有的标准节点 URI。当前可转换 VMess、VLESS、Trojan、Shadowsocks、Hysteria2、TUIC、AnyTLS、HTTP 和 SOCKS profile；完整解码、标准节点解析与 JSON 类型校验均在本地完成，不执行配置、不读取配置中的本机文件或向其服务器发起请求。
+
+核对官方 [v2rayN InnerFmt](https://github.com/2dust/v2rayN/blob/f5bdbe3466be4d8159680070b79aabf3f6cfc7bd/v2rayN/ServiceLib/Handler/Fmt/InnerFmt.cs)、[ProfileItem](https://github.com/2dust/v2rayN/blob/f5bdbe3466be4d8159680070b79aabf3f6cfc7bd/v2rayN/ServiceLib/Models/Entities/ProfileItem.cs)及协议 / 传输 extra 字段：新版 VMess / VLESS 的 UUID 来自 Password；TUIC UUID 来自 Username；兼容旧 Id / UUID、大小写字段和扁平化 extra JSON。读取 `ProtoExtraObj` / `ProtoExtra` 的 VMess security / alterId、VLESS encryption / flow、HY2 带宽 / Salamander / 端口 / 间隔、TUIC 拥塞控制，并读取 `TransportExtraObj` / `TransportExtra` 中的 WS、gRPC、HTTPUpgrade、XHTTP 参数，保留 TLS / REALITY、SNI、ALPN、ClientHello 指纹、packet-encoding 和 IPv6。
+
+该格式是 profile 导入，不是任意核心配置执行器。Custom / Outbound / PolicyGroup / ProxyChain 等不可转成独立节点的配置、无法等价表达的传输 / 安全字段会拒绝导入。嵌入 Cert、ECH、finalmask、自定义 outbound、独立 socket 配置等不会通过自动 `insecure=1` 或猜测值进行降级；已有 HY2 CertSha / pinSHA256 可以按证书指纹保留。非法 JSON、UTF-8、Base64、协议不一致、无效端口或 UUID 均不会作为原始节点存储。这里没有照搬上游对坏 Cert 自动跳过证书校验的逻辑。
+
+新增前后端共用 `src/utils/protocols/common/mieru.js`，Mihomo `type: mieru` YAML 可导入 / 导出，保留用户名密码、TCP / UDP、port 或 port-range、udp、multiplexing、handshake-mode、traffic-pattern 和导入 profile 信息。按照 [Mihomo v1.19.34 MieruOption](https://github.com/MetaCubeX/mihomo/blob/v1.19.34/adapter/outbound/mieru.go)正确使用 `MULTIPLEXING_*` / `HANDSHAKE_*` 枚举，拒绝布尔 multiplexing 等错误类型。前后端统一导出为官方 `mierus://username:password@server?profile=...&port=...&protocol=...`，支持 IPv6 和 URI 特殊字符编码，也兼容上游早期内部 authority/query 格式。
+
+官方 Mieru 简单链接的重复 port / protocol 必须一一配对；每个绑定展开成独立节点，不把 TCP 与 UDP 混成一个代理，也不只取第一个端口。完整 `mieru://<base64(protobuf ClientConfig)>` 按官方 [ClientConfig schema](https://github.com/enfein/mieru/blob/1367cf2d2dd81c5f27d455be7cea691d7948c420/pkg/appctl/proto/clientcfg.proto)读取 profile、server、portBinding 及协议设置，再转换为独立简单链接。解码有长度、绑定数、线格式和整数边界检查；需要原始密码，不把 server-side hashedPassword 冒充密码。不会安装原配置里的本地监听、RPC、日志设置；profile 自带独立 SOCKS dialer 时拒绝不完整转换。分享语义依据官方 [URL 转换源码](https://github.com/enfein/mieru/blob/1367cf2d2dd81c5f27d455be7cea691d7948c420/pkg/appctl/url.go)和客户端配置文档核查。
+
+Mieru 的客户端目标限定为 Mihomo / Meta（可用 `meta=true`）；普通 Clash、sing-box、Surge、Loon、Quantumult X、Egern 不能把 Mieru 当成别的协议或静默删掉，正式请求会返回 HTTP 422 和原因。Mihomo 未暴露 Mieru 自定义 MTU，原生缺省是 1400；导入可保留 MTU 元数据，但非默认 MTU 的 Mihomo 导出明确拒绝，需使用原生 Mieru 客户端。port-range 只输出范围，不额外添加会冲突的 primary port。原生 traffic-pattern 保留其编码值，由客户端做协议级校验。
+
+批量粘贴 v2rayN / Mieru / Clash YAML / sing-box JSON 时通过现有 `/api/parse_subscription` 统一解析；标准链接仍直接导入。后端解析失败时提示并避免写入未转换配置。混合内容中的普通 HTTP 订阅继续保留，转换结果会与已有节点去重。新格式同时接入节点来源识别、文件导入、单节点 / 订阅组预览、正式订阅生成和保护性缓存。保存原始多绑定链接时，预览和输出都展开全部绑定；自定义名称、组前缀和既有算子继续作用于转换后的节点。
+
+新增 `tests/unit/v2rayn-mieru-import.test.js` 的 60 个用例和 `bulk-import-new-formats.test.js` 的 10 个用例，覆盖官方 / 旧字段、extra、证书约束、畸形输入、Mieru 官方简单 / 完整样例、重复绑定、枚举类型、默认 MTU、YAML 往返、导入 API、混合订阅、缓存、保存原始链接预览及 HTTP 422。全量 184 个文件、2104 个用例全部通过，最后的原始链接预览 / TUIC 官方字段复查相关 7 个文件、245 个用例通过。`npm run build` 与 Pages Functions 构建通过。
+
+官方 Mihomo v1.19.34（沿用此前经发布资产 SHA256 核验的 Windows 二进制）对前后端 Mieru 导出、域名 / IPv4 / IPv6、TCP / UDP、单端口 / 范围、8 类 v2rayN 转换节点的内置 / INI 输出及多绑定配置，共 41 次最小配置检查通过。没有建立代理连接。新增 `tests/browser/v2rayn-mieru-import.mjs`，使用实际解析 handler 与批量导入 composable，在真实 Chromium 的 1440 / 390 / 320px 三种视口验证混合导入、组保留、节点与订阅分类，以及不写入原始 v2rayn wrapper；无新增未捕获异常。浏览器只访问本机服务，外部请求被拦截。临时源码、配置和验证日志在忽略目录 `tmp/v2rayn-*`、`tmp/mieru-*`。
 
 ## 可以跳过，或不能直接照搬
 

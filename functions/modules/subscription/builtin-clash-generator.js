@@ -7,6 +7,7 @@
 import { urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
 import { isMetaCore, isHiddifyAgent } from './user-agent-utils.js';
+import { assertMieruTargetSupported } from '../../../src/utils/protocols/common/mieru.js';
 import { DNS_PROXY_GROUP, resolveSafeDnsConfig } from './safe-dns.js';
 import {
     POLICY_GROUPS,
@@ -157,6 +158,11 @@ export function generateBuiltinClashConfig(nodeList, options = {}) {
 
     // 转换为 Clash 代理对象
     let proxies = urlsToClashProxies(nodeUrls, options);
+    assertMieruTargetSupported(
+        proxies,
+        'clash',
+        options.isMeta || isMetaCore(userAgent, options.searchParams)
+    );
 
     // 清理控制字符
     proxies = deepCleanControlChars(proxies);

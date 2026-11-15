@@ -8,6 +8,7 @@ import { convertTuicToUrl } from './converters/tuic.js';
 import { convertSocks5ToUrl } from './converters/socks5.js';
 import { convertHttpToUrl } from './converters/http.js';
 import { convertWireguardToUrl } from './converters/wireguard.js';
+import { convertMieruToUrl } from './common/mieru.js';
 
 /**
  * 转换Clash代理配置为标准URL
@@ -20,6 +21,8 @@ export function convertClashProxyToUrl(proxy) {
     const type = proxy.type.toLowerCase();
 
     switch (type) {
+        case 'mieru':
+            return convertMieruToUrl(proxy);
         case 'vmess':
             return convertVmessToUrl(proxy);
         case 'ss':

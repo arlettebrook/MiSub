@@ -15,6 +15,8 @@ import { extractNodeMetadata } from './metadata-extractor.js';
 import { splitIniFields, unquoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import { hysteria2IniOptionToQuery } from '../../../src/utils/protocols/common/hysteria2-params.js';
 import { parseHttpProxyEndpoint, markHttpProxyUrl } from '../../../shared/node-source.js';
+import { parseV2rayNLink } from './v2rayn-parser.js';
+import { parseMieruLinks, convertMieruToUrl } from '../../../src/utils/protocols/common/mieru.js';
 
 /**
  * 支持的节点协议正则表达式
@@ -304,6 +306,15 @@ export function extractValidNodes(text) {
         .map((line) => line.trim());
 
     for (const line of lines) {
+        if (/^v2rayn:\/\//i.test(line)) {
+            const converted = parseV2rayNLink(line);
+            if (converted) nodes.push(converted);
+            continue;
+        }
+        if (/^mierus?:\/\//i.test(line)) {
+            nodes.push(...parseMieruLinks(line).map(convertMieruToUrl).filter(Boolean));
+            continue;
+        }
         if (NODE_PROTOCOL_REGEX.test(line)) {
             if (/^https?:\/\//i.test(line)) {
                 if (parseHttpProxyEndpoint(line)) nodes.push(markHttpProxyUrl(line));

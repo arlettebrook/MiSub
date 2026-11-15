@@ -1,7 +1,11 @@
 import { StorageFactory } from '../../storage-adapter.js';
 import { createJsonResponse } from '../utils.js';
 import { parseNodeInfo } from '../utils/geo-utils.js';
-import { calculateProtocolStats, calculateRegionStats } from '../utils/node-parser.js';
+import {
+    calculateProtocolStats,
+    calculateRegionStats,
+    parseNodeList,
+} from '../utils/node-parser.js';
 import { KV_KEY_SUBS } from '../config.js';
 import { fetchSubscriptionNodes } from './node-fetcher.js';
 import { isManualNodeSource } from '../../../shared/node-source.js';
@@ -43,16 +47,17 @@ export async function handleSingleSubscriptionMode(
     if (isManualNodeSource(subscription)) {
         // 手工节点：直接解析节点URL
         const nodeInfo = parseNodeInfo(subscription.url);
+        const expanded = /^(v2rayn|mierus?):\/\//i.test(subscription.url)
+            ? parseNodeList(subscription.url)
+            : [nodeInfo];
         const manualNodeResult = {
             subscriptionName: subscription.name || '手工节点',
             url: subscription.url,
             success: true,
-            nodes: [
-                {
-                    ...nodeInfo,
-                    subscriptionName: subscription.name || '手工节点',
-                },
-            ],
+            nodes: expanded.map((node) => ({
+                ...node,
+                subscriptionName: subscription.name || '手工节点',
+            })),
             error: null,
             isManualNode: true,
         };
@@ -63,8 +68,8 @@ export async function handleSingleSubscriptionMode(
             nodes: manualNodeResult.nodes,
             totalCount: manualNodeResult.nodes.length,
             stats: {
-                protocols: { [nodeInfo.protocol]: 1 },
-                regions: { [nodeInfo.region || '其他']: 1 },
+                protocols: calculateProtocolStats(manualNodeResult.nodes),
+                regions: calculateRegionStats(manualNodeResult.nodes),
             },
         };
     }

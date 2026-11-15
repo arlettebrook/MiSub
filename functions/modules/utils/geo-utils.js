@@ -1,4 +1,6 @@
 import { normalizeProxyHost, splitUriHostPort } from '../../../shared/proxy-address.js';
+import { parseMieruLinks } from '../../../src/utils/protocols/common/mieru.js';
+import { parseV2rayNLink } from './v2rayn-parser.js';
 
 /**
  * 地理识别工具模块
@@ -621,6 +623,10 @@ export function containsRegion(nodeName, region) {
  * @returns {Object} 节点详细信息
  */
 export function parseNodeInfo(nodeUrl) {
+    if (typeof nodeUrl === 'string' && /^v2rayn:\/\//i.test(nodeUrl)) {
+        const converted = parseV2rayNLink(nodeUrl);
+        if (converted) return parseNodeInfo(converted);
+    }
     if (!nodeUrl || typeof nodeUrl !== 'string') {
         return {
             protocol: 'unknown',
@@ -632,7 +638,9 @@ export function parseNodeInfo(nodeUrl) {
 
     // 提取协议
     const protocolMatch = nodeUrl.match(/^(.*?):\/\//);
-    const protocol = protocolMatch ? protocolMatch[1].toLowerCase() : 'unknown';
+    let protocol = protocolMatch ? protocolMatch[1].toLowerCase() : 'unknown';
+    const mieru = /^mierus?$/.test(protocol) ? parseMieruLinks(nodeUrl)[0] : null;
+    if (mieru) protocol = 'mieru';
 
     // 提取节点名称
     let nodeName = '';
@@ -671,9 +679,16 @@ export function parseNodeInfo(nodeUrl) {
     // [新增] 提取服务器地址和端口
     let server = '';
     let port = '';
+    if (mieru) {
+        server = mieru.server;
+        port = String(mieru.port || mieru['port-range'].split('-')[0]);
+        if (hashIndex === -1) nodeName = mieru.name;
+    }
 
     try {
-        if (protocol === 'vmess') {
+        if (mieru) {
+            // Endpoint and credentials are carried in the simple Mieru query.
+        } else if (protocol === 'vmess') {
             const base64Part = nodeUrl.replace('vmess://', '');
             if (base64Part && !base64Part.includes('@')) {
                 // 排除可能是明文的情况(虽然vmess少见)

@@ -23,6 +23,9 @@ export const COMMON_NODE_PROTOCOLS = [
     'http',
     'https',
     'wireguard',
+    'mieru',
+    'mierus',
+    'v2rayn',
 ];
 
 export function createProtocolRegex(protocols, caseInsensitive = true) {

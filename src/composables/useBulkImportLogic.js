@@ -7,14 +7,42 @@ import { normalizeManualNodeGroupName } from './manual-nodes/groups.js';
 import { parseSurgeConfig } from '../utils/protocolConverter.js';
 import { t } from '../i18n/index.js';
 import { isManualNodeSource, isRemoteSubscriptionSource } from '../../shared/node-source.js';
+import { api } from '../lib/http.js';
+
+export function needsServerParsing(text) {
+    return (
+        /^\s*(v2rayn|mierus?):\/\//im.test(text) ||
+        /^\s*proxies\s*:/im.test(text) ||
+        (/^\s*\{/.test(text) && /"outbounds"\s*:/.test(text))
+    );
+}
 
 export function useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk }) {
     const { showToast } = useToastStore();
     const dataStore = useDataStore();
     const showModal = ref(false);
 
-    const handleBulkImport = (importText, group) => {
+    const handleBulkImport = async (importText, group) => {
         if (!importText) return;
+        if (needsServerParsing(importText)) {
+            try {
+                const response = await api.post('/api/parse_subscription', { content: importText });
+                const urls = (response?.data?.nodes || []).map((node) => node.url).filter(Boolean);
+                if (response?.success && urls.length) {
+                    const subscriptions = importText
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(isRemoteSubscriptionSource);
+                    importText = [...new Set([...urls, ...subscriptions])].join('\n');
+                } else {
+                    showToast(t('bulkImport.noValidLinks'), 'warning');
+                    return;
+                }
+            } catch (error) {
+                showToast(t('bulkImport.noValidLinks'), 'warning');
+                return;
+            }
+        }
 
         const normalizedGroup = normalizeManualNodeGroupName(group);
 
@@ -73,6 +101,7 @@ export function useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk 
                 // 去重检查：订阅 URL
                 if (!existingUrls.has(line)) {
                     validSubs.push({ ...baseItem, id: generateSubscriptionId() });
+                    existingUrls.add(line);
                 }
             } else if (isManualNodeSource(line)) {
                 // 避免重复添加已从 Surge 格式解析的节点
@@ -80,6 +109,7 @@ export function useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk 
                 // 去重检查：节点 URL
                 if (!alreadyParsed && !existingUrls.has(line)) {
                     validNodes.push({ ...baseItem, id: generateNodeId() });
+                    existingUrls.add(line);
                 }
             }
         });

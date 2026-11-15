@@ -50,6 +50,7 @@ const REAL_PROXY_PROTOCOLS = [
     'socks5://',
     'socks://',
     'wireguard://',
+    'mierus://',
 ];
 
 /**
@@ -461,6 +462,29 @@ export async function generateCombinedNodeList(
             let processedUrl = fixNodeUrlEncoding(rawUrl, {
                 plusAsSpace: Boolean(sub?.plusAsSpace),
             });
+            if (/^(v2rayn|mieru):\/\//i.test(rawUrl) || /^mierus:\/\//i.test(rawUrl)) {
+                let expanded = parseNodeList(processedUrl).map((node) => node.url);
+                if (!expanded.length) continue;
+                const customName = typeof sub.name === 'string' ? sub.name.trim() : '';
+                expanded = expanded.map((node, index) => {
+                    let current = customName
+                        ? applyManualNodeName(
+                              node,
+                              expanded.length > 1 ? `${customName} (${index + 1})` : customName
+                          )
+                        : node;
+                    const group = typeof sub.group === 'string' ? sub.group.trim() : '';
+                    if (prependGroupName && group && !skipPrefixDueToRenaming)
+                        current = prependNodeName(current, group);
+                    if (shouldPrependManualNodes && !skipPrefixDueToRenaming)
+                        current = prependNodeName(current, manualNodePrefix);
+                    return current;
+                });
+                const transformed = await applySubscriptionTransforms(expanded, sub);
+                manualProcessedLines.push(...transformed);
+                upstreamNodeCount += expanded.length;
+                continue;
+            }
             const customNodeName = typeof sub.name === 'string' ? sub.name.trim() : '';
             if (customNodeName) processedUrl = applyManualNodeName(processedUrl, customNodeName);
 

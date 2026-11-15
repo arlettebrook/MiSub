@@ -135,6 +135,7 @@ function getProtocol(url) {
 function normalizeProtocol(proto) {
     const p = String(proto || 'unknown').toLowerCase();
     if (p === 'hy' || p === 'hy2' || p === 'hysteria') return 'hysteria2';
+    if (p === 'mierus') return 'mieru';
     return p;
 }
 
