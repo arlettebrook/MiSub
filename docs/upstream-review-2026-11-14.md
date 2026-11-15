@@ -197,7 +197,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | HY2 参数兼容                 | 2026-11-15 已修复 peer、证书 pin、跳跃间隔和端口范围的解析 / 导出，并接入可等价表达的客户端字段                                           | 实施及客户端边界详见下文；参考 `510323ec`、`7861be59`、`d3fe8cad`                                                                              |
 | HTTP / HTTPS 代理            | 2026-11-15 已补齐 HTTP / TLS HTTP 代理的解析、导入导出和来源识别，已保存代理不再作为订阅地址抓取                                          | 实施和歧义地址处理详见下文；参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`                                                    |
 | `.mrs` 规则 provider         | 2026-11-15 已补齐 INI / 统一模型输出的 mrs format、behavior 和缓存路径，原有远程 Clash YAML 显式配置继续保留                              | 实施及推断规则详见下文；参考 `44d39ef5`                                                                                                        |
-| Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                               |
+| Mihomo 自定义链式代理        | 2026-11-15 已支持自定义 INI / 远程 YAML 的链式声明、落地副本和安全入口选择，普通 Clash 保留选择组降级                                     | 实施及用法详见下文；参考 `4b13ca2f`、`f59ce91c`、`f9342cde`                                                                                    |
 | v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                              |
 | 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                           |
 | 组合订阅嵌套                 | 上游 `0719f5a3` 新增 subProfiles；本项目没有对应 UI / 完整聚合逻辑                                                                        | 有复用订阅组需求再做。需一起处理 `36d5d056` 的初始化错误修复，并补环检测、重复节点、禁用子组、预览、删除和导入兼容                             |
@@ -264,6 +264,18 @@ Mihomo 的 MRS 仅支持 `domain` 与 `ipcidr`，不能使用 `classical`。按�
 新增 `tests/unit/rule-provider-mrs.test.js` 的 23 个回归用例，覆盖 geoip / geosite / 自定义域名规则、大小写、URL query / fragment、basename 和缓存路径、去重 / 同名规则、INI 与统一模型入口、原有 YAML / text / ACL4SSR 行为及实际 ProcessorService 远程模板链路。相关 3 个文件、66 个用例通过；全量 181 个文件、1994 个用例全部通过，`npm run build`、Pages Functions 构建、改动文件格式检查和 `git diff --check` 通过。
 
 使用已核验发布资产 SHA256 的官方 Mihomo v1.19.34，按其 [MRS 转换源码](https://github.com/MetaCubeX/mihomo/blob/v1.19.34/rules/provider/mrs_converter.go)通过 `convert-ruleset` 在本地生成 domain / ipcidr 二进制样例，再从本机 HTTP 服务加载统一模板生成的 4 个 provider。客户端 API 确认每个 provider 有 2 条规则，实际 `.mrs` 缓存文件与对应二进制内容一致；反例将 behavior 改成 classical 时客户端报告 invalid format，删去 format 时报告缺少 YAML payload，均未加载有效规则。验证只访问 localhost，没有下载线上规则或建立代理出口连接，受控客户端验证进程已退出。临时源码、样例、配置和日志位于忽略目录 `tmp/mrs-*`。
+
+### Mihomo 自定义链式代理（2026-11-15）
+
+**实施进度：自定义模板链式代理已完成。** 新增 `functions/modules/subscription/mihomo-chain-proxy.js`，INI 支持 `custom_chain_proxy=<落地组>\`<前置组>[\`<副本前缀>]`，远程 Clash YAML profile 支持顶层 `x-misub-chain-proxy` 对象或对象数组（`landing-group`/`entry-group`/`clone-prefix`，也兼容 `group`/`entry`/`prefix`）。Meta 输出为每个当前节点生成唯一命名的落地副本，添加 `dialer-proxy: <前置组>`；普通 Clash 不展开副本，保留普通选择组。沿用现有客户端识别与 `meta=true` 参数，不重写内置 relay 分流等级。
+
+模板中前置组和落地组缺失时自动创建，INI 在智能修剪前展开，避免指向链式组的规则因组尚未创建被删掉。重复渲染使用独立模型副本，不修改调用者的节点、组或嵌套配置，也不会叠加副本。名称分配同时避开原始节点、策略组、其他链和内置策略名称。YAML 扩展声明会从输出移除，不影响无声明的 YAML profile 或其他 provider / 策略组选项。
+
+前置选择解析到原始节点，支持已有成员、正则、动态原始节点选择和嵌套组；随后固定成员并移除动态 include-all / use / filter 等可能纳入落地副本的选项。已有原始节点的 dialer 保留；如果它的任何依赖可能到达链式组、外部动态 provider 或循环，就不作为前置节点。声明冲突、入口和落地同名、跨链把落地当入口、空过滤或没有安全原始入口会报告受控模板错误，正式请求返回 HTTP 422。无节点时用 DIRECT 组保持配置与规则有效。详细示例在 `docs/examples/custom-rules-template.md`。
+
+新增 `tests/unit/mihomo-chain-proxy.test.js` 的 38 个回归用例，覆盖 INI / YAML 声明、Meta capability、普通 Clash 降级、缺失组、前缀与命名碰撞、多链共享入口、重复渲染、深拷贝、嵌套选择、过滤、已有 dialer、循环、无节点和正式请求 HTTP 422。相关 5 个文件、109 个用例通过；当前工作区全量 182 个文件、2034 个用例全部通过，`npm run build`、Pages Functions 构建、本次源码 / 测试 / 文档格式检查及 `git diff --check` 通过。
+
+使用此前经官方发布资产 SHA256 核验的 Mihomo v1.19.34，验证 INI / YAML × Meta / 普通 Clash，共 4 份配置检查通过。随后实际运行受控客户端，通过本机 HTTP CONNECT 请求验证两种 Meta 模板均经过“前置 HTTP 代理 → 落地 HTTP 代理 → 本机测试服务”，并从客户端 API 确认前置组仅包含原始入口；两个普通 Clash 模板直接走原始落地，没有新建链式跳转。全部网络连接仅访问 localhost，测试进程退出，不涉及生产节点。临时配置、请求记录和日志位于忽略目录 `tmp/chain-client-configs/`、`tmp/mihomo-chain-*`。
 
 ## 可以跳过，或不能直接照搬
 

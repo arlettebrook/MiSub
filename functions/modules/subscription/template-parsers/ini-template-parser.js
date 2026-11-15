@@ -1,5 +1,6 @@
 import { createUnifiedTemplateModel } from '../template-model.js';
 import { pinRemoteRuleUrl } from '../builtin-rules-provider.js';
+import { normalizeChainConfigs } from '../mihomo-chain-proxy.js';
 
 function parseIniSections(templateText) {
     const lines = String(templateText || '').split(/\r?\n/);
@@ -173,6 +174,14 @@ export function parseIniTemplate(templateText, options = {}) {
         .filter((line) => /^ruleset=/i.test(line.trim()))
         .map(parseAclRuleSetLine)
         .filter(Boolean);
+    const parsedChains = aclCustomLines
+        .filter((line) => /^\s*custom_chain_proxy\s*=/i.test(line))
+        .map((line) => {
+            const [group, entry, prefix = ''] = line
+                .replace(/^\s*custom_chain_proxy\s*=/i, '')
+                .split('`');
+            return { group, entry, prefix };
+        });
 
     const groups = (sections.get('proxy group') || [])
         .map(parseGroupLine)
@@ -196,6 +205,7 @@ export function parseIniTemplate(templateText, options = {}) {
         proxies: options.proxies || [],
         groups,
         rules,
+        extras: parsedChains.length ? { chainProxy: normalizeChainConfigs(parsedChains) } : {},
         settings: {
             managedConfigUrl: options.managedConfigUrl || '',
             interval: options.interval || 86400,

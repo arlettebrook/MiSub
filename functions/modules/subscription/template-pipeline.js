@@ -8,6 +8,7 @@ import { renderQuanxFromTemplateModel } from './template-renderers/render-quanx.
 import { renderEgernFromTemplateModel } from './template-renderers/render-egern.js';
 import { urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
+import { applyMihomoChainProxy } from './mihomo-chain-proxy.js';
 
 /**
  * 处理重名节点，确保每个节点名称唯一
@@ -40,6 +41,9 @@ export function renderClashFromIniTemplate(templateText, options = {}) {
     });
 
     // 智能注入地区分组逻辑
+    // Materialize chain groups before pruning so omitted declarations remain
+    // valid rule targets. Consumption prevents a second expansion in rendering.
+    model = applyMihomoChainProxy(model, { enableDialerProxy: Boolean(options.isMeta) });
     model = applySmartModelOptimizations(model);
 
     return renderClashFromTemplateModel(model);

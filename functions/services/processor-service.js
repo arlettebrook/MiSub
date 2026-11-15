@@ -20,6 +20,7 @@ import { base64EncodeUtf8 } from '../modules/utils.js';
 import yaml from 'js-yaml';
 import { urlsToClashProxies } from '../utils/url-to-clash.js';
 import { resolveSafeDnsConfig } from '../modules/subscription/safe-dns.js';
+import { applyMihomoChainProxyToClashConfig } from '../modules/subscription/mihomo-chain-proxy.js';
 
 function getTemplateExtension(templateUrl) {
     const raw = typeof templateUrl === 'string' ? templateUrl.trim() : '';
@@ -68,7 +69,7 @@ export function isClashYamlProfileTemplate(templateText) {
             parsed &&
             typeof parsed === 'object' &&
             !Array.isArray(parsed) &&
-            Array.isArray(parsed['proxy-groups']) &&
+            (Array.isArray(parsed['proxy-groups']) || parsed['x-misub-chain-proxy']) &&
             Array.isArray(parsed.rules)
         );
     } catch {
@@ -77,7 +78,7 @@ export function isClashYamlProfileTemplate(templateText) {
 }
 
 export function renderClashYamlProfileTemplate(templateText, nodeList, options = {}) {
-    const config = yaml.load(templateText);
+    let config = yaml.load(templateText);
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
         return '';
     }
@@ -88,6 +89,12 @@ export function renderClashYamlProfileTemplate(templateText, nodeList, options =
         .filter((line) => line && !line.startsWith('#'));
     const proxies = urlsToClashProxies(nodeUrls, options).map(stripInternalProxyFields);
     deduplicateProxyNames(proxies);
+    config = applyMihomoChainProxyToClashConfig(
+        { ...config, proxies },
+        {
+            enableDialerProxy: Boolean(options.isMeta),
+        }
+    );
 
     return yaml.dump(
         {
@@ -100,7 +107,7 @@ export function renderClashYamlProfileTemplate(templateText, nodeList, options =
                 mode: options.dnsMode,
                 proxyGroup: '🌐 DNS 出口',
             }),
-            proxies,
+            proxies: config.proxies,
         },
         {
             indent: 2,

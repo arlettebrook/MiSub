@@ -1228,6 +1228,15 @@ export async function handleMisubRequest(context) {
                     return new Response(rendered.content, { headers: responseHeaders });
                 }
             } catch (err) {
+                if (err.code === 'MIHOMO_CHAIN_CONFIG_ERROR') {
+                    return new Response(JSON.stringify({ error: err.message }), {
+                        status: 422,
+                        headers: {
+                            'Content-Type': 'application/json; charset=utf-8',
+                            'Cache-Control': 'no-store',
+                        },
+                    });
+                }
                 console.warn(
                     '[ExternalTemplate] Local Clash YAML profile render failed, falling back to external redirect:',
                     err?.message || err
@@ -1470,7 +1479,11 @@ export async function handleMisubRequest(context) {
             return new Response(finalContent || '', { headers: responseHeaders });
         } catch (e) {
             console.error(`[Builtin${targetFormat}] Generation failed:`, e);
-            if (e.code === 'HY2_UNSUPPORTED_CERT_PIN' || e.code === 'HY2_UNSUPPORTED_HOP_RANGE') {
+            if (
+                e.code === 'HY2_UNSUPPORTED_CERT_PIN' ||
+                e.code === 'HY2_UNSUPPORTED_HOP_RANGE' ||
+                e.code === 'MIHOMO_CHAIN_CONFIG_ERROR'
+            ) {
                 return new Response(JSON.stringify({ error: e.message }), {
                     status: 422,
                     headers: {

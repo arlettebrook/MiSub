@@ -5,6 +5,7 @@ export function createUnifiedTemplateModel(input = {}) {
             source: input.meta?.source || 'builtin',
             target: input.meta?.target || 'clash',
             ruleLevel: input.meta?.ruleLevel || 'std',
+            isMeta: Boolean(input.meta?.isMeta),
         },
         proxies: Array.isArray(input.proxies) ? input.proxies : [],
         groups: Array.isArray(input.groups) ? input.groups : [],

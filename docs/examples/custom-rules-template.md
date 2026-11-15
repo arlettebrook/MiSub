@@ -9,14 +9,15 @@
 MiSub 的内置引擎（Built-in Engine）采用一种**中间格式**，它会自动根据你使用的客户端（Clash, Sing-Box, Surge, Loon, Quantumult X）将规则翻译成对应的语法。
 
 ### 1. 策略组 (Policy Groups)
+
 在 MiSub 中，你可以直接使用以下由系统自动生成的策略组名称：
 
-*   `🚀 节点选择`: 主要的手动切换入口。
-*   `♻️ 自动选择`: 延迟最低的节点。
-*   `🔯 故障转移`: 自动切换到可用节点。
-*   `👋 手动切换`: 纯手动节点列表。
-*   `🌍 总出口`: (链式代理模式) 所有流量的总闸。
-*   `🇺🇸 美国节点`, `🇭🇰 香港节点`, `🇯🇵 日本节点`: 自动按地区分类的组。
+- `🚀 节点选择`: 主要的手动切换入口。
+- `♻️ 自动选择`: 延迟最低的节点。
+- `🔯 故障转移`: 自动切换到可用节点。
+- `👋 手动切换`: 纯手动节点列表。
+- `🌍 总出口`: (链式代理模式) 所有流量的总闸。
+- `🇺🇸 美国节点`, `🇭🇰 香港节点`, `🇯🇵 日本节点`: 自动按地区分类的组。
 
 ---
 
@@ -80,6 +81,51 @@ MATCH,🚀 节点选择
 ```
 
 ---
+
+## 🔗 Mihomo 自定义链式代理
+
+自定义模板通过节点级 `dialer-proxy` 实现“前置代理 → 落地节点”。Mihomo / Meta 输出会生成落地副本，原始节点保留；普通 Clash 输出使用原始节点的选择组。可以通过请求参数 `meta=true` 指定 Meta，或由现有客户端识别逻辑决定。
+
+INI 模板声明如下：
+
+```ini
+[custom]
+# 格式：custom_chain_proxy=<落地组>`<前置组>[`<副本前缀>]
+custom_chain_proxy=链式落地`链式前置`链式 -
+
+[Proxy Group]
+链式前置 = select, include-all-proxies=true
+链式落地 = select, 链式前置
+
+[Rule]
+MATCH,链式落地
+```
+
+前缀省略或留空时使用 `<落地组> - `。前置组可以按节点名或 INI 的 `custom_proxy_group` 正则选择原始节点。没有声明策略组时，会自动创建前置组与落地组；落地副本总是来自当前 MiSub 节点列表。
+
+远程 Clash YAML profile 使用顶层扩展字段：
+
+```yaml
+proxy-groups:
+    - name: 链式前置
+      type: select
+      include-all-proxies: true
+    - name: 链式落地
+      type: select
+      proxies: []
+x-misub-chain-proxy:
+    entry-group: 链式前置
+    landing-group: 链式落地
+    clone-prefix: '链式 - '
+rules:
+    - MATCH,链式落地
+```
+
+YAML 声明也可以写为对象数组，以创建多个独立链。数组项支持统一模型短字段 `entry`、`group`、`prefix`。`x-misub-chain-proxy` 会从最终客户端配置中移除。自定义模板管理器当前保存 INI；YAML profile 继续使用远程模板 URL。
+
+前置组会固定为可安全使用的原始节点；嵌套组会展开，动态 `include-all`、`use` 和过滤字段会被移除，避免再次纳入落地副本。运行时外部 provider 节点不参与这次复制。已有节点的 dialer 保留，但如果其依赖可能回到链式组或形成环，会排除它作为前置选择。没有任何安全入口、过滤不到节点、声明自身为前置或发生名称冲突时，会返回明确的模板错误。
+
+普通 Clash 不生成新的 dialer 副本，原有落地选择可以继续使用。每个 Meta 链会增加一份当前节点列表的副本；多个链可共用前置组，但前置组不能同时是另一个落地组。配置中不要依赖已移除的 `type: relay` 来实现这类链式声明。
 
 ## 🚀 如何在 GitHub 上使用
 
