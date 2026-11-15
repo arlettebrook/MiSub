@@ -201,7 +201,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | v2rayN 完整配置链接、Mieru   | 2026-11-15 已支持可转换的 v2rayN JSON profile 链接、Mieru 官方简单 / 完整分享链接，以及 Mihomo Mieru YAML 导入和输出                      | 已按官方字段核验；支持范围和不能等价转换的配置详见下文                                                                                         |
 | 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                           |
 | 组合订阅嵌套                 | 上游 `0719f5a3` 新增 subProfiles；本项目没有对应 UI / 完整聚合逻辑                                                                        | 有复用订阅组需求再做。需一起处理 `36d5d056` 的初始化错误修复，并补环检测、重复节点、禁用子组、预览、删除和导入兼容                             |
-| SettingsContent 共享         | 本项目 SettingsView 与 SettingsPanel 仍重复维护，后者仍静态导入分区                                                                       | 可借鉴 `19c9575b` 的共享结构，继续保留本项目按需加载、加载反馈和浮动保存逻辑                                                                   |
+| SettingsContent 共享         | 2026-11-15 已将页面 / 弹窗的设置分区、加载反馈与保存入口抽入共用内容，补齐弹窗自定义公开页和重置回调                                      | 实施及验证详见下文；参考 `19c9575b`，保留按需加载、深链接、标签记忆和浮动保存                                                                  |
 
 ### XHTTP 高级参数双向映射（2026-11-15）
 
@@ -296,6 +296,20 @@ Mieru 的客户端目标限定为 Mihomo / Meta（可用 `meta=true`）；普通
 新增 `tests/unit/v2rayn-mieru-import.test.js` 的 60 个用例和 `bulk-import-new-formats.test.js` 的 10 个用例，覆盖官方 / 旧字段、extra、证书约束、畸形输入、Mieru 官方简单 / 完整样例、重复绑定、枚举类型、默认 MTU、YAML 往返、导入 API、混合订阅、缓存、保存原始链接预览及 HTTP 422。全量 184 个文件、2104 个用例全部通过，最后的原始链接预览 / TUIC 官方字段复查相关 7 个文件、245 个用例通过。`npm run build` 与 Pages Functions 构建通过。
 
 官方 Mihomo v1.19.34（沿用此前经发布资产 SHA256 核验的 Windows 二进制）对前后端 Mieru 导出、域名 / IPv4 / IPv6、TCP / UDP、单端口 / 范围、8 类 v2rayN 转换节点的内置 / INI 输出及多绑定配置，共 41 次最小配置检查通过。没有建立代理连接。新增 `tests/browser/v2rayn-mieru-import.mjs`，使用实际解析 handler 与批量导入 composable，在真实 Chromium 的 1440 / 390 / 320px 三种视口验证混合导入、组保留、节点与订阅分类，以及不写入原始 v2rayn wrapper；无新增未捕获异常。浏览器只访问本机服务，外部请求被拦截。临时源码、配置和验证日志在忽略目录 `tmp/v2rayn-*`、`tmp/mieru-*`。
+
+### SettingsContent 共享（2026-11-15）
+
+**实施进度：设置内容共享已完成。** 新增 `src/components/settings/SettingsContent.vue`，SettingsView 和 SettingsPanel 共用设置分区、侧栏、模块说明、初始加载提示、按需加载与底部保存按钮。两种外壳各自调用一次 `useSettingsLogic`，通过 props 传入状态与操作；共享组件不再创建一份设置状态，分区编辑直接作用于对应父组件草稿，页面和弹窗独立打开时不会互相覆盖。
+
+所有分区继续使用原有 `settingsSectionLoaders` 和异步加载反馈，只挂载访问过的标签页，切换回来保留已挂载分区。弹窗由静态导入所有分区改为相同的按需加载方式，迁移弹窗也改为按需加载。统一补齐 `custom-page` 分区和 SystemSettings 的 `handleReset`；备份导入 / 导出回调一并传入，SettingsPanel 仍支持父级明确提供的备份回调。
+
+SettingsView 保留页面标题、sessionStorage 标签记忆、Token 深链接高亮 / 滚动定位、路由返回和激活时重新加载，以及原有浮动保存的位置观察 / 移动视觉视口逻辑。共享内容通过 save-anchor 事件提供真实底部按钮节点，页面的底部 / 浮动按钮使用相同状态和保存操作。SettingsPanel 保留透明布局、常显模块说明，以及向 SettingsModal 暴露返回成功状态的 handleSave；加载、保存、校验错误或 sessionPaused 时禁止保存，成功才允许 SettingsModal 关闭。
+
+异步分区的 wrapper 会在代码加载前挂载；共享内容只在真实模块已解析后报告就绪，避免把加载占位层当成表单完成。System 标签同时等待 WebDAV 和系统设置两个模块。加载中显示可访问的 status 提示和 spinner，分区代码加载时显示既有 skeleton，不提前加载隐藏的客户端 / 公共页等分区。
+
+新增 `tests/unit/settings-content-sharing.test.js` 的 14 个用例和 `settings-content-loading.test.js` 的 1 个用例，覆盖唯一状态实例、独立草稿、编辑 / 保存、两种外壳分区一致性、公开页、重置 / 备份回调、按需加载、系统双模块就绪、访问后保留实例、加载 / 保存 / 验证暂停时的禁用行为，以及 SettingsModal 成功 / 失败关闭逻辑。静态约束防止容器重新直接导入和维护设置分区。新增及原有标签 / 浮动保存 / 深链接相关 5 个文件、76 个用例通过；全量 186 个文件、2119 个用例全部通过，`npm run build` 通过。
+
+新增 `tests/browser/settings-content-sharing.mjs`，真实 Chromium 使用模拟设置接口验证 SettingsView / SettingsPanel / 完整 SettingsModal × 中英文 × 1440 / 390 / 320px，共 18 个场景全部通过。覆盖首次只请求 basic、服务分区代码延迟时的加载反馈、公开页 / 系统 / WebDAV 访问、真实恢复出厂设置确认提示（取消操作）、切回基础设置保持原 DOM、验证暂停禁用保存、失败保存保留 Token 草稿、单次初始设置请求、页面浮动保存及无新增未捕获异常 / 横向溢出。测试仅访问本机服务，未修改生产设置。本次源码、测试和文档格式检查及 `git diff --check` 通过。临时验证日志和截图保存在忽略目录 `tmp/settings-content-*`、`tmp/settings-sharing-*`。
 
 ## 可以跳过，或不能直接照搬
 

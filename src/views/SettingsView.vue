@@ -1,39 +1,18 @@
 <script setup>
     import { createLazyModal } from '../utils/lazy-modal.js';
-    import {
-        ref,
-        computed,
-        nextTick,
-        onMounted,
-        onActivated,
-        onBeforeUnmount,
-        watch,
-        defineAsyncComponent,
-    } from 'vue';
+    import { ref, computed, nextTick, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
     import { useRoute } from 'vue-router';
     import { useI18n } from '../i18n/index.js';
     import { useLazyModals } from '../composables/useLazyModals.js';
     import { useSettingsLogic } from '../composables/useSettingsLogic.js';
-    import SettingsLayout from '../components/layout/SettingsLayout.vue';
 
-    import SettingsSidebar from '../components/settings/SettingsSidebar.vue';
+    import SettingsContent from '../components/settings/SettingsContent.vue';
     import SettingsSaveButton from '../components/settings/SettingsSaveButton.vue';
-    import { settingsSectionLoaders } from '../utils/settings-section-loaders.js';
-    import SettingsSectionLoading from '../components/settings/SettingsSectionLoading.vue';
+
     import { resolveSettingsFocusAnchor } from '../utils/dashboard-deeplink.js';
     import { createFloatingSavePosition } from '../utils/floating-save-position.js';
 
-    const lazySection = (loader) =>
-        defineAsyncComponent({ loader, loadingComponent: SettingsSectionLoading, delay: 0 });
     const MigrationModal = createLazyModal('MigrationModal');
-    const BasicSettings = lazySection(settingsSectionLoaders['basic']);
-    const HomeSettings = lazySection(settingsSectionLoaders['home']);
-    const ServiceSettings = lazySection(settingsSectionLoaders['service']);
-    const GlobalSettings = lazySection(settingsSectionLoaders['global']);
-    const SystemSettings = lazySection(settingsSectionLoaders['system']);
-    const WebdavBackupSettings = lazySection(settingsSectionLoaders['webdav']);
-    const ClientSettings = lazySection(settingsSectionLoaders['client']);
-    const CustomPageSettings = lazySection(settingsSectionLoaders['custom-page']);
 
     const props = defineProps({ sessionPaused: Boolean });
 
@@ -78,12 +57,11 @@
         }
     };
     const activeTab = ref(restoreActiveTab());
-    const visitedTabs = ref(new Set());
+
     const mountedTabs = new Set();
     watch(
         activeTab,
         (tab) => {
-            visitedTabs.value.add(tab);
             try {
                 sessionStorage.setItem(settingsTabStorageKey, tab);
             } catch {
@@ -124,7 +102,7 @@
         },
         { immediate: true }
     );
-    visitedTabs.value.add(activeTab.value);
+
     const notifyContentReady = () => {
         if (!isLoading.value && mountedTabs.has(activeTab.value)) {
             emit('content-ready', settingsRoutePath);
@@ -247,28 +225,6 @@
         notifyContentReady();
     };
 
-    const currentTabLabel = computed(() => {
-        switch (activeTab.value) {
-            case 'basic':
-                return t('settings.tabs.basic');
-            case 'home':
-                return t('settings.tabs.home');
-            case 'global':
-                return t('settings.tabs.global');
-            case 'service':
-                return t('settings.tabs.service');
-
-            case 'client':
-                return t('settings.tabs.client');
-            case 'system':
-                return t('settings.tabs.system');
-            case 'custom-page':
-                return t('settings.tabs.customPage');
-            default:
-                return t('settings.title');
-        }
-    });
-
     // 仅新布局需要的函数
     const handleOpenMigrationModal = () => {
         showMigrationModal.value = true;
@@ -321,117 +277,23 @@
             </h1>
         </div>
 
-        <SettingsLayout class="settings-page-layout h-full">
-            <template #sidebar>
-                <SettingsSidebar v-model:activeTab="activeTab" />
-            </template>
-
-            <div v-if="isLoading" class="text-center p-12">
-                <svg
-                    class="animate-spin h-8 w-8 text-indigo-500 mx-auto mb-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                >
-                    <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                    ></circle>
-                    <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                </svg>
-                <p class="text-gray-500">{{ t('settings.loading') }}</p>
-            </div>
-
-            <div v-else class="space-y-6 max-w-6xl w-full mx-auto">
-                <div
-                    class="hidden md:flex flex-wrap items-center justify-between gap-3 p-4 bg-white/70 dark:bg-gray-900/60 border border-gray-100/80 dark:border-white/10 misub-radius-lg shadow-sm"
-                >
-                    <div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                            {{ t('settings.currentModule') }}
-                        </p>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
-                            {{ currentTabLabel }}
-                        </p>
-                    </div>
-                    <div
-                        class="text-xs text-gray-500 dark:text-gray-400 bg-white/70 dark:bg-white/5 border border-gray-200/60 dark:border-white/10 px-3 py-1.5 misub-radius-pill"
-                    >
-                        {{ t('settings.saveHint') }}
-                    </div>
-                </div>
-                <BasicSettings
-                    v-if="visitedTabs.has('basic')"
-                    v-show="activeTab === 'basic'"
-                    :settings="settings"
-                    :disguiseConfig="disguiseConfig"
-                    :highlighted-focus-id="highlightedFocusId"
-                    @vue:mounted="handleSectionMounted('basic')"
-                />
-                <HomeSettings
-                    v-if="visitedTabs.has('home')"
-                    v-show="activeTab === 'home'"
-                    :settings="settings"
-                    @vue:mounted="handleSectionMounted('home')"
-                />
-                <GlobalSettings
-                    v-if="visitedTabs.has('global')"
-                    v-show="activeTab === 'global'"
-                    :settings="settings"
-                    @vue:mounted="handleSectionMounted('global')"
-                />
-                <ServiceSettings
-                    v-if="visitedTabs.has('service')"
-                    v-show="activeTab === 'service'"
-                    :settings="settings"
-                    @vue:mounted="handleSectionMounted('service')"
-                />
-                <ClientSettings
-                    v-if="visitedTabs.has('client')"
-                    v-show="activeTab === 'client'"
-                    @vue:mounted="handleSectionMounted('client')"
-                />
-                <CustomPageSettings
-                    v-if="visitedTabs.has('custom-page')"
-                    v-show="activeTab === 'custom-page'"
-                    :settings="settings"
-                    @vue:mounted="handleSectionMounted('custom-page')"
-                />
-                <div
-                    v-if="visitedTabs.has('system')"
-                    v-show="activeTab === 'system'"
-                    class="space-y-6"
-                >
-                    <WebdavBackupSettings :settings="settings" />
-                    <SystemSettings
-                        :settings="settings"
-                        :exportBackup="exportBackup"
-                        :importBackup="importBackup"
-                        :handleReset="handleReset"
-                        @migrate="handleOpenMigrationModal"
-                        @vue:mounted="handleSectionMounted('system')"
-                    />
-                </div>
-            </div>
-
-            <template #footer>
-                <div ref="bottomSaveAction">
-                    <SettingsSaveButton
-                        :is-saving="isSaving"
-                        :disabled="isSaveDisabled"
-                        @save="handleSave"
-                    />
-                </div>
-            </template>
-        </SettingsLayout>
+        <SettingsContent
+            v-model:active-tab="activeTab"
+            :settings="settings"
+            :disguise-config="disguiseConfig"
+            :is-loading="isLoading"
+            :is-saving="isSaving"
+            :save-disabled="isSaveDisabled"
+            :highlighted-focus-id="highlightedFocusId"
+            layout-class="settings-page-layout h-full"
+            :export-backup="exportBackup"
+            :import-backup="importBackup"
+            :handle-reset="handleReset"
+            @save="handleSave"
+            @migrate="handleOpenMigrationModal"
+            @section-mounted="handleSectionMounted"
+            @save-anchor="bottomSaveAction = $event"
+        />
 
         <Teleport to="body">
             <SettingsSaveButton

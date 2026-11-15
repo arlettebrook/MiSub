@@ -2,7 +2,7 @@
     import { useI18n } from '../../i18n/index.js';
 
     const { t } = useI18n();
-    import { ref, watch } from 'vue';
+    import { ref } from 'vue';
     import Modal from '../forms/Modal.vue';
     import SettingsPanel from './SettingsPanel.vue';
 
@@ -10,6 +10,7 @@
         show: Boolean,
         exportBackup: Function,
         importBackup: Function,
+        sessionPaused: Boolean,
     });
 
     const emit = defineEmits(['update:show']);
@@ -48,6 +49,7 @@
                 ref="settingsPanelRef"
                 :export-backup="props.exportBackup"
                 :import-backup="props.importBackup"
+                :session-paused="props.sessionPaused"
             />
         </template>
     </Modal>
