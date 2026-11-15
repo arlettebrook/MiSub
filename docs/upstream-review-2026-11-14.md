@@ -196,7 +196,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | XHTTP 高级参数双向映射       | 初次对照时只有 padding 等 9 个字段，`headers`、`xmux`、`downloadSettings` 会丢失；2026-11-15 已完成前后端高级参数映射及下载流安全继承修复 | 实施及验证详见下文；参考 `6ecc36cb`、`4ceac9aa`、`b34efa38`、`00f87185`、`47bcc1c7`、`e5e3e2ac`，保留本项目 packet-encoding 和 encryption 修复 |
 | HY2 参数兼容                 | 2026-11-15 已修复 peer、证书 pin、跳跃间隔和端口范围的解析 / 导出，并接入可等价表达的客户端字段                                           | 实施及客户端边界详见下文；参考 `510323ec`、`7861be59`、`d3fe8cad`                                                                              |
 | HTTP / HTTPS 代理            | 2026-11-15 已补齐 HTTP / TLS HTTP 代理的解析、导入导出和来源识别，已保存代理不再作为订阅地址抓取                                          | 实施和歧义地址处理详见下文；参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`                                                    |
-| `.mrs` 规则 provider         | 统一模板 renderer 复现输出 classical + `.yaml` path，缺 format；远程 Clash YAML 原样配置已有 mrs 保留测试                                 | 使用 mrs 的统一模板时参考 `44d39ef5`，输出合法 format / behavior / path；不需重做已支持的远程 YAML 路径                                        |
+| `.mrs` 规则 provider         | 2026-11-15 已补齐 INI / 统一模型输出的 mrs format、behavior 和缓存路径，原有远程 Clash YAML 显式配置继续保留                              | 实施及推断规则详见下文；参考 `44d39ef5`                                                                                                        |
 | Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                               |
 | v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                              |
 | 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                           |
@@ -252,6 +252,18 @@ Clash YAML 和 sing-box HTTP 出站配置可导入。内置 / INI 模板的 Clas
 新增 `tests/browser/http-proxy-boundaries.mjs`，使用真实 Chromium 和生产构建，模拟本地接口加载两个 HTTP / HTTPS 代理及一个带自定义端口的订阅源。中英文 × 1440 / 390 / 320px 共 6 个场景通过：代理出现在手动节点页，订阅出现在机场订阅页，节点内容适配小屏，没有因代理分类新增未捕获异常或把代理提交到订阅数量抓取接口。浏览器外部请求被拦截，没有读取生产订阅。临时配置、日志和截图保存在忽略目录 `tmp/http-*`。
 
 最终全量 180 个文件、1971 个用例全部通过，`npm run build`、Pages Functions 构建、改动文件格式检查及 `git diff --check` 通过。全量验证日志为 `tmp/http-proxy-final-unit.log`。
+
+### `.mrs` 规则 provider（2026-11-15）
+
+**实施进度：Mihomo MRS provider 输出兼容已完成。** 统一 Clash 模板 renderer 根据 URL pathname 识别 `.mrs`（不区分大小写，支持 query / fragment），输出 `format: mrs` 和 `./ruleset/<provider>.mrs` 缓存路径。provider 名称去掉扩展名，重复 URL 共用 provider，不同来源同名文件保持独立名称和规则引用。`ruleset=`、`[Rule] RULE-SET` 以及直接统一模型渲染均适用，生成阶段不抓取二进制规则内容。
+
+Mihomo 的 MRS 仅支持 `domain` 与 `ipcidr`，不能使用 `classical`。按上游约定，URL pathname 含独立 `/geoip/` 路段时输出 `ipcidr`，其他 `.mrs` 默认 `domain`；hostname 或 query 中出现 geoip 不改变行为。这是来源路径约定，不是读取 MRS 内容后自动识别。自定义 IP 规则地址如果没有 `/geoip/` 路段，应使用已支持的 Clash YAML profile，明确声明 `behavior: ipcidr`；该路径会保留 provider 自定义 format、behavior、path 和 interval。
+
+原有 YAML / ACL4SSR provider 映射和 IP CIDR 规则行为保留。文本 `.list` / `.txt` 同样改为以 pathname 判定，即使带签名查询参数仍输出 `format: text` 和 `.list` 缓存后缀，避免当成 YAML。
+
+新增 `tests/unit/rule-provider-mrs.test.js` 的 23 个回归用例，覆盖 geoip / geosite / 自定义域名规则、大小写、URL query / fragment、basename 和缓存路径、去重 / 同名规则、INI 与统一模型入口、原有 YAML / text / ACL4SSR 行为及实际 ProcessorService 远程模板链路。相关 3 个文件、66 个用例通过；全量 181 个文件、1994 个用例全部通过，`npm run build`、Pages Functions 构建、改动文件格式检查和 `git diff --check` 通过。
+
+使用已核验发布资产 SHA256 的官方 Mihomo v1.19.34，按其 [MRS 转换源码](https://github.com/MetaCubeX/mihomo/blob/v1.19.34/rules/provider/mrs_converter.go)通过 `convert-ruleset` 在本地生成 domain / ipcidr 二进制样例，再从本机 HTTP 服务加载统一模板生成的 4 个 provider。客户端 API 确认每个 provider 有 2 条规则，实际 `.mrs` 缓存文件与对应二进制内容一致；反例将 behavior 改成 classical 时客户端报告 invalid format，删去 format 时报告缺少 YAML payload，均未加载有效规则。验证只访问 localhost，没有下载线上规则或建立代理出口连接，受控客户端验证进程已退出。临时源码、样例、配置和日志位于忽略目录 `tmp/mrs-*`。
 
 ## 可以跳过，或不能直接照搬
 

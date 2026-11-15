@@ -118,8 +118,14 @@ function toClashRuleProviderUrl(sourceUrl) {
 
 function getRuleProviderBehavior(providerUrl) {
     try {
+        const pathname = new URL(providerUrl).pathname;
+        // MRS contains domain or IP CIDR data, never classical rule lines.
+        // Standard geodata releases distinguish them by /geoip/ vs /geosite/.
+        if (/\.mrs$/i.test(pathname)) {
+            return /\/geoip\//i.test(pathname) ? 'ipcidr' : 'domain';
+        }
         const fileName =
-            new URL(providerUrl).pathname
+            pathname
                 .split('/')
                 .pop()
                 ?.replace(/\.(yaml|yml|list|txt|conf)$/i, '') || '';
@@ -163,7 +169,7 @@ export function renderClashFromTemplateModel(model) {
                 urlPath
                     .split('/')
                     .pop()
-                    ?.replace(/\.(yaml|yml|list|txt|conf)$/i, '') || '';
+                    ?.replace(/\.(yaml|yml|list|txt|conf|mrs)$/i, '') || '';
             if (fileName) {
                 nameHint = fileName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
             }
@@ -173,14 +179,22 @@ export function renderClashFromTemplateModel(model) {
 
         const providerName = `${nameHint}_${providerCounter++}`;
         ruleProviderMap.set(providerUrl, providerName);
-        const usesTextList = /\.(list|txt)$/i.test(providerUrl);
+        let pathname = '';
+        try {
+            pathname = new URL(providerUrl).pathname;
+        } catch {
+            // Keep the existing invalid-URL fallback without breaking rendering.
+        }
+        const usesTextList = /\.(list|txt)$/i.test(pathname);
+        const usesMrs = /\.mrs$/i.test(pathname);
         ruleProviders[providerName] = {
             type: 'http',
             behavior: getRuleProviderBehavior(providerUrl),
             url: providerUrl,
-            path: `./ruleset/${providerName}.${usesTextList ? 'list' : 'yaml'}`,
+            path: `./ruleset/${providerName}.${usesTextList ? 'list' : usesMrs ? 'mrs' : 'yaml'}`,
             interval: 86400,
             ...(usesTextList ? { format: 'text' } : {}),
+            ...(usesMrs ? { format: 'mrs' } : {}),
         };
     });
 
