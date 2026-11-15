@@ -1,3 +1,4 @@
+import { isRemoteSubscriptionSource } from '../../shared/node-source.js';
 /**
  * API处理模块
  * 处理各种API请求
@@ -420,7 +421,7 @@ export async function handleMisubsSave(request, env) {
         if (finalMisubs && finalMisubs.length > 0) {
             try {
                 const notificationPromises = finalMisubs
-                    .filter((sub) => sub?.enabled && sub.url && sub.url.startsWith('http'))
+                    .filter((sub) => sub?.enabled && isRemoteSubscriptionSource(sub))
                     .map((sub) =>
                         checkAndNotify(sub, settings, env).catch((notifyError) => {
                             console.warn(

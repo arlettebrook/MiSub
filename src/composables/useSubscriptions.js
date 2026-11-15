@@ -1,3 +1,4 @@
+import { isRemoteSubscriptionSource, isManualNodeSource } from '../../shared/node-source.js';
 // FILE: src/composables/useSubscriptions.js
 import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
@@ -22,9 +23,7 @@ export function useSubscriptions(
 
     // Filtered computed property: Only http/https links are "Subscriptions"
     const subscriptions = computed(() => {
-        return (allSubscriptions.value || []).filter(
-            (sub) => sub.url && /^https?:\/\//.test(sub.url)
-        );
+        return (allSubscriptions.value || []).filter((sub) => isRemoteSubscriptionSource(sub));
     });
 
     const searchQuery = ref('');
@@ -100,7 +99,7 @@ export function useSubscriptions(
         const subToUpdate = subscriptions.value.find((s) => s.id === subId);
         if (!subToUpdate) return false;
         // Double check URL just in case
-        if (!subToUpdate.url.startsWith('http')) return false;
+        if (!isRemoteSubscriptionSource(subToUpdate)) return false;
 
         if (!isInitialLoad) {
             subToUpdate.isUpdating = true;
@@ -293,7 +292,7 @@ export function useSubscriptions(
         }
         markDirty();
 
-        const subsToUpdate = subs.filter((sub) => sub.url && sub.url.startsWith('http'));
+        const subsToUpdate = subs.filter((sub) => isRemoteSubscriptionSource(sub));
 
         if (subsToUpdate.length > 0) {
             showToast(t('subscriptions.batchUpdating', { count: subsToUpdate.length }), 'info');
@@ -325,7 +324,7 @@ export function useSubscriptions(
 
     async function batchUpdateAllSubscriptions() {
         const subsToUpdate = subscriptions.value.filter(
-            (sub) => sub.enabled && sub.url && sub.url.startsWith('http') && !sub.isUpdating
+            (sub) => sub.enabled && isRemoteSubscriptionSource(sub) && !sub.isUpdating
         );
 
         if (subsToUpdate.length === 0) {
@@ -435,7 +434,7 @@ export function useSubscriptions(
     async function autoUpdateAllSubscriptions() {
         try {
             const subsToUpdate = subscriptions.value.filter(
-                (sub) => sub.enabled && sub.url && sub.url.startsWith('http') && !sub.isUpdating
+                (sub) => sub.enabled && isRemoteSubscriptionSource(sub) && !sub.isUpdating
             );
             for (const sub of subsToUpdate) {
                 if (!autoUpdateEnabled || document.visibilityState === 'hidden') break;
@@ -497,8 +496,8 @@ export function useSubscriptions(
         // 1. Get all Manual Nodes (to preserve them)
         // We can't rely just on manualNodes computed because it might be filtered or not imported here.
         // Instead, filter from source of truth: allSubscriptions
-        const currentManualNodes = (allSubscriptions.value || []).filter(
-            (item) => !item.url || !/^https?:\/\//.test(item.url)
+        const currentManualNodes = (allSubscriptions.value || []).filter((item) =>
+            isManualNodeSource(item)
         );
 
         // 2. Combine New Ordered Subscriptions + Existing Manual Nodes

@@ -1,3 +1,4 @@
+import { isRemoteSubscriptionSource, isManualNodeSource } from '../../../shared/node-source.js';
 import { StorageFactory } from '../../storage-adapter.js';
 import {
     migrateConfigSettings,
@@ -687,7 +688,7 @@ export async function handleMisubRequest(context) {
                             baseSub &&
                             baseSub.enabled &&
                             typeof baseSub.url === 'string' &&
-                            baseSub.url.startsWith('http')
+                            (isRemoteSubscriptionSource(baseSub) || isManualNodeSource(baseSub))
                         ) {
                             // 如果是对象，则合并覆盖配置（Profile 级别的设置优先级更高）
                             const sub = isObject ? { ...baseSub, ...item } : baseSub;
@@ -705,7 +706,7 @@ export async function handleMisubRequest(context) {
                             node &&
                             node.enabled &&
                             typeof node.url === 'string' &&
-                            !node.url.startsWith('http')
+                            isManualNodeSource(node)
                         ) {
                             targetMisubs.push(node);
                         }
@@ -1026,7 +1027,7 @@ export async function handleMisubRequest(context) {
             }
         );
         const sourceNames = targetMisubs
-            .filter((s) => typeof s?.url === 'string' && s.url.startsWith('http'))
+            .filter((s) => isRemoteSubscriptionSource(s))
             .map((s) => s.name || s.url);
         // 仅在至少一个订阅源真正从远程拉取成功时才刷新缓存时间
         // 如果没有 HTTP 订阅源（纯手动节点/过期订阅组），则始终写入缓存
@@ -1078,17 +1079,13 @@ export async function handleMisubRequest(context) {
 
     const expectedRemoteNodeCount =
         targetMisubs.reduce((total, sub) => {
-            if (!sub?.enabled || typeof sub?.url !== 'string' || !sub.url.startsWith('http'))
-                return total;
+            if (!sub?.enabled || !isRemoteSubscriptionSource(sub)) return total;
             const knownCount = Math.max(
                 Number(sub.lastGoodNodeCount) || 0,
                 Number(sub.nodeCount) || 0
             );
             return total + (Number.isFinite(knownCount) && knownCount > 0 ? knownCount : 0);
-        }, 0) +
-        targetMisubs.filter(
-            (sub) => sub?.enabled && typeof sub?.url === 'string' && !sub.url.startsWith('http')
-        ).length;
+        }, 0) + targetMisubs.filter((sub) => sub?.enabled && isManualNodeSource(sub)).length;
 
     const { combinedNodeList, cacheHeaders } = await resolveNodeListWithCache({
         storageAdapter,
@@ -1110,7 +1107,7 @@ export async function handleMisubRequest(context) {
                 sub?.enabled &&
                 typeof sub.url === 'string' &&
                 sub.url.trim() &&
-                !sub.url.trim().toLowerCase().startsWith('http')
+                isManualNodeSource(sub)
         )
         .map((sub) =>
             fixNodeUrlEncoding(sub.url.trim(), { plusAsSpace: Boolean(sub.plusAsSpace) })

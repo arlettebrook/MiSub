@@ -5,6 +5,7 @@
 
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getUniqueName } from './name-utils.js';
+import { quoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import {
     POLICY_GROUPS,
     getBuiltinRules,
@@ -189,11 +190,11 @@ function buildQxLine(proxy) {
         const username = proxy.username || '';
         const password = proxy.password || '';
         const extraParts = [];
-        if (type === 'https') extraParts.push('over-tls=true');
+        if (type === 'https' || proxy.tls === true) extraParts.push('over-tls=true');
         if (proxy.sni || proxy.servername)
             extraParts.push(`tls-host=${proxy.sni || proxy.servername}`);
         appendQxTlsParams(extraParts, proxy);
-        return `http=${server}:${port}, username=${username}, password=${password}${extraParts.length > 0 ? `, ${extraParts.join(', ')}` : ''}, tag=${name}`;
+        return `http=${server.includes(':') ? `[${server}]` : server}:${port}, username=${quoteIniValue(username)}, password=${quoteIniValue(password)}${extraParts.length > 0 ? `, ${extraParts.join(', ')}` : ''}, tag=${name}`;
     }
 
     if (type === 'hysteria2' || type === 'hy2') {

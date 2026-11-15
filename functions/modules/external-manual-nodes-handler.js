@@ -12,6 +12,7 @@ import {
 } from './external-api-utils.js';
 import { detectNodeProtocol, isManualNode, toExternalManualNode } from './external-api-mappers.js';
 import { parseNodeList } from './utils/node-parser.js';
+import { markHttpProxyUrl } from '../../shared/node-source.js';
 
 function nowIso() {
     return new Date().toISOString();
@@ -67,7 +68,7 @@ export async function handleExternalManualNodesRequest(request, env, selector = 
         if (request.method !== 'POST')
             return createExternalError('method_not_allowed', 'Method Not Allowed', 405);
         const payload = await readExternalJson(request);
-        const candidateUrl = String(payload?.url || '').trim();
+        const candidateUrl = markHttpProxyUrl(String(payload?.url || '').trim());
         if (!candidateUrl)
             return createExternalError(
                 'manual_node_url_required',
@@ -144,7 +145,7 @@ export async function handleExternalManualNodesRequest(request, env, selector = 
                 'Manual node URL is required',
                 400
             );
-        if (!isManualNode(payload))
+        if (!isManualNode({ ...payload, url: markHttpProxyUrl(String(payload?.url || '').trim()) }))
             return createExternalError(
                 'invalid_manual_node_url',
                 'Manual node URL must use a supported node protocol',
@@ -156,7 +157,7 @@ export async function handleExternalManualNodesRequest(request, env, selector = 
         const item = {
             id: generateId('node'),
             name: String(payload.name).trim(),
-            url: String(payload.url).trim(),
+            url: markHttpProxyUrl(String(payload.url).trim()),
             enabled: payload.enabled !== false,
             group: String(payload.group || '').trim(),
             tags: normalizeStringArray(payload.tags),
@@ -179,7 +180,9 @@ export async function handleExternalManualNodesRequest(request, env, selector = 
         const updated = {
             ...current,
             ...(payload.name !== undefined ? { name: String(payload.name || '').trim() } : {}),
-            ...(payload.url !== undefined ? { url: String(payload.url || '').trim() } : {}),
+            ...(payload.url !== undefined
+                ? { url: markHttpProxyUrl(String(payload.url || '').trim()) }
+                : {}),
             ...(payload.enabled !== undefined ? { enabled: payload.enabled !== false } : {}),
             ...(payload.group !== undefined ? { group: String(payload.group || '').trim() } : {}),
             ...(payload.tags !== undefined ? { tags: normalizeStringArray(payload.tags) } : {}),

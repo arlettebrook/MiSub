@@ -3,15 +3,10 @@ import { useToastStore } from '../stores/toast.js';
 import { useDataStore } from '../stores/useDataStore.js';
 import { extractNodeName } from '../lib/utils.js';
 import { generateNodeId, generateSubscriptionId } from '../utils/id.js';
-import { COMMON_NODE_PROTOCOLS, createProtocolRegex } from '@/constants/nodeProtocols.js';
 import { normalizeManualNodeGroupName } from './manual-nodes/groups.js';
 import { parseSurgeConfig } from '../utils/protocolConverter.js';
 import { t } from '../i18n/index.js';
-
-const BULK_IMPORT_NODE_PROTOCOLS = COMMON_NODE_PROTOCOLS.filter(
-    (protocol) => protocol !== 'http' && protocol !== 'https'
-);
-const BULK_IMPORT_NODE_REGEX = createProtocolRegex(BULK_IMPORT_NODE_PROTOCOLS, false);
+import { isManualNodeSource, isRemoteSubscriptionSource } from '../../shared/node-source.js';
 
 export function useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk }) {
     const { showToast } = useToastStore();
@@ -74,12 +69,12 @@ export function useBulkImportLogic({ addSubscriptionsFromBulk, addNodesFromBulk 
                 notes: '',
             };
 
-            if (/^https?:\/\//.test(line)) {
+            if (isRemoteSubscriptionSource(line)) {
                 // 去重检查：订阅 URL
                 if (!existingUrls.has(line)) {
                     validSubs.push({ ...baseItem, id: generateSubscriptionId() });
                 }
-            } else if (BULK_IMPORT_NODE_REGEX.test(line)) {
+            } else if (isManualNodeSource(line)) {
                 // 避免重复添加已从 Surge 格式解析的节点
                 const alreadyParsed = validNodes.some((n) => n.url === line);
                 // 去重检查：节点 URL

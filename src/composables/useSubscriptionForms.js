@@ -3,6 +3,7 @@ import { useToastStore } from '../stores/toast.js';
 import { generateSubscriptionId } from '../utils/id.js';
 import { t } from '../i18n/index.js';
 import { validateUserAgent } from '../../shared/user-agents.js';
+import { isRemoteSubscriptionSource } from '../../shared/node-source.js';
 
 const isDev = import.meta.env.DEV;
 
@@ -61,7 +62,7 @@ export function useSubscriptionForms({ addSubscription, updateSubscription }) {
             showToast(t('subscriptions.urlRequired'), 'error');
             return;
         }
-        if (!/^https?:\/\//i.test(editingSubscription.value.url)) {
+        if (!isRemoteSubscriptionSource(editingSubscription.value)) {
             showToast(t('subscriptions.invalidUrl'), 'error');
             return;
         }

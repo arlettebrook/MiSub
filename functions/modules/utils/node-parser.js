@@ -14,12 +14,13 @@ import { validateSS2022Node, fixSS2022Node } from './ss2022-validator.js';
 import { extractNodeMetadata } from './metadata-extractor.js';
 import { splitIniFields, unquoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import { hysteria2IniOptionToQuery } from '../../../src/utils/protocols/common/hysteria2-params.js';
+import { parseHttpProxyEndpoint, markHttpProxyUrl } from '../../../shared/node-source.js';
 
 /**
  * 支持的节点协议正则表达式
  */
 export const NODE_PROTOCOL_REGEX =
-    /^(ss|ssr|vmess|vless|trojan|hysteria2|hy2|hysteria|tuic|snell|naive\+https?|naive\+quic|socks5|socks|http|anytls|wireguard):\/\//i;
+    /^(ss|ssr|vmess|vless|trojan|hysteria2|hy2|hysteria|tuic|snell|naive\+https?|naive\+quic|socks5|socks|https?|anytls|wireguard):\/\//i;
 
 /**
  * 尝试解析 Surge 或 Quantumult X 格式的节点字符串
@@ -59,6 +60,7 @@ function parseSurgeOrQxLine(line) {
                     ) {
                         if (proxy.type === 'vless' || proxy.type === 'vmess') proxy.uuid = v;
                         else if (proxy.type === 'snell') proxy.psk = v;
+                        else if (k === 'username') proxy.username = v;
                         else proxy.password = v;
                     }
                     if (k === 'private-key') proxy['private-key'] = v;
@@ -69,6 +71,18 @@ function parseSurgeOrQxLine(line) {
                         if (proxy.type === 'tuic') proxy.token = proxy.password = v;
                     }
                     if (k === 'sni') proxy.sni = v;
+                    if (
+                        (proxy.type === 'http' || proxy.type === 'https') &&
+                        ['tls', 'over-tls'].includes(k)
+                    )
+                        proxy.tls = v === 'true';
+                    if ((proxy.type === 'http' || proxy.type === 'https') && k === 'alpn')
+                        proxy.alpn = v.split(',');
+                    if (
+                        (proxy.type === 'http' || proxy.type === 'https') &&
+                        k === 'client-fingerprint'
+                    )
+                        proxy['client-fingerprint'] = v;
                     if (k === 'skip-cert-verify' && v === 'true') proxy.skipCertVerify = true;
                     if (k === 'encrypt-method' || k === 'cipher' || k === 'method')
                         proxy.cipher = v;
@@ -118,6 +132,9 @@ function parseSurgeOrQxLine(line) {
                         if (positionalIndex === 0) proxy.password = val;
                     } else if (proxy.type === 'snell') {
                         if (positionalIndex === 0) proxy.psk = val;
+                    } else if (proxy.type === 'http' || proxy.type === 'https') {
+                        if (positionalIndex === 0) proxy.username = val;
+                        else if (positionalIndex === 1) proxy.password = val;
                     }
                     positionalIndex++;
                 }
@@ -128,7 +145,7 @@ function parseSurgeOrQxLine(line) {
 
     // QX 格式: "protocol=server:port, key=value, ..., tag=name"
     match = line.match(
-        /^(shadowsocks|ss|ssr|vmess|vless|trojan|hysteria2?|hy2|hysteria|tuic|snell|anytls|socks5|http|https|wireguard)\s*=\s*([^,:]+?)\s*:\s*(\d+)(.*)$/i
+        /^(shadowsocks|ss|ssr|vmess|vless|trojan|hysteria2?|hy2|hysteria|tuic|snell|anytls|socks5|http|https|wireguard)\s*=\s*(\[[^\]]+\]|[^,:]+?)\s*:\s*(\d+)(.*)$/i
     );
     if (match) {
         const proxy = {
@@ -156,12 +173,15 @@ function parseSurgeOrQxLine(line) {
                         k === 'uuid'
                     ) {
                         if (proxy.type === 'vless' || proxy.type === 'vmess') proxy.uuid = v;
+                        else if (k === 'username') proxy.username = v;
                         else proxy.password = v;
                     }
                     if (k === 'token') {
                         if (proxy.type === 'tuic') proxy.token = proxy.password = v;
                     }
                     if (k === 'sni' || k === 'tls-host' || k === 'obfs-host') proxy.sni = v;
+                    if ((proxy.type === 'http' || proxy.type === 'https') && k === 'over-tls')
+                        proxy.tls = v === 'true';
                     if (k === 'tls-verification' && v === 'false') proxy.skipCertVerify = true;
                     if (k === 'method' || k === 'cipher') {
                         // `none` 是 Shadowsocks 的合法配置，不能在解析阶段被抹掉
@@ -285,7 +305,9 @@ export function extractValidNodes(text) {
 
     for (const line of lines) {
         if (NODE_PROTOCOL_REGEX.test(line)) {
-            nodes.push(line);
+            if (/^https?:\/\//i.test(line)) {
+                if (parseHttpProxyEndpoint(line)) nodes.push(markHttpProxyUrl(line));
+            } else nodes.push(line);
             continue;
         }
 

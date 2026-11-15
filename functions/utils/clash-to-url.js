@@ -4,6 +4,7 @@ import {
     getXhttpHost,
 } from '../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../shared/proxy-address.js';
+import { convertHttpToUrl } from '../../src/utils/protocols/converters/http.js';
 import {
     getHysteria2CertificatePin,
     getHysteria2HopInterval,
@@ -38,6 +39,7 @@ export function convertClashProxyToUrl(proxy) {
         const port = proxy.port;
 
         if (!proxy.server || !server || !port) return null;
+        if (type === 'http' || type === 'https') return convertHttpToUrl(proxy);
 
         if (type === 'ss' || type === 'shadowsocks') {
             const userInfo = base64Encode(`${proxy.cipher}:${proxy.password}`);
@@ -267,14 +269,6 @@ export function convertClashProxyToUrl(proxy) {
                     ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
                     : '';
             return `socks5://${auth}${uriServer}:${port}#${encodeURIComponent(name)}`;
-        }
-
-        if (type === 'http') {
-            const auth =
-                proxy.username && proxy.password
-                    ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
-                    : '';
-            return `http://${auth}${uriServer}:${port}#${encodeURIComponent(name)}`;
         }
 
         if (type === 'snell') {

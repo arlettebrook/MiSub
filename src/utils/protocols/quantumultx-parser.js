@@ -1,5 +1,7 @@
 import { generateNodeId } from '../id.js';
 import { base64Encode } from './common/base64.js';
+import { splitIniFields, unquoteIniValue } from './common/ini.js';
+import { convertHttpToUrl } from './converters/http.js';
 
 /**
  * 解析Quantumult X配置
@@ -35,7 +37,7 @@ export function parseQuantumultXConfig(content) {
         } else if (trimmedLine.toLowerCase().startsWith('anytls')) {
             const node = parseQuantumultXAnyTLS(trimmedLine);
             if (node) nodes.push(node);
-        } else if (trimmedLine.toLowerCase().startsWith('http')) {
+        } else if (/^https?\s*=/i.test(trimmedLine)) {
             const node = parseQuantumultXHTTP(trimmedLine);
             if (node) nodes.push(node);
         }
@@ -570,7 +572,38 @@ function parseQuantumultXHTTP(line) {
         if (equalIndex === -1) return null;
 
         const config = line.slice(equalIndex + 1);
-        const params = config.split(',').map((p) => p.trim());
+        const params = splitIniFields(config);
+
+        const endpoint = parseServerPortToken(params[0]);
+        if (endpoint && /^\d+$/.test(endpoint.port)) {
+            const fields = parseKeyValueParams(params.slice(1));
+            const proxy = {
+                type: 'http',
+                server: endpoint.server,
+                port: endpoint.port,
+                name: unquoteIniValue(fields.get('tag') || 'HTTP'),
+                username: unquoteIniValue(fields.get('username') || ''),
+                password: unquoteIniValue(fields.get('password') || ''),
+                tls:
+                    line.trim().toLowerCase().startsWith('https') ||
+                    fields.get('over-tls') === 'true',
+                sni: fields.get('tls-host') || fields.get('sni'),
+                'skip-cert-verify': fields.has('tls-verification')
+                    ? fields.get('tls-verification') === 'false'
+                    : undefined,
+            };
+            const url = convertHttpToUrl(proxy);
+            return url
+                ? {
+                      id: generateNodeId(),
+                      name: proxy.name,
+                      url,
+                      enabled: true,
+                      protocol: proxy.tls ? 'https' : 'http',
+                      source: 'quantumultx',
+                  }
+                : null;
+        }
 
         if (params.length < 3) return null;
 

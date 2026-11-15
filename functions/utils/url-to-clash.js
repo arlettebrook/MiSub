@@ -5,6 +5,7 @@
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
 import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address.js';
+import { parseHttpProxyEndpoint } from '../../shared/node-source.js';
 import {
     getHysteria2CertificatePin,
     getHysteria2HopInterval,
@@ -1243,46 +1244,26 @@ function parseAnytlsUrl(url) {
  * @param {string} url - HTTPS URL
  * @returns {Object|null} Clash 代理对象
  */
-function parseHttpsUrl(url) {
+function parseHttpsUrl(url, isTls = true) {
     try {
-        // https://username:password@server:port?params#name
-        const body = url.substring(8);
-        const atIndex = body.indexOf('@');
-        if (atIndex === -1) return null;
-
-        let userInfo = body.substring(0, atIndex);
-        let serverPart = body.substring(atIndex + 1);
-
-        const queryIndex = serverPart.indexOf('?');
-        const hashIndex = serverPart.indexOf('#');
-        if (queryIndex !== -1) {
-            serverPart = serverPart.substring(0, queryIndex);
-        } else if (hashIndex !== -1) {
-            serverPart = serverPart.substring(0, hashIndex);
-        }
-
-        const { server, port } = parseHostPort(serverPart);
-        const params = parseQueryParams(url);
+        const endpoint = parseHttpProxyEndpoint(url);
+        if (!endpoint) return null;
+        const server = normalizeProxyHost(endpoint.url.hostname);
+        const port = endpoint.port;
+        const params = endpoint.url.searchParams;
         const name = extractName(url);
-
-        let username = '';
-        let password = '';
-        const colonIndex = userInfo.indexOf(':');
-        if (colonIndex !== -1) {
-            username = decodeURIComponent(userInfo.substring(0, colonIndex));
-            password = decodeURIComponent(userInfo.substring(colonIndex + 1));
-        } else {
-            username = decodeURIComponent(userInfo);
-        }
+        const username = decodeURIComponent(endpoint.url.username);
+        const password = decodeURIComponent(endpoint.url.password);
 
         const proxy = {
-            name: name || `HTTPS-${server}`,
-            type: 'https',
+            name: name || `${isTls ? 'HTTPS' : 'HTTP'}-${server}`,
+            type: 'http',
             server,
             port,
             username,
             password,
         };
+        if (isTls) proxy.tls = true;
 
         if (params.get('sni')) {
             proxy.servername = params.get('sni');
@@ -1294,7 +1275,23 @@ function parseHttpsUrl(url) {
 
         if (params.get('allowInsecure') === '1' || params.get('insecure') === '1') {
             proxy['skip-cert-verify'] = true;
+        } else if (params.get('allowInsecure') === '0' || params.get('insecure') === '0') {
+            proxy['skip-cert-verify'] = false;
         }
+        if (params.get('fp')) proxy['client-fingerprint'] = params.get('fp');
+        if (params.get('alpn'))
+            proxy.alpn = params
+                .get('alpn')
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean);
+        const headers = Object.fromEntries(
+            [...params]
+                .filter(([key]) => key.startsWith('header-'))
+                .map(([key, value]) => [key.slice(7), value])
+        );
+        if (Object.keys(headers).length) proxy.headers = headers;
+        if (params.get('dp')) proxy['dialer-proxy'] = params.get('dp');
 
         proxy.udp = false;
         return proxy;
@@ -1497,6 +1494,8 @@ export function urlToClashProxy(url) {
         return parseAnytlsUrl(url);
     } else if (lowerUrl.startsWith('https://')) {
         return parseHttpsUrl(url);
+    } else if (lowerUrl.startsWith('http://')) {
+        return parseHttpsUrl(url, false);
     } else if (lowerUrl.startsWith('socks5://')) {
         return parseSocks5Url(url);
     }

@@ -1,3 +1,4 @@
+import { isRemoteSubscriptionSource } from '../../../shared/node-source.js';
 import { DEFAULT_USER_AGENT } from '../../../shared/user-agents.js';
 
 /**
@@ -96,7 +97,7 @@ export async function handleNodeCountRequest(request, env) {
             plusAsSpace,
             userAgent: customUserAgent,
         } = await readJsonWithLimit(request, JSON_BODY_LIMITS.normal);
-        if (!subUrl || typeof subUrl !== 'string' || !/^https?:\/\//i.test(subUrl)) {
+        if (!isRemoteSubscriptionSource(subUrl)) {
             return createErrorResponse('Invalid or missing url', 400);
         }
 
@@ -528,7 +529,7 @@ export async function handleBatchUpdateNodesRequest(request, env) {
                 subscriptionIds.includes(sub.id) &&
                 sub.enabled &&
                 sub.url &&
-                sub.url.startsWith('http')
+                isRemoteSubscriptionSource(sub)
         );
 
         if (targetSubscriptions.length === 0) {

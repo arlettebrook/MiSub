@@ -2,6 +2,7 @@ import { generateNodeId } from '../id.js';
 import { base64Encode } from './common/base64.js';
 import { splitIniFields, unquoteIniValue } from './common/ini.js';
 import { hysteria2IniOptionToQuery } from './common/hysteria2-params.js';
+import { convertHttpToUrl } from './converters/http.js';
 
 export function parseLoonConfig(content) {
     const nodes = [];
@@ -24,7 +25,7 @@ export function parseLoonConfig(content) {
         } else if (lower.includes(' = vless,')) {
             const node = parseLoonVless(line);
             if (node) nodes.push(node);
-        } else if (lower.includes(' = http,')) {
+        } else if (/\s*=\s*https?\s*,/i.test(line)) {
             const node = parseLoonHttp(line);
             if (node) nodes.push(node);
         } else if (lower.includes(' = hysteria2,')) {
@@ -181,18 +182,31 @@ function parseLoonVless(line) {
 }
 
 function parseLoonHttp(line) {
-    const parsed = parseNameAndParams(line);
+    const parsed = parseNameAndParams(line, splitIniFields);
     if (!parsed) return null;
-    const [protocol, server, port, username, password] = parsed.params;
-    if (protocol.toLowerCase() !== 'http' || !server || !port) return null;
-    const auth =
-        username && password
-            ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`
-            : '';
+    const [protocol, server, port, ...extra] = parsed.params;
+    if (!/^https?$/i.test(protocol) || !server || !port) return null;
+    const proxy = { type: protocol.toLowerCase(), name: parsed.name, server, port };
+    let positional = 0;
+    for (const field of extra) {
+        const index = /^["']/.test(field) ? -1 : field.indexOf('=');
+        if (index < 0) {
+            proxy[positional++ === 0 ? 'username' : 'password'] = unquoteIniValue(field);
+            continue;
+        }
+        const key = field.slice(0, index).trim().toLowerCase(),
+            value = unquoteIniValue(field.slice(index + 1));
+        if (['username', 'password', 'sni', 'alpn', 'client-fingerprint'].includes(key))
+            proxy[key] = value;
+        if (key === 'over-tls' || key === 'tls') proxy.tls = value === 'true';
+        if (key === 'skip-cert-verify') proxy[key] = value === 'true';
+    }
+    const url = convertHttpToUrl(proxy);
+    if (!url) return null;
     return {
         id: generateNodeId(),
         name: parsed.name,
-        url: `http://${auth}${server}:${port}#${encodeURIComponent(parsed.name)}`,
+        url,
         enabled: true,
         protocol: 'http',
         source: 'loon',

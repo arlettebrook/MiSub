@@ -6,6 +6,7 @@
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
 import { applyHysteria2SingboxOptions } from '../../../src/utils/protocols/common/hysteria2-params.js';
+import { applyHttpSingboxOptions } from '../../../src/utils/protocols/common/http-params.js';
 import { getUniqueName } from './name-utils.js';
 import { groupNodeLinesByRegion } from './region-groups.js';
 import {
@@ -244,14 +245,7 @@ function buildOutbound(proxy) {
         outbound.type = 'http';
         outbound.server = server;
         outbound.server_port = port;
-        if (proxy.username) outbound.username = proxy.username;
-        if (proxy.password) outbound.password = proxy.password;
-        if (type === 'https') {
-            outbound.tls = {
-                enabled: true,
-                server_name: proxy.sni || proxy.servername || server,
-            };
-        }
+        return applyHttpSingboxOptions(outbound, proxy);
     } else if (type === 'socks5' || type === 'socks5-tls') {
         outbound.type = 'socks';
         outbound.server = server;

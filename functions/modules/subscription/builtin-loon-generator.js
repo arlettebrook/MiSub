@@ -213,6 +213,18 @@ function clashProxyToLoonResult(proxy) {
             parts.push(`salamander-password=${quoteIniValue(proxy['obfs-password'])}`);
         }
         appendTlsParams(parts, proxy);
+    } else if (type === 'http' || type === 'https') {
+        parts.push(
+            `${name} = http`,
+            server,
+            String(port),
+            quoteIniValue(proxy.username || ''),
+            quoteIniValue(proxy.password || '')
+        );
+        if (type === 'https' || proxy.tls === true) {
+            parts.push('over-tls=true');
+            appendTlsParams(parts, proxy);
+        }
     } else if (type === 'tuic') {
         parts.push(`${name} = tuic`);
         parts.push(server);

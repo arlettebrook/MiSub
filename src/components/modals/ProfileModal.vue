@@ -1,4 +1,6 @@
 <script setup>
+    import { isRemoteSubscriptionSource } from '../../../shared/node-source.js';
+
     import { ref, watch, computed } from 'vue';
     import Modal from '../forms/Modal.vue';
     import ProfileForm from './ProfileModal/ProfileForm.vue';
@@ -109,7 +111,7 @@
 
     const selectableSubscriptions = computed(() => {
         return (props.allSubscriptions || []).filter(
-            (sub) => sub.enabled && sub.url && /^https?:\/\//.test(sub.url)
+            (sub) => sub.enabled && isRemoteSubscriptionSource(sub)
         );
     });
 

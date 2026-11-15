@@ -1,5 +1,6 @@
+import { isRemoteSubscriptionSource } from '../../../shared/node-source.js';
 export function buildAutoSortedSubscriptions(allSubscriptions, manualNodes) {
-    const subs = allSubscriptions.filter((s) => s.url && /^https?:\/\//.test(s.url));
+    const subs = allSubscriptions.filter((s) => isRemoteSubscriptionSource(s));
     const nodes = [...manualNodes];
 
     const regionKeywords = {

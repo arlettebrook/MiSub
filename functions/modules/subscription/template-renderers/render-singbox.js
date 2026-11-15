@@ -1,6 +1,7 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { getVlessPacketEncoding } from '../../../../src/utils/protocols/common/vless-params.js';
 import { applyHysteria2SingboxOptions } from '../../../../src/utils/protocols/common/hysteria2-params.js';
+import { applyHttpSingboxOptions } from '../../../../src/utils/protocols/common/http-params.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
 import { buildSingboxDnsConfig, DNS_PROXY_GROUP, SINGBOX_CN_RULE_SET } from '../safe-dns.js';
 import { getSingboxDnsRuleSet, pinRemoteRuleUrl } from '../builtin-rules-provider.js';
@@ -22,6 +23,12 @@ function buildOutbound(proxy) {
     const server = proxy.server;
     const serverPort = parsePort(proxy.port);
     if (!serverPort) return null;
+    if (type === 'http' || type === 'https') {
+        return applyHttpSingboxOptions(
+            { tag, type: 'http', server, server_port: serverPort },
+            proxy
+        );
+    }
 
     if (type === 'trojan') {
         return {

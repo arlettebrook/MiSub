@@ -16,6 +16,7 @@ import {
 } from './manual-nodes/groups.js';
 import { t } from '../i18n/index.js';
 import { readStorage, writeStorage } from '../utils/browser-storage.js';
+import { markHttpProxyUrl, isRemoteSubscriptionSource } from '../../shared/node-source.js';
 
 export function useManualNodes(markDirty) {
     const { showToast } = useToastStore();
@@ -122,6 +123,7 @@ export function useManualNodes(markDirty) {
     function addNode(node) {
         const normalizedNode = {
             ...node,
+            url: markHttpProxyUrl(node.url),
             group: normalizeManualNodeGroupName(node.group),
         };
         if (!normalizedNode.name) {
@@ -136,6 +138,7 @@ export function useManualNodes(markDirty) {
     function updateNode(updatedNode) {
         const normalizedNode = {
             ...updatedNode,
+            url: markHttpProxyUrl(updatedNode.url),
             group: normalizeManualNodeGroupName(updatedNode.group),
         };
         // Update in shared store
@@ -177,6 +180,7 @@ export function useManualNodes(markDirty) {
         // Reverse insert so they appear in correct order when unshifted
         for (let i = nodes.length - 1; i >= 0; i--) {
             const node = { ...nodes[i] };
+            node.url = markHttpProxyUrl(node.url);
             node.group = normalizeManualNodeGroupName(normalizedGroupName || node.group);
             dataStore.addSubscription(node);
         }
@@ -285,8 +289,8 @@ export function useManualNodes(markDirty) {
                 : reorderedVisibleNodes;
 
         // 1. Get all Subscriptions (to preserve them)
-        const currentSubscriptions = (allSubscriptions.value || []).filter(
-            (item) => item.url && /^https?:\/\//.test(item.url)
+        const currentSubscriptions = (allSubscriptions.value || []).filter((item) =>
+            isRemoteSubscriptionSource(item)
         );
 
         // 2. Combine Existing Subscriptions + New Ordered Manual Nodes

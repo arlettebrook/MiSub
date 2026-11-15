@@ -1,3 +1,4 @@
+import { isRemoteSubscriptionSource } from '../../shared/node-source.js';
 import { DEFAULT_USER_AGENT } from '../../shared/user-agents.js';
 
 /**
@@ -124,7 +125,9 @@ export async function handleCronTrigger(env) {
     const allSubs = JSON.parse(JSON.stringify(originalSubs));
     const settings = (await storageAdapter.get(KV_KEY_SETTINGS)) || DEFAULT_SETTINGS;
 
-    const httpSubscriptions = allSubs.filter((sub) => sub.url.startsWith('http') && sub.enabled);
+    const httpSubscriptions = allSubs.filter(
+        (sub) => isRemoteSubscriptionSource(sub) && sub.enabled
+    );
 
     console.info(`[Cron] Starting parallel update for ${httpSubscriptions.length} subscriptions`);
     const startTime = Date.now();

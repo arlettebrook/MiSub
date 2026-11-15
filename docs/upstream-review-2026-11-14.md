@@ -195,7 +195,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | XHTTP 高级参数双向映射       | 初次对照时只有 padding 等 9 个字段，`headers`、`xmux`、`downloadSettings` 会丢失；2026-11-15 已完成前后端高级参数映射及下载流安全继承修复 | 实施及验证详见下文；参考 `6ecc36cb`、`4ceac9aa`、`b34efa38`、`00f87185`、`47bcc1c7`、`e5e3e2ac`，保留本项目 packet-encoding 和 encryption 修复 |
 | HY2 参数兼容                 | 2026-11-15 已修复 peer、证书 pin、跳跃间隔和端口范围的解析 / 导出，并接入可等价表达的客户端字段                                           | 实施及客户端边界详见下文；参考 `510323ec`、`7861be59`、`d3fe8cad`                                                                              |
-| HTTP / HTTPS 代理            | 当前普通 `http://` 转 Clash 返回 null，且不被 `isRealProxyNode` 识别；HTTPS 当前也需核对 type 与 TLS 表达                                 | 有此类节点时参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`；必须区分 HTTP 订阅地址与 HTTP 代理节点，避免把节点当订阅抓取      |
+| HTTP / HTTPS 代理            | 2026-11-15 已补齐 HTTP / TLS HTTP 代理的解析、导入导出和来源识别，已保存代理不再作为订阅地址抓取                                          | 实施和歧义地址处理详见下文；参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`                                                    |
 | `.mrs` 规则 provider         | 统一模板 renderer 复现输出 classical + `.yaml` path，缺 format；远程 Clash YAML 原样配置已有 mrs 保留测试                                 | 使用 mrs 的统一模板时参考 `44d39ef5`，输出合法 format / behavior / path；不需重做已支持的远程 YAML 路径                                        |
 | Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                               |
 | v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                              |
@@ -234,6 +234,24 @@ Surge 输出按[官方 HY2 文档](https://manual.nssurge.com/policies/hysteria2
 新增 `tests/unit/hysteria2-parameter-compatibility.test.js` 的 67 个回归用例，覆盖别名优先级、前后端 URI / YAML / INI 往返、官方多端口格式、间隔数值和 duration、非法输入、证书字段区别、带宽、混淆 / 密码、sing-box 两种生成入口以及正式订阅 HTTP 422 行为。相关 4 个文件、112 个用例通过；全量 178 个文件、1914 个用例全部通过。客户端校验后补齐单端口范围格式及带宽输出的专项复查也通过；最终 `npm run build`、Pages Functions 构建、改动文件格式检查和 `git diff --check` 通过。
 
 使用已按官方发布资产 SHA256 校验的 Mihomo v1.19.34 与 sing-box v1.14.4 Windows 二进制：前端 / 后端 / sing-box JSON 导入 × 域名 / IPv4 / IPv6 × 单值 / 范围间隔，检验 Mihomo 与 sing-box 内置 / 模板最小出站，再检查两个带 certificate fingerprint 的 Mihomo 配置，共 56 次客户端配置检查通过，另 4 次断言确认 sing-box 无法等价表示的证书 pin 会被拒绝。跳跃节点初始化会解析地址，验证配置使用本地 hosts DNS 解析器，没有向外部 DNS 发请求，也没有建立代理连接；这不代表实际服务端握手或全部模板的联网验证。验证日志、配置和源码位于忽略目录 `tmp/hy2-*`。
+
+### HTTP / HTTPS 代理（2026-11-15）
+
+**实施进度：HTTP / HTTPS 代理兼容已完成。** HTTP 和 HTTPS URI 均可解析为 Clash / Mihomo 的 `type: http`；HTTPS 明确添加 `tls: true`。前后端共用 HTTP 链接导出，按 `type=https` 或显式 `tls=true` 选择 HTTPS，不因单独的 SNI / 指纹字段给普通 HTTP 启用 TLS。认证允许无用户名密码、仅用户名或空用户名密码，特殊字符使用 URI 编码；显式主要端口（包括 80 / 443）、IPv6、SNI / peer、ALPN、ClientHello 指纹、证书校验开关、字符串请求头和 dialer-proxy 保留。
+
+新增 `shared/node-source.js`，统一手动节点与远程订阅来源识别。代理 endpoint 必须为 HTTP(S) 根路径及代理查询字段；根路径的认证信息、带显式端口的节点名 / 代理参数或明确节点标记可识别为代理。带 `/sub` 等路径、token / target 等订阅查询参数的地址继续作为远程订阅，不因自定义端口被当成代理。仅凭 `https://host:8443/` 无法判断是代理还是订阅，所以批量粘贴这类没有认证、节点名和代理参数的裸地址时保留订阅语义；用户在手动节点入口添加，或通过 Clash / sing-box / INI 代理配置导入时，记录 URL 中的 `proxy=1` 标记（仅在确需消除歧义时），保留默认端口。已有根路径命名 / 认证代理无需迁移。
+
+该来源规则用于前端节点 / 订阅列表、批量导入、排序和重排、订阅组选择，后端单节点 / 订阅组预览、正式订阅与缓存计数、保护性缓存、自动 / 批量刷新、外部 API，以及 Telegram 节点列表 / 导入 / 刷新分类。已识别代理不会被 fetch 当作订阅，真正的订阅仍可正常抓取；HTTP 代理也按真实节点写入保护性缓存。只改变 Telegram 分类与转换代码，没有通过 Telegram 发送真实消息。当前订阅组的旧 subscriptions 引用中若混入 HTTP 代理，也会当作节点保留。
+
+Clash YAML 和 sing-box HTTP 出站配置可导入。内置 / INI 模板的 Clash 与 sing-box 输出保留 HTTP 认证、TLS、SNI、ALPN和 HTTP headers；sing-box 使用原生 `type=http` 与 TLS 子配置，普通 HTTP 不启用 TLS。Surge、Loon 和 Quantumult X 使用各自 TLS HTTP 表达，并补齐 HTTP 节点导入：Surge 的 HTTPS 类型，Loon 的 `over-tls=true`，Quantumult X 的 `http=endpoint, ... over-tls=true`。Surge / Loon 的用户名密码和 Quantumult X 字符串值使用 INI 引号规则，后端 INI 解析支持 TLS、认证及 IPv6。Quantumult X 只把明确的 `http=` / `https=` 代理行作为节点，不将远程规则 URL 当成 HTTP 代理。
+
+新增 `tests/unit/http-proxy-compatibility.test.js` 的 53 个回归用例和 `http-proxy-ui-boundaries.test.js` 的 4 个用例，更新原先 HTTPS 类型及“HTTP 导出不能回环”的旧断言。覆盖来源歧义、带路径 / token / 自定义端口的订阅、认证与 IPv6、默认端口、显式节点入口、前后端 URI / YAML / sing-box / INI 往返、混合列表抓取、预览、保护性缓存、正式请求新鲜 / 缓存输出、刷新拒绝代理和外部手动节点创建。专项 3 个文件、64 个用例通过；最后的 Quantumult X / HY2 相关 4 个文件、131 个用例通过。
+
+官方 Mihomo v1.19.34 与 sing-box v1.14.4（沿用此前已按发布资产 SHA256 核验的 Windows 二进制）：前端 / 后端 × 域名 / IPv4 / IPv6 × 普通 HTTP / TLS HTTP × 无认证 / 仅用户名 / 完整认证，检验 Mihomo 与 sing-box 内置 / 模板的最小配置，共 108 次原生配置检查通过。检查不建立代理连接，不代表真实服务端认证或全部模板联网验证。
+
+新增 `tests/browser/http-proxy-boundaries.mjs`，使用真实 Chromium 和生产构建，模拟本地接口加载两个 HTTP / HTTPS 代理及一个带自定义端口的订阅源。中英文 × 1440 / 390 / 320px 共 6 个场景通过：代理出现在手动节点页，订阅出现在机场订阅页，节点内容适配小屏，没有因代理分类新增未捕获异常或把代理提交到订阅数量抓取接口。浏览器外部请求被拦截，没有读取生产订阅。临时配置、日志和截图保存在忽略目录 `tmp/http-*`。
+
+最终全量 180 个文件、1971 个用例全部通过，`npm run build`、Pages Functions 构建、改动文件格式检查及 `git diff --check` 通过。全量验证日志为 `tmp/http-proxy-final-unit.log`。
 
 ## 可以跳过，或不能直接照搬
 

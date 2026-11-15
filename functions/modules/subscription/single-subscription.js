@@ -4,6 +4,7 @@ import { parseNodeInfo } from '../utils/geo-utils.js';
 import { calculateProtocolStats, calculateRegionStats } from '../utils/node-parser.js';
 import { KV_KEY_SUBS } from '../config.js';
 import { fetchSubscriptionNodes } from './node-fetcher.js';
+import { isManualNodeSource } from '../../../shared/node-source.js';
 
 /**
  * 处理单个订阅模式的节点获取
@@ -39,7 +40,7 @@ export async function handleSingleSubscriptionMode(
     }
 
     // 检查是否为手工节点
-    if (!subscription.url.startsWith('http')) {
+    if (isManualNodeSource(subscription)) {
         // 手工节点：直接解析节点URL
         const nodeInfo = parseNodeInfo(subscription.url);
         const manualNodeResult = {

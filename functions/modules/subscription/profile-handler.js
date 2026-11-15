@@ -7,6 +7,7 @@ import { runOperatorChain } from '../../utils/operator-runner.js';
 import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS } from '../config.js';
 import { fetchSubscriptionNodes } from './node-fetcher.js';
 import { applyManualNodeName } from '../utils/node-cleaner.js';
+import { isManualNodeSource, isRemoteSubscriptionSource } from '../../../shared/node-source.js';
 
 function ensureArray(data) {
     if (!data) return [];
@@ -142,10 +143,15 @@ export async function handleProfileMode(
     // 1. Add subscriptions in order defined by profile
     const profileSubIds = profile.subscriptions || [];
     if (Array.isArray(profileSubIds)) {
-        profileSubIds.forEach((id) => {
+        profileSubIds.forEach((item) => {
+            const id = typeof item === 'object' ? item.id : item;
             const sub = misubMap.get(id);
-            if (sub && sub.enabled && sub.url.startsWith('http')) {
-                targetMisubs.push(sub);
+            if (
+                sub &&
+                sub.enabled &&
+                (isRemoteSubscriptionSource(sub) || isManualNodeSource(sub))
+            ) {
+                targetMisubs.push(typeof item === 'object' ? { ...sub, ...item } : sub);
             }
         });
     }
@@ -155,15 +161,15 @@ export async function handleProfileMode(
     if (Array.isArray(profileNodeIds)) {
         profileNodeIds.forEach((id) => {
             const node = misubMap.get(id);
-            if (node && node.enabled && !node.url.startsWith('http')) {
+            if (node && node.enabled && isManualNodeSource(node)) {
                 targetMisubs.push(node);
             }
         });
     }
 
     // 分离HTTP订阅和手工节点
-    const targetSubscriptions = targetMisubs.filter((item) => item.url.startsWith('http'));
-    const targetManualNodes = targetMisubs.filter((item) => !item.url.startsWith('http'));
+    const targetSubscriptions = targetMisubs.filter(isRemoteSubscriptionSource);
+    const targetManualNodes = targetMisubs.filter(isManualNodeSource);
 
     // 处理手工节点（直接解析节点URL）
     // 先将用户自定义名称写入 URL（与订阅生成流程保持一致），

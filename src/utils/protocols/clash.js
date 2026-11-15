@@ -43,6 +43,7 @@ export function convertClashProxyToUrl(proxy) {
         case 'socks5':
             return convertSocks5ToUrl(proxy);
         case 'http':
+        case 'https':
             return convertHttpToUrl(proxy);
         case 'wireguard':
             return convertWireguardToUrl(proxy);

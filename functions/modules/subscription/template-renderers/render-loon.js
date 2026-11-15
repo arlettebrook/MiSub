@@ -14,6 +14,16 @@ function buildProxyLine(proxy) {
     const server = proxy.server;
     const port = proxy.port;
     if (!server || !port) return null;
+    if (type === 'http' || type === 'https') {
+        const extras = [quoteIniValue(proxy.username || ''), quoteIniValue(proxy.password || '')];
+        if (type === 'https' || proxy.tls === true) {
+            extras.push('over-tls=true');
+            if (proxy.sni || proxy.servername)
+                extras.push(`sni=${quoteIniValue(proxy.servername || proxy.sni)}`);
+            if (proxy['skip-cert-verify'] === true) extras.push('skip-cert-verify=true');
+        }
+        return `${name} = http, ${server}, ${port}, ${extras.join(', ')}`;
+    }
 
     const sni = proxy.servername ?? proxy.sni;
 

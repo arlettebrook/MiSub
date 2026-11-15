@@ -1,5 +1,6 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
+import { quoteIniValue } from '../../../../src/utils/protocols/common/ini.js';
 
 function buildProxyLine(proxy) {
     const type = String(proxy.type || '').toLowerCase();
@@ -103,9 +104,10 @@ function buildProxyLine(proxy) {
     if (type === 'http' || type === 'https') {
         const extras = [];
         const sni = proxy.servername ?? proxy.sni;
-        if (type === 'https') extras.push('over-tls=true');
+        if (type === 'https' || proxy.tls === true) extras.push('over-tls=true');
         if (sni !== undefined) extras.push(`tls-host=${sni}`);
-        return `http=${server}:${port}, username=${proxy.username || ''}, password=${proxy.password || ''}${extras.length ? `, ${extras.join(', ')}` : ''}, tag=${name}`;
+        if (proxy['skip-cert-verify'] === true) extras.push('tls-verification=false');
+        return `http=${server.includes(':') ? `[${server}]` : server}:${port}, username=${quoteIniValue(proxy.username || '')}, password=${quoteIniValue(proxy.password || '')}${extras.length ? `, ${extras.join(', ')}` : ''}, tag=${name}`;
     }
     if (type === 'hysteria2' || type === 'hy2') {
         // Quantumult X rejects the Hysteria2 server syntax emitted by MiSub; omit it

@@ -2,6 +2,7 @@ import { generateNodeId } from '../id.js';
 import { splitIniFields, unquoteIniValue } from './common/ini.js';
 import { base64Encode } from './common/base64.js';
 import { hysteria2IniOptionToQuery } from './common/hysteria2-params.js';
+import { convertHttpToUrl } from './converters/http.js';
 
 /**
  * 解析Surge配置
@@ -42,6 +43,8 @@ export function parseSurgeConfig(content) {
         } else if (
             lowerLine.startsWith('http-proxy') ||
             lowerLine.startsWith('https-proxy') ||
+            valuePrefix === 'http' ||
+            valuePrefix === 'https' ||
             valuePrefix === 'http-proxy' ||
             valuePrefix === 'https-proxy'
         ) {
@@ -288,19 +291,36 @@ function parseSurgeHTTP(line) {
         const parts = line.match(/^([^=]+?)\s*=\s*(.+)$/);
         if (!parts) return null;
 
-        const params = parts[2].split(',').map((p) => p.trim());
-        const [protocol, server, port] = params;
-
+        const name = unquoteIniValue(parts[1].trim());
+        const [protocol, server, port, ...extra] = splitIniFields(parts[2]);
         if (!server || !port) return null;
-
-        const isHTTPS =
-            line.toLowerCase().startsWith('https-proxy') || protocol.toLowerCase() === 'https';
-        const urlProtocol = isHTTPS ? 'https' : 'http';
+        const proxy = {
+            name,
+            type: protocol.toLowerCase().includes('https') ? 'https' : 'http',
+            server,
+            port,
+        };
+        let positional = 0;
+        for (const field of extra) {
+            const index = /^["']/.test(field) ? -1 : field.indexOf('=');
+            if (index < 0) {
+                proxy[positional++ === 0 ? 'username' : 'password'] = unquoteIniValue(field);
+                continue;
+            }
+            const key = field.slice(0, index).trim().toLowerCase(),
+                value = unquoteIniValue(field.slice(index + 1));
+            if (['username', 'password', 'sni', 'alpn', 'client-fingerprint'].includes(key))
+                proxy[key] = value;
+            if (key === 'tls') proxy.tls = value === 'true';
+            if (key === 'skip-cert-verify') proxy[key] = value === 'true';
+        }
+        const url = convertHttpToUrl(proxy);
+        if (!url) return null;
 
         return {
             id: generateNodeId(),
-            name: name.trim().replace(/"/g, ''),
-            url: `${urlProtocol}://${server}:${port}#${encodeURIComponent(name.trim().replace(/"/g, ''))}`,
+            name,
+            url,
             enabled: true,
             protocol: protocol,
             source: 'surge',

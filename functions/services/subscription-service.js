@@ -19,6 +19,11 @@ import { runOperatorChain } from '../utils/operator-runner.js';
 import { createTimeoutFetch } from '../modules/utils.js';
 import { assertPublicNetworkUrl } from '../modules/security-utils.js';
 import { isSuspiciousNodeCountDrop, isCacheFilterCompatible } from './node-cache-service.js';
+import {
+    isManualNodeSource,
+    isRemoteSubscriptionSource,
+    isHttpProxyUrl,
+} from '../../shared/node-source.js';
 
 /**
  * 订阅获取配置常量
@@ -55,6 +60,7 @@ export function isRealProxyNode(node) {
     const trimmed = node.trim().toLowerCase();
     if (!trimmed) return false;
     if (isLocalProxyEndpoint(trimmed)) return false;
+    if (isHttpProxyUrl(trimmed)) return true;
     return REAL_PROXY_PROTOCOLS.some((protocol) => trimmed.startsWith(protocol));
 }
 
@@ -443,7 +449,7 @@ export async function generateCombinedNodeList(
     // 重构后的手动节点处理逻辑
     const manualSubSourceGroups = misubs.filter((sub) => {
         const url = typeof sub?.url === 'string' ? sub.url.trim() : '';
-        return Boolean(url) && !url.toLowerCase().startsWith('http');
+        return Boolean(url) && isManualNodeSource(sub);
     });
 
     let manualProcessedLines = [];
@@ -480,9 +486,7 @@ export async function generateCombinedNodeList(
     }
     const processedManualNodes = manualProcessedLines.join('\n');
 
-    const httpSubs = misubs.filter(
-        (sub) => sub && sub.url && sub.url.toLowerCase().startsWith('http')
-    );
+    const httpSubs = misubs.filter((sub) => isRemoteSubscriptionSource(sub));
     const limiter = createConcurrencyLimiter(FETCH_CONFIG.CONCURRENCY);
     let upstreamSuccessCount = 0; // 追踪真正从远程拉取成功的订阅数（不含 per-sub 缓存回退）
     let acceptedEmptySourceCount = 0;

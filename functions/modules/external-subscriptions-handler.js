@@ -84,7 +84,7 @@ export async function inspectRemoteSubscription(env, payload = {}) {
             message: 'Subscription URL is required',
             status: 400,
         };
-    if (!/^https?:\/\//i.test(requestedUrl))
+    if (!isRemoteSubscription({ url: requestedUrl }))
         return {
             ok: false,
             errorCode: 'invalid_subscription_url',

@@ -250,13 +250,14 @@ function clashProxyToSurgeResult(proxy) {
         return buildWireGuardResult(name, proxy);
     } else if (type === 'http' || type === 'https') {
         // 格式: name = http/https, server, port, username, password
-        parts.push(`${name} = ${type}`);
+        const httpTls = type === 'https' || proxy.tls === true;
+        parts.push(`${name} = ${httpTls ? 'https' : 'http'}`);
         parts.push(server);
         parts.push(String(port));
         // HTTP(S) 的用户名和密码是位置参数
-        parts.push(proxy.username || '');
-        parts.push(proxy.password || '');
-        if (type === 'https') appendTlsParams(parts, proxy);
+        parts.push(quoteIniValue(proxy.username || ''));
+        parts.push(quoteIniValue(proxy.password || ''));
+        if (httpTls) appendTlsParams(parts, proxy);
     } else if (type === 'socks5' || type === 'socks5-tls') {
         // 格式: name = socks5/socks5-tls, server, port, username, password
         parts.push(`${name} = ${type}`);

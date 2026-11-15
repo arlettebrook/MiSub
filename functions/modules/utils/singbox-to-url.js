@@ -10,6 +10,7 @@
 
 import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../../shared/proxy-address.js';
+import { convertHttpToUrl } from '../../../src/utils/protocols/converters/http.js';
 import {
     normalizeHysteria2Ports,
     normalizeHysteria2HopInterval,
@@ -87,6 +88,28 @@ export function singboxOutboundToUrl(ob) {
     const hash = name ? `#${encodeURIComponent(name)}` : '';
 
     switch (type) {
+        case 'http': {
+            const headers = Object.fromEntries(
+                Object.entries(ob.headers || {}).map(([key, value]) => [
+                    key,
+                    Array.isArray(value) ? value.join(', ') : value,
+                ])
+            );
+            return convertHttpToUrl({
+                type: 'http',
+                name,
+                server,
+                port,
+                username: ob.username,
+                password: ob.password,
+                tls: ob.tls?.enabled === true,
+                sni: ob.tls?.server_name,
+                alpn: ob.tls?.alpn,
+                'skip-cert-verify': ob.tls?.insecure,
+                'client-fingerprint': ob.tls?.utls?.fingerprint,
+                headers,
+            });
+        }
         case 'vless': {
             const params = tlsParams(ob);
             const packetEncoding = getVlessPacketEncoding(ob);

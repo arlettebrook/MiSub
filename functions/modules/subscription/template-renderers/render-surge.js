@@ -147,10 +147,15 @@ function buildProxyLine(proxy) {
     }
     if (type === 'http' || type === 'https' || type === 'socks5') {
         const extras = [];
-        if (proxy.username) extras.push(`username=${proxy.username}`);
-        if (proxy.password) extras.push(`password=${proxy.password}`);
-        if (type === 'https') extras.push('tls=true');
-        return `${name} = ${type === 'socks5' ? 'socks5' : 'http'}, ${server}, ${port}${extras.length ? `, ${extras.join(', ')}` : ''}`;
+        if (proxy.username) extras.push(`username=${quoteIniValue(proxy.username)}`);
+        if (proxy.password) extras.push(`password=${quoteIniValue(proxy.password)}`);
+        const httpTls = type === 'https' || proxy.tls === true;
+        if (httpTls) {
+            if (proxy.sni || proxy.servername)
+                extras.push(`sni=${quoteIniValue(proxy.servername || proxy.sni)}`);
+            if (proxy['skip-cert-verify'] === true) extras.push('skip-cert-verify=true');
+        }
+        return `${name} = ${type === 'socks5' ? 'socks5' : httpTls ? 'https' : 'http'}, ${server}, ${port}${extras.length ? `, ${extras.join(', ')}` : ''}`;
     }
     if (type === 'anytls') {
         const extras = [`password=${proxy.password || ''}`];

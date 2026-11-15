@@ -438,7 +438,8 @@ describe('protocol conversion fixtures', () => {
                 url: 'https://user:p%40ss%3Aword@https.example.com:443?sni=https-sni.example.com&allowInsecure=1#Fixture%20HTTPS',
                 expected: {
                     name: 'Fixture HTTPS',
-                    type: 'https',
+                    type: 'http',
+                    tls: true,
                     server: 'https.example.com',
                     port: 443,
                     username: 'user',
@@ -688,8 +689,13 @@ proxies:
             for (const part of fixture.requiredParts) {
                 expect(url).toContain(part);
             }
-            expect(urlToClashProxy(url)).toBeNull();
-            expect(urlsToClashProxies([url])).toEqual([]);
+            if (fixture.proxy.type === 'http') {
+                expect(urlToClashProxy(url)).toMatchObject(fixture.proxy);
+                expect(urlsToClashProxies([url])).toHaveLength(1);
+            } else {
+                expect(urlToClashProxy(url)).toBeNull();
+                expect(urlsToClashProxies([url])).toEqual([]);
+            }
         }
     });
 });

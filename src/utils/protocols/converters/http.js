@@ -15,19 +15,20 @@ export function convertHttpToUrl(proxy) {
 
         // 用户认证
         let userinfo = '';
-        if (proxy.username) {
+        if (proxy.username || proxy.password) {
             const password = proxy.password || '';
-            userinfo = `${encodeURIComponent(proxy.username)}:${encodeURIComponent(password)}@`;
+            userinfo = `${encodeURIComponent(proxy.username || '')}:${encodeURIComponent(password)}@`;
         }
 
         // 协议类型 (http/https)
-        const protocol = proxy.tls ? 'https' : 'http';
+        const useTls = String(proxy.type).toLowerCase() === 'https' || proxy.tls === true;
+        const protocol = useTls ? 'https' : 'http';
         let url = `${protocol}://${userinfo}${serverAddr}:${proxy.port}`;
 
         const params = new URLSearchParams();
 
         // TLS 配置
-        if (proxy.tls) {
+        if (useTls) {
             // SNI
             if (proxy.sni || proxy.servername) {
                 params.set('sni', proxy.sni || proxy.servername);
@@ -39,8 +40,9 @@ export function convertHttpToUrl(proxy) {
             }
 
             // 跳过证书验证
-            if (proxy['skip-cert-verify'] !== undefined) {
-                params.set('allowInsecure', proxy['skip-cert-verify'] ? '1' : '0');
+            const skipCertVerify = proxy['skip-cert-verify'] ?? proxy.skipCertVerify;
+            if (skipCertVerify !== undefined) {
+                params.set('allowInsecure', skipCertVerify ? '1' : '0');
             }
 
             // ALPN
@@ -49,6 +51,7 @@ export function convertHttpToUrl(proxy) {
                 params.set('alpn', alpn);
             }
         }
+        if (proxy['dialer-proxy']) params.set('dp', proxy['dialer-proxy']);
 
         // 自定义 Headers
         if (proxy.headers) {
@@ -64,9 +67,7 @@ export function convertHttpToUrl(proxy) {
         }
 
         // Fragment (节点名称)
-        if (proxy.name) {
-            url += `#${encodeURIComponent(proxy.name)}`;
-        }
+        url += `#${encodeURIComponent(proxy.name || `${protocol.toUpperCase()}-${proxy.server}`)}`;
 
         return url;
     } catch (e) {

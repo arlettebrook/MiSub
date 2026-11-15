@@ -1,4 +1,4 @@
-import { NODE_PROTOCOL_REGEX } from '@/constants/nodeProtocols.js';
+import { isManualNodeSource } from '../../../shared/node-source.js';
 
 export const countryCodeMap = {
     hk: ['🇭🇰', '香港', 'HK'],
@@ -64,9 +64,7 @@ export function isManualNodeEntry(item) {
     const trimmedUrl = item.url.trim();
     if (!trimmedUrl) return false;
 
-    if (/^https?:\/\//i.test(trimmedUrl)) return false;
-
-    return NODE_PROTOCOL_REGEX.test(trimmedUrl);
+    return isManualNodeSource(item);
 }
 
 export function filterManualNodes(nodes, searchTerm, activeColorFilter) {
