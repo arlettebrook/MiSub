@@ -191,17 +191,33 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 
 ## 按需采纳的功能和兼容性增强
 
-| 项目                         | 当前状态 / 收益                                                                                                                                           | 建议                                                                                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| XHTTP 高级参数双向映射       | 本项目已有 padding 等 9 个字段映射；复现中的 `headers`、`xmux`、`downloadSettings` 被全部丢弃。上游覆盖下载流 TLS / REALITY、复用参数、头类型及大小写去重 | 使用 XHTTP 时优先；成组参考 `6ecc36cb`、`4ceac9aa`、`b34efa38`、`00f87185`、`47bcc1c7`、`e5e3e2ac`，保留本项目 packet-encoding 和 encryption 修复 |
-| HY2 参数兼容                 | 已保留 ports，但复现中的 peer、pinSHA256、hop-interval 丢失                                                                                               | 参考 `510323ec`、`7861be59`、`d3fe8cad`；把 SNI 别名、证书 pin 和跳跃间隔贯通解析 / URI / 客户端输出，不能只改一端                                |
-| HTTP / HTTPS 代理            | 当前普通 `http://` 转 Clash 返回 null，且不被 `isRealProxyNode` 识别；HTTPS 当前也需核对 type 与 TLS 表达                                                 | 有此类节点时参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`；必须区分 HTTP 订阅地址与 HTTP 代理节点，避免把节点当订阅抓取         |
-| `.mrs` 规则 provider         | 统一模板 renderer 复现输出 classical + `.yaml` path，缺 format；远程 Clash YAML 原样配置已有 mrs 保留测试                                                 | 使用 mrs 的统一模板时参考 `44d39ef5`，输出合法 format / behavior / path；不需重做已支持的远程 YAML 路径                                           |
-| Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                                  |
-| v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                                 |
-| 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                              |
-| 组合订阅嵌套                 | 上游 `0719f5a3` 新增 subProfiles；本项目没有对应 UI / 完整聚合逻辑                                                                                        | 有复用订阅组需求再做。需一起处理 `36d5d056` 的初始化错误修复，并补环检测、重复节点、禁用子组、预览、删除和导入兼容                                |
-| SettingsContent 共享         | 本项目 SettingsView 与 SettingsPanel 仍重复维护，后者仍静态导入分区                                                                                       | 可借鉴 `19c9575b` 的共享结构，继续保留本项目按需加载、加载反馈和浮动保存逻辑                                                                      |
+| 项目                         | 当前状态 / 收益                                                                                                                           | 建议                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| XHTTP 高级参数双向映射       | 初次对照时只有 padding 等 9 个字段，`headers`、`xmux`、`downloadSettings` 会丢失；2026-11-15 已完成前后端高级参数映射及下载流安全继承修复 | 实施及验证详见下文；参考 `6ecc36cb`、`4ceac9aa`、`b34efa38`、`00f87185`、`47bcc1c7`、`e5e3e2ac`，保留本项目 packet-encoding 和 encryption 修复 |
+| HY2 参数兼容                 | 已保留 ports，但复现中的 peer、pinSHA256、hop-interval 丢失                                                                               | 参考 `510323ec`、`7861be59`、`d3fe8cad`；把 SNI 别名、证书 pin 和跳跃间隔贯通解析 / URI / 客户端输出，不能只改一端                             |
+| HTTP / HTTPS 代理            | 当前普通 `http://` 转 Clash 返回 null，且不被 `isRealProxyNode` 识别；HTTPS 当前也需核对 type 与 TLS 表达                                 | 有此类节点时参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`；必须区分 HTTP 订阅地址与 HTTP 代理节点，避免把节点当订阅抓取      |
+| `.mrs` 规则 provider         | 统一模板 renderer 复现输出 classical + `.yaml` path，缺 format；远程 Clash YAML 原样配置已有 mrs 保留测试                                 | 使用 mrs 的统一模板时参考 `44d39ef5`，输出合法 format / behavior / path；不需重做已支持的远程 YAML 路径                                        |
+| Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                               |
+| v2rayN 完整配置链接、Mieru   | 本项目已有普通 vmess / vless URI；上游增加的 v2rayn parser 面向另一类完整配置导入                                                         | 按实际输入格式增加，不把“支持 v2rayN 客户端”误当作“已支持所有 v2rayn:// 配置链接”                                                              |
+| 机场身份、站点分组和命名记忆 | 上游提供用户指定机场身份、站点聚合、跨分页保持分组及 TG 管理                                                                              | 订阅数量较多时有价值；小规模部署可暂缓，需要保留本项目布局和导航优化                                                                           |
+| 组合订阅嵌套                 | 上游 `0719f5a3` 新增 subProfiles；本项目没有对应 UI / 完整聚合逻辑                                                                        | 有复用订阅组需求再做。需一起处理 `36d5d056` 的初始化错误修复，并补环检测、重复节点、禁用子组、预览、删除和导入兼容                             |
+| SettingsContent 共享         | 本项目 SettingsView 与 SettingsPanel 仍重复维护，后者仍静态导入分区                                                                       | 可借鉴 `19c9575b` 的共享结构，继续保留本项目按需加载、加载反馈和浮动保存逻辑                                                                   |
+
+### XHTTP 高级参数双向映射（2026-11-15）
+
+**实施进度：高级参数双向映射已完成。** 新增 `src/utils/protocols/common/xhttp-extra.js`，通过原有 `vless-params.js` 导出接口供前后端共用。VLESS 链接 → Clash / Mihomo，以及前端 / 后端 Clash → VLESS 链接均保留请求头、padding、uplink HTTP method、session / seq / uplink data、分包大小和间隔、XMUX 复用参数，以及独立 `downloadSettings` 的地址、端口、XHTTP path / host / headers / XMUX、TLS / REALITY 设置。session 旧字段名可导入，导出统一使用 `sessionID*`；数值及区间按目标字段类型规范化，已有的 `false` / `0`、packet-encoding、encryption、IPv6 修复继续保留。
+
+HTTP 头只保留字符串值，并按不区分大小写的名称去重。URL 明确指定的 host 优先于 extra 里的 Host；只有请求头提供 Host 时也能还原。导出把 Host 放回独立 host 参数，并从 extra 的上下行 headers 中移除，符合 Xray 的校验规则。未知字段和无可转换字段的 XMUX 不产生空 extra；非法 extra JSON 不会导致整个节点被拒绝。
+
+下载流只按声明的 `security` 读取对应 TLS / REALITY 块，缺省安全模式保持无 TLS。Xray 的下载流配置独立，而 Mihomo 的缺失字段会继承上行；导入时明确默认 TLS、SNI、指纹、ALPN、校验证书选项及 path / host / headers / reuse，必要时用空 REALITY 公钥阻止错误继承。Clash 导出时则物化真实生效的继承值，保留同一下载地址和安全配置，并明确输出 `downloadSettings.network=xhttp`。声明 REALITY 但缺公钥时保留清空标记并记录告警，避免拿上行公钥代替；这类无效输入不作为有效客户端配置验证样例。
+
+另核对并处理 Xray 构建时的 `extra` 覆盖规则：`xhttpSettings.extra` 会替换除 host / path / mode 外的配置，下载头必须与 XMUX 一起写入内层 extra，不能把头放在会被覆盖的外层。该行为由官方 [Xray v26.11.9 transport_method.go](https://github.com/XTLS/Xray-core/blob/v26.11.9/infra/conf/transport_method.go) 与 [Mihomo v1.19.34 vless.go](https://github.com/MetaCubeX/mihomo/blob/v1.19.34/adapter/outbound/vless.go) 的类型及继承逻辑确认。
+
+新增 `tests/unit/xhttp-advanced-mapping.test.js` 的 60 个回归用例和共享样例 `tests/fixtures/xhttp-advanced.js`，验证前后端往返、全套字段、字符串头与大小写去重、数值区间、旧 session 名称、空 / 非法输入、上下行 TLS / REALITY / 明文、继承和显式清除。集成验证经过 Clash YAML 导入、内置 Clash 生成和 INI 模板生成，高级选项及 packet-encoding / encryption 保持一致。相关 4 个文件、114 个用例通过；全量 177 个文件、1847 个用例全部通过，`npm run build` 与 Pages Functions 构建通过，改动文件格式检查和 `git diff --check` 通过。
+
+使用官方 Mihomo v1.19.34 与 Xray v26.11.9 Windows amd64 二进制，经 GitHub 发布资产 SHA256 digest 核验后执行 `mihomo -t` / `xray run -test`。前端 / 后端 × 三种上行安全模式 × 基础、三种独立下行安全模式、继承、缺省下行，共 36 对配置、72 次客户端检查通过。Mihomo 要求 post 间隔大于 0，客户端样例使用有效正区间；Xray 不允许面向公网的无加密 VLESS，明文上行样例使用私有 IPv6。单元测试仍验证显式 0 的保留，不将保留输入值当作所有客户端都接受该值的证明。
+
+客户端检查使用最小出站配置，不下载规则、不建立代理连接；没有声称所有完整订阅模板或其他客户端都支持这些 XHTTP 字段。临时源码、二进制、配置和验证结果位于忽略目录 `tmp/xhttp-*`。
 
 ## 可以跳过，或不能直接照搬
 

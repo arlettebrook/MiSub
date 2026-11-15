@@ -8,6 +8,8 @@ import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address
 import {
     getVlessPacketEncoding,
     xhttpExtraToClashOptions,
+    normalizeXhttpHeaders,
+    applyDownloadInheritanceGuard,
 } from '../../src/utils/protocols/common/vless-params.js';
 
 const VIRTUAL_INFO_NODE_PASSWORD = '00000000-0000-0000-0000-000000000000';
@@ -209,7 +211,16 @@ function parseVlessUrl(url) {
 
             if (extraRaw) {
                 try {
-                    Object.assign(xhttpOpts, xhttpExtraToClashOptions(JSON.parse(extraRaw)));
+                    const { headers, ...fields } = xhttpExtraToClashOptions(JSON.parse(extraRaw));
+                    Object.assign(xhttpOpts, fields);
+                    if (headers) {
+                        xhttpOpts.headers = {
+                            ...normalizeXhttpHeaders(headers, { omitHost: Boolean(host) }),
+                            ...(xhttpOpts.headers || {}),
+                        };
+                        if (!host && xhttpOpts.headers.Host)
+                            xhttpOpts.host = xhttpOpts.headers.Host;
+                    }
                 } catch (e) {
                     // extra 非法时不能让整个订阅转换失败
                     console.warn('[MiSub] XHTTP extra 参数解析失败:', e);
@@ -259,6 +270,12 @@ function parseVlessUrl(url) {
             }
         } else if (security === 'tls') {
             proxy.tls = true;
+        }
+
+        if (network === 'xhttp') {
+            applyDownloadInheritanceGuard(proxy['xhttp-opts'], {
+                upstreamReality: Boolean(proxy['reality-opts']),
+            });
         }
 
         // Skip cert verify (统一支持 allowInsecure 和 insecure)

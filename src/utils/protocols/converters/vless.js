@@ -2,7 +2,11 @@
  * VLESS配置转换为URL
  * 支持 TLS、Reality、WebSocket、gRPC、HTTP/2、HTTPUpgrade 和 XHTTP 参数。
  */
-import { getVlessPacketEncoding, clashXhttpOptionsToExtra } from '../common/vless-params.js';
+import {
+    getVlessPacketEncoding,
+    clashXhttpOptionsToExtra,
+    getXhttpHost,
+} from '../common/vless-params.js';
 import { formatUriHost } from '../../../../shared/proxy-address.js';
 
 export function convertVlessToUrl(proxy) {
@@ -96,14 +100,14 @@ export function convertVlessToUrl(proxy) {
                     if (xhttpOpts.path) {
                         params.set('path', xhttpOpts.path);
                     }
-                    const xhttpHost = xhttpOpts.host || xhttpOpts.headers?.Host;
+                    const xhttpHost = getXhttpHost(xhttpOpts);
                     if (xhttpHost) {
                         params.set('host', xhttpHost);
                     }
                     if (xhttpOpts.mode) {
                         params.set('mode', xhttpOpts.mode);
                     }
-                    const extra = clashXhttpOptionsToExtra(xhttpOpts);
+                    const extra = clashXhttpOptionsToExtra(xhttpOpts, proxy);
                     if (Object.keys(extra).length > 0) {
                         params.set('extra', JSON.stringify(extra));
                     }

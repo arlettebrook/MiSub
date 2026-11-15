@@ -1,6 +1,7 @@
 import {
     getVlessPacketEncoding,
     clashXhttpOptionsToExtra,
+    getXhttpHost,
 } from '../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../shared/proxy-address.js';
 
@@ -170,10 +171,10 @@ export function convertClashProxyToUrl(proxy) {
             const xhttpOpts = proxy['xhttp-opts'] || proxy.xhttpOpts;
             if (xhttpOpts) {
                 if (xhttpOpts.path) params.push(`path=${encodeURIComponent(xhttpOpts.path)}`);
-                const xhttpHost = xhttpOpts.host || xhttpOpts.headers?.Host;
+                const xhttpHost = getXhttpHost(xhttpOpts);
                 if (xhttpHost) params.push(`host=${encodeURIComponent(xhttpHost)}`);
                 if (xhttpOpts.mode) params.push(`mode=${encodeURIComponent(xhttpOpts.mode)}`);
-                const extra = clashXhttpOptionsToExtra(xhttpOpts);
+                const extra = clashXhttpOptionsToExtra(xhttpOpts, proxy);
                 if (Object.keys(extra).length > 0) {
                     params.push(`extra=${encodeURIComponent(JSON.stringify(extra))}`);
                 }
