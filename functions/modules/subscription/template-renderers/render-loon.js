@@ -1,6 +1,12 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
 import { quoteIniValue } from '../../../../src/utils/protocols/common/ini.js';
+import {
+    normalizeHysteria2Ports,
+    getHysteria2ScalarHopInterval,
+    assertHysteria2CertificatePinSupport,
+    hysteria2BandwidthMbps,
+} from '../../../../src/utils/protocols/common/hysteria2-params.js';
 
 function buildProxyLine(proxy) {
     const type = String(proxy.type || '').toLowerCase();
@@ -90,7 +96,14 @@ function buildProxyLine(proxy) {
         return `${name} = vless, ${server}, ${port}, ${extras.join(', ')}`;
     }
     if (type === 'hysteria2' || type === 'hy2') {
+        assertHysteria2CertificatePinSupport(proxy, 'Loon');
         const extras = [quoteIniValue(proxy.password || '')];
+        const ports = normalizeHysteria2Ports(proxy.ports);
+        if (ports) extras.push(`server-ports=${quoteIniValue(ports)}`);
+        const interval = getHysteria2ScalarHopInterval(proxy, 'Loon');
+        if (interval !== undefined) extras.push(`hop-interval=${interval}`);
+        const downMbps = hysteria2BandwidthMbps(proxy.down);
+        if (downMbps !== undefined) extras.push(`download-bandwidth=${downMbps}`);
         if (proxy.obfs === 'salamander' && proxy['obfs-password']) {
             extras.push(`salamander-password=${quoteIniValue(proxy['obfs-password'])}`);
         }

@@ -34,6 +34,7 @@ export function convertClashProxyToUrl(proxy) {
             return convertVlessToUrl(proxy);
         case 'hysteria':
         case 'hysteria2':
+        case 'hy2':
             return convertHysteriaToUrl(proxy);
         case 'anytls':
             return convertAnytlsToUrl(proxy);

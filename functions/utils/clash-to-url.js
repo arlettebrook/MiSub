@@ -4,6 +4,11 @@ import {
     getXhttpHost,
 } from '../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../shared/proxy-address.js';
+import {
+    getHysteria2CertificatePin,
+    getHysteria2HopInterval,
+    normalizeHysteria2Ports,
+} from '../../src/utils/protocols/common/hysteria2-params.js';
 
 function base64Encode(str) {
     return btoa(unescape(encodeURIComponent(str)));
@@ -217,8 +222,19 @@ export function convertClashProxyToUrl(proxy) {
                 params.push(`obfs-password=${encodeURIComponent(proxy['obfs-password'])}`);
             const sni = proxy.servername ?? proxy.sni;
             if (sni !== undefined) params.push(`sni=${encodeURIComponent(sni)}`);
-            if (proxy.skipCertVerify || proxy['skip-cert-verify']) params.push('insecure=1');
-            if (proxy.ports !== undefined) params.push(`ports=${encodeURIComponent(proxy.ports)}`);
+            const insecure = proxy['skip-cert-verify'] ?? proxy.skipCertVerify;
+            if (insecure !== undefined) params.push(`insecure=${insecure ? '1' : '0'}`);
+            const pin = getHysteria2CertificatePin(proxy);
+            if (pin) params.push(`pinSHA256=${encodeURIComponent(pin)}`);
+            const ports = normalizeHysteria2Ports(proxy.ports);
+            if (ports) params.push(`ports=${encodeURIComponent(ports)}`);
+            const hopInterval = getHysteria2HopInterval(proxy);
+            if (hopInterval !== undefined)
+                params.push(`hop-interval=${encodeURIComponent(hopInterval)}`);
+            if (proxy.alpn)
+                params.push(
+                    `alpn=${encodeURIComponent(Array.isArray(proxy.alpn) ? proxy.alpn.join(',') : proxy.alpn)}`
+                );
             if (proxy.up !== undefined || proxy['up-mbps'] !== undefined)
                 params.push(`up=${encodeURIComponent(proxy.up ?? proxy['up-mbps'])}`);
             if (proxy.down !== undefined || proxy['down-mbps'] !== undefined)

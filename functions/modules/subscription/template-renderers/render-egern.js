@@ -1,5 +1,6 @@
 import yaml from 'js-yaml';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
+import { assertHysteria2CertificatePinSupport } from '../../../../src/utils/protocols/common/hysteria2-params.js';
 
 /**
  * Sanitize string: trim and remove carriage returns/newlines which break YAML indentation
@@ -178,6 +179,7 @@ function mapProxy(proxy) {
     }
 
     if (type === 'hysteria2' || type === 'hy2') {
+        assertHysteria2CertificatePinSupport(proxy, 'Egern');
         const mapped = {
             hysteria2: {
                 name,

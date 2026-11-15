@@ -6,6 +6,11 @@ import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
 import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address.js';
 import {
+    getHysteria2CertificatePin,
+    getHysteria2HopInterval,
+    normalizeHysteria2Ports,
+} from '../../src/utils/protocols/common/hysteria2-params.js';
+import {
     getVlessPacketEncoding,
     xhttpExtraToClashOptions,
     normalizeXhttpHeaders,
@@ -709,7 +714,7 @@ function parseHysteria2Url(url) {
     try {
         // hysteria2://password@server:port?params#name
         // hy2://password@server:port?params#name
-        const prefixLen = url.startsWith('hysteria2://') ? 12 : 6;
+        const prefixLen = url.toLowerCase().startsWith('hysteria2://') ? 12 : 6;
         const body = url.substring(prefixLen);
 
         const atIndex = body.indexOf('@');
@@ -744,15 +749,18 @@ function parseHysteria2Url(url) {
             auth: password,
         };
 
-        // SNI
-        if (params.get('sni')) {
-            proxy.servername = params.get('sni');
-            proxy.sni = params.get('sni');
+        // Shadowrocket uses peer for the TLS server name.
+        const hy2Sni = params.get('sni') || params.get('peer');
+        if (hy2Sni) {
+            proxy.servername = hy2Sni;
+            proxy.sni = hy2Sni;
         }
 
         // Skip cert verify
-        if (params.get('insecure') === '1' || params.get('allowInsecure') === '1') {
+        if (['1', 'true'].includes(params.get('insecure') || params.get('allowInsecure'))) {
             proxy['skip-cert-verify'] = true;
+        } else if (['0', 'false'].includes(params.get('insecure') || params.get('allowInsecure'))) {
+            proxy['skip-cert-verify'] = false;
         }
 
         // [Hysteria2] handshake timeout
@@ -769,11 +777,27 @@ function parseHysteria2Url(url) {
             proxy['obfs-password'] = params.get('obfs-password');
         }
 
-        if (params.get('ports') || params.get('mport')) {
-            proxy.ports = params.get('ports') || params.get('mport');
-        }
+        const pin = getHysteria2CertificatePin(params);
+        if (pin) proxy.fingerprint = pin;
+        const authorityPort = splitUriHostPort(serverPart.replace(/\/$/, '')).port;
+        const ports = normalizeHysteria2Ports(
+            params.get('ports') ||
+                params.get('mport') ||
+                (/[-,:]/.test(authorityPort) ? authorityPort : undefined)
+        );
+        if (ports) proxy.ports = ports;
+        const hopInterval = getHysteria2HopInterval(params);
+        if (hopInterval !== undefined) proxy['hop-interval'] = hopInterval;
         if (params.get('up')) proxy.up = params.get('up');
         if (params.get('down')) proxy.down = params.get('down');
+        if (!proxy.up && params.get('upmbps')) proxy.up = `${params.get('upmbps')} Mbps`;
+        if (!proxy.down && params.get('downmbps')) proxy.down = `${params.get('downmbps')} Mbps`;
+        if (params.get('alpn'))
+            proxy.alpn = params
+                .get('alpn')
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean);
         const fastOpen = params.get('fast_open') || params.get('fast-open');
         if (fastOpen === '1' || fastOpen === 'true') {
             proxy['fast-open'] = true;

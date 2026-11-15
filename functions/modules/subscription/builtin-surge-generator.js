@@ -11,6 +11,12 @@ import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js
 import { getUniqueName } from './name-utils.js';
 import { quoteIniValue } from '../../../src/utils/protocols/common/ini.js';
 import {
+    getHysteria2CertificatePin,
+    normalizeHysteria2Ports,
+    getHysteria2ScalarHopInterval,
+    hysteria2BandwidthMbps,
+} from '../../../src/utils/protocols/common/hysteria2-params.js';
+import {
     POLICY_GROUPS,
     getBuiltinRules,
     getRemoteProviderDefinitions,
@@ -165,16 +171,21 @@ function clashProxyToSurgeResult(proxy) {
             parts.push(`${proxy.obfs}-password=${quoteIniValue(proxy['obfs-password'])}`);
         }
         // 带宽限制（可选，单位 Mbps）
-        if (proxy['down'] || proxy['download-bandwidth']) {
-            parts.push(`download-bandwidth=${proxy['down'] || proxy['download-bandwidth']}`);
-        }
+        const downMbps = hysteria2BandwidthMbps(proxy.down ?? proxy['download-bandwidth']);
+        if (downMbps !== undefined) parts.push(`download-bandwidth=${downMbps}`);
         // 端口跳跃（Surge 支持的高级功能）
-        if (proxy['port-hopping']) {
-            parts.push(`port-hopping=${proxy['port-hopping']}`);
+        const hy2Ports = normalizeHysteria2Ports(
+            proxy.ports || String(proxy['port-hopping'] || '').replace(/;/g, ',')
+        );
+        if (hy2Ports) {
+            parts.push(`port-hopping=${hy2Ports.replace(/,/g, ';')}`);
         }
-        if (proxy['port-hopping-interval']) {
-            parts.push(`port-hopping-interval=${proxy['port-hopping-interval']}`);
+        const interval = getHysteria2ScalarHopInterval(proxy, 'Surge');
+        if (interval !== undefined) {
+            parts.push(`port-hopping-interval=${interval}`);
         }
+        const pin = getHysteria2CertificatePin(proxy);
+        if (pin) parts.push(`server-cert-fingerprint-sha256=${pin}`);
         // TLS 通用参数
         appendTlsParams(parts, proxy);
     } else if (type === 'tuic') {
@@ -396,7 +407,10 @@ function appendTlsParams(parts, proxy) {
     if (proxy['skip-cert-verify'] === true || proxy.skipCertVerify === true) {
         parts.push('skip-cert-verify=true');
     }
-    if (proxy['server-cert-fingerprint-sha256']) {
+    if (
+        proxy['server-cert-fingerprint-sha256'] &&
+        !parts.some((part) => part.startsWith('server-cert-fingerprint-sha256='))
+    ) {
         parts.push(`server-cert-fingerprint-sha256=${proxy['server-cert-fingerprint-sha256']}`);
     }
 }

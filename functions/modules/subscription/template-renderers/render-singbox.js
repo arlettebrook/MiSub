@@ -1,5 +1,6 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { getVlessPacketEncoding } from '../../../../src/utils/protocols/common/vless-params.js';
+import { applyHysteria2SingboxOptions } from '../../../../src/utils/protocols/common/hysteria2-params.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
 import { buildSingboxDnsConfig, DNS_PROXY_GROUP, SINGBOX_CN_RULE_SET } from '../safe-dns.js';
 import { getSingboxDnsRuleSet, pinRemoteRuleUrl } from '../builtin-rules-provider.js';
@@ -192,7 +193,7 @@ function buildOutbound(proxy) {
         if (proxy.obfs) {
             outbound.obfs = { type: proxy.obfs, password: proxy['obfs-password'] || '' };
         }
-        return outbound;
+        return applyHysteria2SingboxOptions(outbound, proxy);
     }
 
     if (type === 'tuic') {

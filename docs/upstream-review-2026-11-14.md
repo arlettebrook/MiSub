@@ -194,7 +194,7 @@ chunk 恢复直接读写 `sessionStorage`；手动节点 composable 初始化直
 | 项目                         | 当前状态 / 收益                                                                                                                           | 建议                                                                                                                                           |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | XHTTP 高级参数双向映射       | 初次对照时只有 padding 等 9 个字段，`headers`、`xmux`、`downloadSettings` 会丢失；2026-11-15 已完成前后端高级参数映射及下载流安全继承修复 | 实施及验证详见下文；参考 `6ecc36cb`、`4ceac9aa`、`b34efa38`、`00f87185`、`47bcc1c7`、`e5e3e2ac`，保留本项目 packet-encoding 和 encryption 修复 |
-| HY2 参数兼容                 | 已保留 ports，但复现中的 peer、pinSHA256、hop-interval 丢失                                                                               | 参考 `510323ec`、`7861be59`、`d3fe8cad`；把 SNI 别名、证书 pin 和跳跃间隔贯通解析 / URI / 客户端输出，不能只改一端                             |
+| HY2 参数兼容                 | 2026-11-15 已修复 peer、证书 pin、跳跃间隔和端口范围的解析 / 导出，并接入可等价表达的客户端字段                                           | 实施及客户端边界详见下文；参考 `510323ec`、`7861be59`、`d3fe8cad`                                                                              |
 | HTTP / HTTPS 代理            | 当前普通 `http://` 转 Clash 返回 null，且不被 `isRealProxyNode` 识别；HTTPS 当前也需核对 type 与 TLS 表达                                 | 有此类节点时参考 `7c1aa705`、`103279e1`、`cda96fb9`、`d226fc2f`、`5ceb437f`；必须区分 HTTP 订阅地址与 HTTP 代理节点，避免把节点当订阅抓取      |
 | `.mrs` 规则 provider         | 统一模板 renderer 复现输出 classical + `.yaml` path，缺 format；远程 Clash YAML 原样配置已有 mrs 保留测试                                 | 使用 mrs 的统一模板时参考 `44d39ef5`，输出合法 format / behavior / path；不需重做已支持的远程 YAML 路径                                        |
 | Mihomo 自定义链式代理        | 本项目内置链式代理已支持 dialer-proxy，但缺上游自定义 INI / YAML 的 chain-proxy 扩展                                                      | 有自定义链式模板需求再参考 `4b13ca2f`、`f59ce91c`、`f9342cde`，维持普通 Clash 与 Meta 的能力区分                                               |
@@ -218,6 +218,22 @@ HTTP 头只保留字符串值，并按不区分大小写的名称去重。URL �
 使用官方 Mihomo v1.19.34 与 Xray v26.11.9 Windows amd64 二进制，经 GitHub 发布资产 SHA256 digest 核验后执行 `mihomo -t` / `xray run -test`。前端 / 后端 × 三种上行安全模式 × 基础、三种独立下行安全模式、继承、缺省下行，共 36 对配置、72 次客户端检查通过。Mihomo 要求 post 间隔大于 0，客户端样例使用有效正区间；Xray 不允许面向公网的无加密 VLESS，明文上行样例使用私有 IPv6。单元测试仍验证显式 0 的保留，不将保留输入值当作所有客户端都接受该值的证明。
 
 客户端检查使用最小出站配置，不下载规则、不建立代理连接；没有声称所有完整订阅模板或其他客户端都支持这些 XHTTP 字段。临时源码、二进制、配置和验证结果位于忽略目录 `tmp/xhttp-*`。
+
+### HY2 参数兼容（2026-11-15）
+
+**实施进度：HY2 参数兼容已完成。** 新增共用 `src/utils/protocols/common/hysteria2-params.js`，HY2 / Hysteria2 链接解析支持 `peer` 作为 SNI 别名，支持 `pinSHA256` / `hpkp` / `fingerprint` 证书 pin，以及 `hop-interval` / `hopInterval` / `hop_interval` 跳跃间隔。明确的 `sni` 和 `pinSHA256` 优先于别名。前后端 Clash → URI 均保留证书 fingerprint、端口列表、间隔、ALPN 和带宽，修正前端把 ClientHello 的 `client-fingerprint=chrome` 当作证书 pin 的错误；密码、混淆、realm 和 IPv6 逻辑继续保留。
+
+本项目导出继续保留单独的主要端口，并用 `ports` 查询参数表达跳跃范围；导入同时兼容 `mport` 和[官方 HY2 URI](https://v2.hysteria.network/docs/developers/URI-Scheme/) 的 authority 多端口格式，例如 `[2001:db8::1]:20000-20010,21000/`。保留合法端口范围，拒绝无效范围。跳跃间隔统一为 Mihomo 的整数秒或范围，兼容 `30s`、`1m` 等整秒 duration 输入；`upmbps` / `downmbps` 与 ALPN、显式 `insecure=0` 也能往返。Hysteria1 的协议和既有导出行为保留。
+
+Clash / Mihomo 的内置和 INI 模板输出保留完整证书 fingerprint 和跳跃配置。sing-box 的内置和模板输出映射为 `server_ports`、`hop_interval` / `hop_interval_max`、`up_mbps` / `down_mbps` 和 TLS SNI / ALPN；端口范围使用冒号，单个端口也写成 `21000:21000`，符合 sing-box v1.14.4 的实际校验。间隔 0 使用 30 秒缺省，小于 5 秒按 Mihomo 语义归一到 5 秒。sing-box JSON 导入保留这些字段，也能导入只有 `server_ports`、未写 `server_port` 的节点。
+
+Surge 输出按[官方 HY2 文档](https://manual.nssurge.com/policies/hysteria2.html)使用分号分隔 `port-hopping`，并输出单值 `port-hopping-interval` 和[证书 pin 字段](https://manual.nssurge.com/policies/tls.html) `server-cert-fingerprint-sha256`。Loon 按[官方节点样例](https://github.com/Loon0x00/LoonExampleConfig/blob/master/Nodes/ExampleNodes.list)输出 `server-ports` 和单值 `hop-interval`。两个客户端的下载带宽提示输出整数 Mbps；前后端 INI 导入同样识别这些字段。范围间隔无法等价写入这两个导出器时明确报错，不取一个端点冒充完整范围。
+
+**证书 pin 的客户端边界：** HY2 的 `pinSHA256` 是整张服务端证书的 SHA256；sing-box v1.14.4 的 `certificate_public_key_sha256` 校验的是 SPKI 公钥哈希，两者不能互换，已核对其[实际 TLS 校验源码](https://github.com/SagerNet/sing-box/blob/v1.14.4/common/tls/std_client.go)。因此需要整张证书 pin 的节点可以输出 URI、Clash / Mihomo 和 Surge，但 sing-box 会明确拒绝转换；Loon、Egern 导出器目前也没有核实等价 pin 字段，不能静默丢失该约束。正式内置订阅请求返回 HTTP 422 和原因，保持用户可识别的失败，不降级为丢了校验的配置或误报成功。未使用公钥 hash、开启 insecure 或其他猜测配置代替证书 pin。
+
+新增 `tests/unit/hysteria2-parameter-compatibility.test.js` 的 67 个回归用例，覆盖别名优先级、前后端 URI / YAML / INI 往返、官方多端口格式、间隔数值和 duration、非法输入、证书字段区别、带宽、混淆 / 密码、sing-box 两种生成入口以及正式订阅 HTTP 422 行为。相关 4 个文件、112 个用例通过；全量 178 个文件、1914 个用例全部通过。客户端校验后补齐单端口范围格式及带宽输出的专项复查也通过；最终 `npm run build`、Pages Functions 构建、改动文件格式检查和 `git diff --check` 通过。
+
+使用已按官方发布资产 SHA256 校验的 Mihomo v1.19.34 与 sing-box v1.14.4 Windows 二进制：前端 / 后端 / sing-box JSON 导入 × 域名 / IPv4 / IPv6 × 单值 / 范围间隔，检验 Mihomo 与 sing-box 内置 / 模板最小出站，再检查两个带 certificate fingerprint 的 Mihomo 配置，共 56 次客户端配置检查通过，另 4 次断言确认 sing-box 无法等价表示的证书 pin 会被拒绝。跳跃节点初始化会解析地址，验证配置使用本地 hosts DNS 解析器，没有向外部 DNS 发请求，也没有建立代理连接；这不代表实际服务端握手或全部模板的联网验证。验证日志、配置和源码位于忽略目录 `tmp/hy2-*`。
 
 ## 可以跳过，或不能直接照搬
 

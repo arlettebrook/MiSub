@@ -1,6 +1,7 @@
 import { generateNodeId } from '../id.js';
 import { base64Encode } from './common/base64.js';
 import { splitIniFields, unquoteIniValue } from './common/ini.js';
+import { hysteria2IniOptionToQuery } from './common/hysteria2-params.js';
 
 export function parseLoonConfig(content) {
     const nodes = [];
@@ -218,6 +219,10 @@ function parseLoonHysteria2(line) {
             .filter((entry) => entry.length)
     );
     const urlParams = [];
+    for (const [key, value] of options) {
+        const hy2Param = hysteria2IniOptionToQuery(key, value);
+        if (hy2Param) urlParams.push(`${hy2Param[0]}=${encodeURIComponent(hy2Param[1])}`);
+    }
     if (options.get('obfs')) urlParams.push(`obfs=${encodeURIComponent(options.get('obfs'))}`);
     if (options.get('obfs-password'))
         urlParams.push(`obfs-password=${encodeURIComponent(options.get('obfs-password'))}`);

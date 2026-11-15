@@ -1,4 +1,9 @@
 import { formatUriHost } from '../../../../shared/proxy-address.js';
+import {
+    getHysteria2CertificatePin,
+    getHysteria2HopInterval,
+    normalizeHysteria2Ports,
+} from '../common/hysteria2-params.js';
 
 /**
  * Hysteria/Hysteria2配置转换为URL
@@ -22,7 +27,7 @@ export function convertHysteriaToUrl(proxy) {
 
         // 处理端口（支持端口跳跃）
         let portStr = String(proxy.port);
-        if (proxy.ports) {
+        if (proxy.ports && !isHysteria2) {
             // 端口跳跃: "1000-2000" 或 "1000,2000,3000"
             portStr = proxy.ports;
         }
@@ -54,8 +59,21 @@ export function convertHysteriaToUrl(proxy) {
             params.set('sni', proxy.sni || proxy.servername);
         }
 
-        if (proxy['client-fingerprint'] || proxy.fingerprint) {
-            params.set('pinSHA256', proxy['client-fingerprint'] || proxy.fingerprint);
+        const certificatePin = isHysteria2
+            ? getHysteria2CertificatePin(proxy)
+            : proxy['client-fingerprint'] || proxy.fingerprint;
+        if (certificatePin) {
+            params.set('pinSHA256', certificatePin);
+        }
+        if (isHysteria2) {
+            const ports = normalizeHysteria2Ports(proxy.ports);
+            if (ports) params.set('ports', ports);
+            const interval = getHysteria2HopInterval(proxy);
+            if (interval !== undefined) params.set('hop-interval', interval);
+            if (proxy.up !== undefined || proxy['up-mbps'] !== undefined)
+                params.set('up', proxy.up ?? proxy['up-mbps']);
+            if (proxy.down !== undefined || proxy['down-mbps'] !== undefined)
+                params.set('down', proxy.down ?? proxy['down-mbps']);
         }
 
         // ALPN
@@ -94,7 +112,7 @@ export function convertHysteriaToUrl(proxy) {
 
         // 快速打开
         if (proxy['fast-open'] !== undefined) {
-            params.set('fastopen', proxy['fast-open'] ? '1' : '0');
+            params.set(isHysteria2 ? 'fast_open' : 'fastopen', proxy['fast-open'] ? '1' : '0');
         }
 
         // Lazy 模式 (Hysteria2)

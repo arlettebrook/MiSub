@@ -1,6 +1,7 @@
 import { generateNodeId } from '../id.js';
 import { splitIniFields, unquoteIniValue } from './common/ini.js';
 import { base64Encode } from './common/base64.js';
+import { hysteria2IniOptionToQuery } from './common/hysteria2-params.js';
 
 /**
  * 解析Surge配置
@@ -430,6 +431,8 @@ function parseSurgeHysteria2(line) {
                 const [, key, value] = match;
                 const v = unquoteIniValue(value);
                 const k = key.toLowerCase();
+                const hy2Param = hysteria2IniOptionToQuery(k, v);
+                if (hy2Param) urlParams.push(`${hy2Param[0]}=${encodeURIComponent(hy2Param[1])}`);
                 if (k === 'password') password = v;
                 else if (k === 'obfs' || k === 'obfs-password')
                     urlParams.push(`${k}=${encodeURIComponent(v)}`);

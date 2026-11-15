@@ -13,6 +13,7 @@ import { extractSingboxNodes } from './singbox-to-url.js';
 import { validateSS2022Node, fixSS2022Node } from './ss2022-validator.js';
 import { extractNodeMetadata } from './metadata-extractor.js';
 import { splitIniFields, unquoteIniValue } from '../../../src/utils/protocols/common/ini.js';
+import { hysteria2IniOptionToQuery } from '../../../src/utils/protocols/common/hysteria2-params.js';
 
 /**
  * 支持的节点协议正则表达式
@@ -79,6 +80,11 @@ function parseSurgeOrQxLine(line) {
                         }
                     }
                     if (proxy.type === 'hysteria2' || proxy.type === 'hy2') {
+                        const hy2Param = hysteria2IniOptionToQuery(k, v);
+                        if (hy2Param) {
+                            const [name, value] = hy2Param;
+                            proxy[name === 'pinSHA256' ? 'fingerprint' : name] = value;
+                        }
                         if (k === 'obfs-password') proxy['obfs-password'] = v;
                         if (k === 'salamander-password' || k === 'gecko-password') {
                             proxy.obfs = k === 'salamander-password' ? 'salamander' : 'gecko';
@@ -174,6 +180,13 @@ function parseSurgeOrQxLine(line) {
                         k === 'obfs-password'
                     )
                         proxy['obfs-password'] = v;
+                    if (proxy.type === 'hysteria2' || proxy.type === 'hy2') {
+                        const hy2Param = hysteria2IniOptionToQuery(k, v);
+                        if (hy2Param) {
+                            const [name, value] = hy2Param;
+                            proxy[name === 'pinSHA256' ? 'fingerprint' : name] = value;
+                        }
+                    }
                     if (k === 'vless-flow') proxy.flow = v;
                     if (k === 'reality-base64-pubkey' || k === 'reality-pubkey') {
                         proxy['reality-opts'] = proxy['reality-opts'] || {};

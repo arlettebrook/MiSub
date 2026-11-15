@@ -10,6 +10,10 @@
 
 import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
 import { formatUriHost, normalizeProxyHost } from '../../../shared/proxy-address.js';
+import {
+    normalizeHysteria2Ports,
+    normalizeHysteria2HopInterval,
+} from '../../../src/utils/protocols/common/hysteria2-params.js';
 
 function toArray(value) {
     if (value === undefined || value === null) return [];
@@ -71,7 +75,12 @@ export function singboxOutboundToUrl(ob) {
     const type = String(ob.type || '').toLowerCase();
     const server = normalizeProxyHost(ob.server);
     const uriServer = formatUriHost(server);
-    const port = ob.server_port ?? ob.port;
+    const port =
+        ob.server_port ??
+        ob.port ??
+        (type === 'hysteria2' || type === 'hy2'
+            ? parseInt(normalizeHysteria2Ports(ob.server_ports) || '', 10)
+            : undefined);
     const name = ob.tag || '';
     if (!ob.server || !server || !port) return null;
 
@@ -120,6 +129,17 @@ export function singboxOutboundToUrl(ob) {
         case 'hysteria2':
         case 'hy2': {
             const params = tlsParams(ob);
+            const ports = normalizeHysteria2Ports(ob.server_ports);
+            if (ports) params.push(['ports', ports]);
+            const interval = normalizeHysteria2HopInterval(ob.hop_interval);
+            const maxInterval = normalizeHysteria2HopInterval(ob.hop_interval_max);
+            if (interval !== undefined)
+                params.push([
+                    'hop-interval',
+                    maxInterval !== undefined ? `${interval}-${maxInterval}` : interval,
+                ]);
+            if (ob.up_mbps !== undefined) params.push(['up', ob.up_mbps]);
+            if (ob.down_mbps !== undefined) params.push(['down', ob.down_mbps]);
             if (ob.obfs && ob.obfs.type) {
                 params.push(['obfs', ob.obfs.type]);
                 if (ob.obfs.password) params.push(['obfs-password', ob.obfs.password]);

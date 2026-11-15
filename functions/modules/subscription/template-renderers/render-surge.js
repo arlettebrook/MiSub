@@ -1,6 +1,12 @@
 import { urlsToClashProxies } from '../../../utils/url-to-clash.js';
 import { normalizeUnifiedTemplateModel } from '../template-model.js';
 import { quoteIniValue } from '../../../../src/utils/protocols/common/ini.js';
+import {
+    getHysteria2CertificatePin,
+    normalizeHysteria2Ports,
+    getHysteria2ScalarHopInterval,
+    hysteria2BandwidthMbps,
+} from '../../../../src/utils/protocols/common/hysteria2-params.js';
 
 function buildProxyLine(proxy) {
     const type = String(proxy.type || '').toLowerCase();
@@ -82,6 +88,15 @@ function buildProxyLine(proxy) {
     if (type === 'vless') return null;
     if (type === 'hysteria2' || type === 'hy2') {
         const extras = [`password=${quoteIniValue(proxy.password || '')}`];
+        const ports = normalizeHysteria2Ports(proxy.ports);
+        if (ports) extras.push(`port-hopping=${ports.replace(/,/g, ';')}`);
+        const interval = getHysteria2ScalarHopInterval(proxy, 'Surge');
+        if (interval !== undefined) extras.push(`port-hopping-interval=${interval}`);
+        const pin = getHysteria2CertificatePin(proxy);
+        if (pin) extras.push(`server-cert-fingerprint-sha256=${pin}`);
+        const downMbps = hysteria2BandwidthMbps(proxy.down);
+        if (downMbps !== undefined) extras.push(`download-bandwidth=${downMbps}`);
+        if (proxy['skip-cert-verify'] === true) extras.push('skip-cert-verify=true');
         if ((proxy.obfs === 'salamander' || proxy.obfs === 'gecko') && proxy['obfs-password']) {
             extras.push(`${proxy.obfs}-password=${quoteIniValue(proxy['obfs-password'])}`);
         }

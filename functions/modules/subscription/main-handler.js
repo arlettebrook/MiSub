@@ -1473,6 +1473,15 @@ export async function handleMisubRequest(context) {
             return new Response(finalContent || '', { headers: responseHeaders });
         } catch (e) {
             console.error(`[Builtin${targetFormat}] Generation failed:`, e);
+            if (e.code === 'HY2_UNSUPPORTED_CERT_PIN' || e.code === 'HY2_UNSUPPORTED_HOP_RANGE') {
+                return new Response(JSON.stringify({ error: e.message }), {
+                    status: 422,
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                        'Cache-Control': 'no-store',
+                    },
+                });
+            }
         }
     }
 

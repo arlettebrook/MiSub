@@ -5,6 +5,7 @@
 
 import { urlToClashProxy, urlsToClashProxies } from '../../utils/url-to-clash.js';
 import { getVlessPacketEncoding } from '../../../src/utils/protocols/common/vless-params.js';
+import { applyHysteria2SingboxOptions } from '../../../src/utils/protocols/common/hysteria2-params.js';
 import { getUniqueName } from './name-utils.js';
 import { groupNodeLinesByRegion } from './region-groups.js';
 import {
@@ -188,6 +189,7 @@ function buildOutbound(proxy) {
             enabled: true,
             server_name: proxy.sni || proxy.servername || server,
         };
+        applyHysteria2SingboxOptions(outbound, proxy);
     } else if (type === 'tuic') {
         outbound.type = 'tuic';
         outbound.server = server;
