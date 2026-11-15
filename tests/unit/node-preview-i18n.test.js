@@ -162,6 +162,19 @@ describe('NodePreviewModal refresh', () => {
 
     beforeEach(() => api.post.mockClear());
 
+    it('shows loading on the first render without flashing the empty-list state', async () => {
+        let complete;
+        api.post.mockImplementationOnce(() => new Promise((resolve) => (complete = resolve)));
+        const wrapper = mountPreview();
+        expect(wrapper.vm.loading).toBe(true);
+        expect(wrapper.find('[data-testid="node-data-loading"]').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('No matching nodes');
+        complete({ success: true, nodes: [] });
+        await flushPromises();
+        expect(wrapper.vm.loading).toBe(false);
+        expect(wrapper.find('[data-testid="node-data-loading"]').exists()).toBe(false);
+    });
+
     const cachedResult = () => ({
         success: true,
         fromCache: true,

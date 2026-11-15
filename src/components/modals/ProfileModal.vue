@@ -317,10 +317,11 @@
         @update:show="emit('update:show', $event)"
         @confirm="handleConfirm"
         size="6xl"
+        body-height="60vh"
     >
         <template #title>
             <div class="flex items-center gap-3">
-                <div class="p-2 misub-radius-lg bg-indigo-500/10">
+                <div class="shrink-0 p-2 misub-radius-lg bg-indigo-500/10">
                     <!-- Folder Icon for Profile -->
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -337,7 +338,7 @@
                         />
                     </svg>
                 </div>
-                <div>
+                <div class="min-w-0">
                     <h3 class="text-lg font-bold text-gray-800 dark:text-white">
                         {{ isNew ? t('profiles.addTitle') : t('profiles.editTitle') }}
                     </h3>

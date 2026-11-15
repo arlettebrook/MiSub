@@ -154,6 +154,7 @@
                         </div>
 
                         <div
+                            data-modal-footer
                             class="p-6 pt-4 flex justify-end space-x-3 shrink-0 border-t border-gray-200 dark:border-gray-700"
                         >
                             <slot name="footer">

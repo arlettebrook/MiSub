@@ -13,16 +13,23 @@ import { useLazyModals } from '/src/composables/useLazyModals.js';
 import '/src/assets/main.css';
 const Logs = createLazyModal('LogModal');
 const Preview = createLazyModal('NodePreviewModal');
+const Profile = createLazyModal('ProfileModal');
+const isProfilePreview = new URLSearchParams(location.search).has('profile-preview');
 createApp({ setup() {
-    const logs = ref(false), preview = ref(false);
+    const logs = ref(false), preview = ref(false), profile = ref(false);
+    window.savedProfiles = [];
+    const draft = { id: 'profile', name: 'demo', isPublic: false, subscriptions: [], manualNodes: [] };
+    const subscriptions = Array.from({ length: 20 }, (_, index) => ({ id: 'sub-' + index, name: 'Subscription ' + index, url: 'https://example.com/sub-' + index, enabled: true }));
     const previewSource = ref('source');
     window.nextPreviewSource = () => previewSource.value = 'another-source';
-    const mounted = useLazyModals({ logs, preview });
+    const mounted = useLazyModals({ logs, preview, profile });
     return () => h('main', [
         h('button', { id: 'open-logs', onClick: () => logs.value = true }, 'Open logs'),
         h('button', { id: 'open-preview', onClick: () => preview.value = true }, 'Open preview'),
+        h('button', { id: 'open-profile', onClick: () => profile.value = true }, 'Edit profile'),
         mounted.has('logs') && h(Logs, { show: logs.value, 'onUpdate:show': value => logs.value = value }),
-        mounted.has('preview') && h(Preview, { show: preview.value, subscriptionId: previewSource.value, subscriptionName: 'Test source', 'onUpdate:show': value => preview.value = value }),
+        mounted.has('preview') && h(Preview, { show: preview.value, ...(isProfilePreview ? { profileId: previewSource.value, profileName: 'Test source' } : { subscriptionId: previewSource.value, subscriptionName: 'Test source' }), 'onUpdate:show': value => preview.value = value }),
+        mounted.has('profile') && h(Profile, { show: profile.value, profile: draft, isNew: false, allSubscriptions: subscriptions, allManualNodes: [], 'onUpdate:show': value => profile.value = value, onSave: value => window.savedProfiles.push(value) }),
     ]);
 } }).use(createPinia()).use(createI18n({ initialLocale: 'en-US' })).mount('#app');
 `;
@@ -35,7 +42,7 @@ const server = await createServer({
             load: (id) => (id === '\0modal-loading' ? harness : undefined),
             configureServer(vite) {
                 vite.middlewares.use((request, response, next) => {
-                    if (request.url !== '/__modal-loading.html') return next();
+                    if (request.url?.split('?')[0] !== '/__modal-loading.html') return next();
                     response.setHeader('Content-Type', 'text/html');
                     response.end(
                         `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="app"></div><script type="module" src="${harnessPath}"></script></body></html>`
@@ -108,6 +115,7 @@ try {
     for (const viewport of [
         { width: 1440, height: 900 },
         { width: 390, height: 844 },
+        { width: 375, height: 667 },
         { width: 320, height: 650 },
     ]) {
         const { width } = viewport;
@@ -154,8 +162,13 @@ try {
                 });
         });
         let previewRequests = 0;
-        await page.route('**/api/subscription_nodes', (route) => {
+        let releaseInitialPreviewData;
+        const initialPreviewDataGate = new Promise(
+            (resolve) => (releaseInitialPreviewData = resolve)
+        );
+        await page.route('**/api/subscription_nodes', async (route) => {
             previewRequests++;
+            if (previewRequests === 1) await initialPreviewDataGate;
             return route.fulfill({
                 json: {
                     success: true,
@@ -172,7 +185,9 @@ try {
                 },
             });
         });
-        await page.goto(`${server.resolvedUrls.local[0]}__modal-loading.html`);
+        await page.goto(
+            `${server.resolvedUrls.local[0]}__modal-loading.html${width <= 375 ? '?profile-preview' : ''}`
+        );
         const firstLogRequest = page.waitForRequest('**/api/logs*');
         await page.locator('#open-logs').click();
         await firstLogRequest;
@@ -257,6 +272,13 @@ try {
         });
         await page.locator('.loading-ring').waitFor();
         await checkLoadingAlignment(page, 'modal-code-loading');
+        await page.waitForFunction(
+            () =>
+                !document
+                    .querySelector('[role="dialog"] > div')
+                    .classList.contains('modal-inner-enter-active')
+        );
+        const loadingBounds = await page.locator('[role="dialog"] > div').boundingBox();
         assert.equal(previewRequests, 1, 'Preview data must load before the preview code is ready');
         let releasePreviewData;
         const previewDataGate = new Promise((resolve) => (releasePreviewData = resolve));
@@ -265,6 +287,20 @@ try {
             await route.fallback();
         });
         releasePreviewCode();
+        await page.locator('[data-testid="node-data-loading"]').waitFor();
+        assert.equal(
+            await page.locator('[data-testid="node-data-loading"] .loading-orbit').isVisible(),
+            true,
+            'The indicator must stay visible when code hands off to data loading'
+        );
+        const dataBounds = await page.locator('[role="dialog"] > div').boundingBox();
+        for (const key of ['x', 'y', 'width', 'height']) {
+            assert.ok(
+                Math.abs(dataBounds[key] - loadingBounds[key]) <= 1,
+                `Preview geometry must stay stable during loading: ${key}; before=${JSON.stringify(loadingBounds)} after=${JSON.stringify(dataBounds)}`
+            );
+        }
+        releaseInitialPreviewData();
         await page.getByText('Demo node', { exact: true }).first().waitFor();
         assert.equal(previewRequests, 1, 'The loaded preview must adopt its existing request');
         assert.equal(
@@ -310,6 +346,72 @@ try {
         await page.keyboard.press('Escape');
         await page.getByRole('dialog').waitFor({ state: 'hidden' });
         assert.equal(await page.evaluate(() => document.activeElement.id), 'open-preview');
+
+        // Small screens must keep the profile's default action buttons inside its
+        // panel while the long form scrolls independently above the fixed footer.
+        await page.locator('#open-profile').click();
+        await page.locator('#profile-name').waitFor();
+        await page.locator('#profile-name').fill('Unsaved');
+        const footer = page.locator('[data-modal-footer]');
+        const checkFooter = async () => {
+            const bounds = await footer.evaluate((element) => {
+                const panel = element.closest('[tabindex="-1"]').getBoundingClientRect();
+                const footer = element.getBoundingClientRect();
+                return {
+                    panelBottom: panel.bottom,
+                    footerBottom: footer.bottom,
+                    buttons: [...element.querySelectorAll('button')].map((button) => {
+                        const rect = button.getBoundingClientRect();
+                        return {
+                            top: rect.top,
+                            bottom: rect.bottom,
+                            right: rect.right,
+                            left: rect.left,
+                        };
+                    }),
+                    footerTop: footer.top,
+                    panelRight: panel.right,
+                    panelLeft: panel.left,
+                };
+            });
+            assert.equal(bounds.buttons.length, 2);
+            assert.ok(
+                bounds.footerBottom <= bounds.panelBottom + 1,
+                `Profile footer exceeds panel: ${JSON.stringify(bounds)}`
+            );
+            for (const button of bounds.buttons) {
+                assert.ok(
+                    button.top >= bounds.footerTop && button.bottom <= bounds.panelBottom - 12,
+                    `Profile button exceeds footer: ${JSON.stringify(bounds)}`
+                );
+                assert.ok(button.left >= bounds.panelLeft && button.right <= bounds.panelRight);
+            }
+        };
+        await checkFooter();
+        await page
+            .locator('[data-modal-body]')
+            .evaluate((body) => (body.scrollTop = body.scrollHeight));
+        await checkFooter();
+        if (process.env.MODAL_LOADING_SCREENSHOT) {
+            await page.evaluate(() => document.documentElement.classList.add('dark'));
+            await page.locator('[role="dialog"] > div').screenshot({
+                path: `${process.env.MODAL_LOADING_SCREENSHOT}-profile-footer-${width}.png`,
+            });
+            await page.evaluate(() => document.documentElement.classList.remove('dark'));
+        }
+        await footer.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        assert.equal(
+            await page.evaluate(() => window.savedProfiles.length),
+            0,
+            'Cancel must not save the profile'
+        );
+        await page.locator('#open-profile').click();
+        await page.locator('#profile-name').fill('Updated profile');
+        await footer.getByRole('button', { name: 'Confirm', exact: true }).click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        assert.equal(await page.evaluate(() => window.savedProfiles.length), 1);
+        assert.equal(await page.evaluate(() => window.savedProfiles[0].name), 'Updated profile');
         const timings = await page.evaluate(() =>
             performance
                 .getEntriesByType('measure')

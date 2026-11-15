@@ -6,6 +6,7 @@ import { createLazyModal } from '../../src/utils/lazy-modal.js';
 import { useLazyModals } from '../../src/composables/useLazyModals.js';
 import { createI18n } from '../../src/i18n/index.js';
 import { cachedLoader } from '../../src/utils/load-timing.js';
+import ModalLoading from '../../src/components/modals/ModalLoading.vue';
 
 const wrappers = [];
 afterEach(async () => {
@@ -138,6 +139,37 @@ describe('immediate lazy dialog shell', () => {
         expect(document.querySelector('#ready-content')).not.toBeNull();
         await vi.advanceTimersByTimeAsync(200);
         expect(document.querySelector('.loading-orbit')).toBeNull();
+    });
+
+    it('keeps the indicator visible when code loading hands off to data loading', async () => {
+        vi.useFakeTimers();
+        let finish;
+        const DataDialog = defineComponent({
+            props: { show: Boolean },
+            setup(props) {
+                return () =>
+                    h(
+                        Modal,
+                        { show: props.show },
+                        {
+                            body: () =>
+                                h(ModalLoading, {
+                                    show: props.show,
+                                    fill: true,
+                                    message: 'Fetching nodes',
+                                }),
+                        }
+                    );
+            },
+        });
+        const { wrapper } = host(() => new Promise((resolve) => (finish = resolve)));
+        await wrapper.get('#open-dialog').trigger('click');
+        await vi.advanceTimersByTimeAsync(150);
+        expect(document.querySelector('.loading-orbit')).not.toBeNull();
+        finish(DataDialog);
+        await flushPromises();
+        expect(document.querySelector('.loading-orbit')).not.toBeNull();
+        expect(document.body.textContent).toContain('Fetching nodes');
     });
 
     it('forwards live validation, confirmation and slot updates without remounting the shell', async () => {

@@ -1,5 +1,5 @@
 <script setup>
-    import { onScopeDispose, ref, watch } from 'vue';
+    import { useModalLoadingFeedback } from '../../composables/useModalLoadingFeedback.js';
     import { useI18n } from '../../i18n/index.js';
 
     const props = defineProps({
@@ -12,18 +12,7 @@
     });
     const emit = defineEmits(['retry']);
     const { t } = useI18n();
-    const showFeedback = ref(false);
-    let timer;
-    watch(
-        () => [props.show, props.error],
-        ([show, error]) => {
-            clearTimeout(timer);
-            showFeedback.value = false;
-            if (show && !error) timer = setTimeout(() => (showFeedback.value = true), 150);
-        },
-        { immediate: true, flush: 'sync' }
-    );
-    onScopeDispose(() => clearTimeout(timer));
+    const showFeedback = useModalLoadingFeedback(() => props.show && !props.error);
 </script>
 
 <template>

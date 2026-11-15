@@ -44,7 +44,7 @@ const sizes = {
     MigrationModal: '2xl',
     LegacyD1MigrationModal: '2xl',
 };
-const bodyHeights = { LogModal: '60vh', NodePreviewModal: '60vh' };
+const bodyHeights = { LogModal: '60vh', NodePreviewModal: '60vh', ProfileModal: '60vh' };
 
 export function createLazyModal(name, loader = modalLoaders[name]) {
     let resolved;
@@ -141,7 +141,8 @@ export function createLazyModal(name, loader = modalLoaders[name]) {
                             ),
                         size: attrs.size || sizes[name] || 'lg',
                         bodyHeight: bodyHeights[name],
-                        bodyMinHeight: name === 'ProfileModal' ? '60vh' : undefined,
+                        preview: name === 'NodePreviewModal',
+                        previewProfile: Boolean(props.profileId),
                         error: error.value,
                         onClose: close,
                         onRetry: requestLoad,

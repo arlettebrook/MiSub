@@ -2,6 +2,7 @@
     import { computed, defineComponent, h, nextTick, inject, ref, watch } from 'vue';
     import Modal from '../forms/Modal.vue';
     import ModalLoading from './ModalLoading.vue';
+    import NodePreviewToolbar from './NodePreview/NodePreviewToolbar.vue';
     import { modalShellKey } from '../../composables/useModalShell.js';
     import { useI18n } from '../../i18n/index.js';
 
@@ -12,6 +13,8 @@
         error: Boolean,
         bodyMinHeight: String,
         bodyHeight: String,
+        preview: Boolean,
+        previewProfile: Boolean,
     });
     const emit = defineEmits(['close', 'retry']);
     const { t } = useI18n();
@@ -62,6 +65,18 @@
     >
         <template v-if="!content || forwardedSlots.title" #title>
             <SlotContent v-if="content" name="title" />
+            <NodePreviewToolbar
+                v-else-if="preview"
+                :title="title"
+                :subtitle="
+                    previewProfile
+                        ? t('nodePreview.profileSubtitle')
+                        : t('nodePreview.subscriptionSubtitle')
+                "
+                :profile="previewProfile"
+                :loading="true"
+                @close="handleClose"
+            />
             <div v-else class="flex items-center justify-between gap-4">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ title }}</h3>
                 <button
@@ -92,6 +107,7 @@
                 :error="error"
                 :min-height="bodyMinHeight"
                 :fill="Boolean(bodyHeight)"
+                :message="preview ? t('nodePreview.loadingNodes') : undefined"
                 @retry="emit('retry')"
             />
         </template>
@@ -100,7 +116,7 @@
             <button
                 v-else
                 type="button"
-                class="touch-target rounded bg-gray-100 px-4 py-2 dark:bg-gray-800"
+                class="touch-target rounded bg-gray-100 px-4 py-2 text-sm dark:bg-gray-800"
                 @click="handleClose"
             >
                 {{ t('common.close') }}
