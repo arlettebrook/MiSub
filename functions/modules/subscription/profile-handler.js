@@ -205,7 +205,9 @@ export async function handleProfileMode(
                 skipCertVerify,
                 Boolean(sub?.plusAsSpace),
                 sub?.enableNodeCache === true,
-                forceRefresh
+                forceRefresh,
+                storageAdapter,
+                sub
             )
         )
     );
@@ -314,6 +316,7 @@ export async function handleProfileMode(
 
     return {
         success: true,
+        ...(subscriptionResults.some((result) => result.fromCache) ? { fromCache: true } : {}),
         subscriptions: allResults,
         nodes: processedNodes,
         totalCount: processedNodes.length,

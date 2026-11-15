@@ -80,12 +80,15 @@ export async function handleSingleSubscriptionMode(
         skipCertVerify,
         Boolean(subscription?.plusAsSpace),
         subscription?.enableNodeCache === true,
-        forceRefresh
+        forceRefresh,
+        storageAdapter,
+        subscription
     );
 
     return {
         success: result.success,
         error: result.error,
+        ...(result.fromCache ? { fromCache: true, cacheUpdatedAt: result.cacheUpdatedAt } : {}),
         subscriptions: [result],
         nodes: result.nodes,
         totalCount: result.nodes.length,

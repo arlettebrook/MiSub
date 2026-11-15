@@ -104,11 +104,15 @@ export function buildSubscriptionFilterFingerprint(sub = {}) {
     ]);
 }
 
-async function readSubscriptionNodeCache(storage, sub) {
+/** Read the same per-source protective cache for output and saved-source previews. */
+export async function readSubscriptionNodeCache(storage, sub) {
     if (!storage?.get) return null;
     try {
         const cached = await storage.get(buildSubscriptionNodeCacheKey(sub));
         if (!cached || !Array.isArray(cached.nodes)) return null;
+        // A saved source can keep its ID while its URL is replaced. Do not reuse
+        // nodes from the previous source; legacy entries without a URL still work.
+        if (cached.sourceUrl && cached.sourceUrl !== sub?.url) return null;
         const nodes = cached.nodes.filter(isRealProxyNode);
         // 健康上游被规则主动筛空的结果也有效，不能在后续故障时复活旧节点。
         return nodes.length > 0 ||

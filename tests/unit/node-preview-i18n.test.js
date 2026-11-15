@@ -143,13 +143,13 @@ describe('NodePreviewModal English translations', () => {
 });
 
 describe('NodePreviewModal refresh', () => {
-    const mountPreview = (props = {}) => {
+    const mountPreview = (props = {}, locale = 'en-US') => {
         const pinia = createPinia();
         setActivePinia(pinia);
         return mount(NodePreviewModal, {
             props: { show: true, subscriptionId: 'source-1', ...props },
             global: {
-                plugins: [pinia, createI18n({ initialLocale: 'en-US' })],
+                plugins: [pinia, createI18n({ initialLocale: locale })],
                 stubs: {
                     Teleport: true,
                     NodeFilters: true,
@@ -161,6 +161,88 @@ describe('NodePreviewModal refresh', () => {
     };
 
     beforeEach(() => api.post.mockClear());
+
+    const cachedResult = () => ({
+        success: true,
+        fromCache: true,
+        nodes: [
+            {
+                name: 'Cached Node',
+                url: 'trojan://test@cached.example:443#Cached',
+                protocol: 'trojan',
+            },
+        ],
+        stats: { protocols: { trojan: 1 }, regions: { 其他: 1 } },
+        subscriptions: [
+            {
+                subscriptionName: 'Cached Source',
+                success: true,
+                fromCache: true,
+                cacheUpdatedAt: '2026-11-14T12:00:00.000Z',
+                error: 'HTTP 403: Forbidden',
+            },
+        ],
+    });
+
+    it.each(['en-US', 'zh-CN'])(
+        'shows cached nodes, source, cache time and original fetch error in %s',
+        async (locale) => {
+            api.post.mockResolvedValueOnce(cachedResult());
+            const wrapper = mountPreview({}, locale);
+            await flushPromises();
+            const alert = wrapper.get('[role="alert"]').text();
+            expect(alert).toContain(
+                locale === 'zh-CN' ? '保护性缓存节点' : 'protective cached nodes'
+            );
+            expect(alert).toContain('Cached Source');
+            expect(alert).toContain('2026');
+            expect(alert).toContain('HTTP 403: Forbidden');
+            expect(wrapper.text()).toContain('Cached Node');
+            if (locale === 'en-US') expectNoChineseOrKeys(alert);
+        }
+    );
+
+    it('keeps the cached preview visible while reporting a genuine force-refresh failure', async () => {
+        api.post.mockResolvedValueOnce(cachedResult());
+        const wrapper = mountPreview();
+        await flushPromises();
+        api.post.mockResolvedValueOnce({ success: false, nodes: [], error: 'HTTP 403: Forbidden' });
+        await wrapper.get('button[aria-label="Fetch nodes again"]').trigger('click');
+        await flushPromises();
+        expect(api.post.mock.calls.at(-1)[1].forceRefresh).toBe(true);
+        expect(wrapper.get('[role="alert"]').text()).toContain(
+            'Refresh failed. Previous nodes kept: HTTP 403'
+        );
+        expect(wrapper.text()).toContain('Cached Node');
+    });
+
+    it('fetches again on reopen after cache fallback, and clears the warning on fresh success', async () => {
+        api.post.mockResolvedValueOnce(cachedResult());
+        const wrapper = mountPreview();
+        await flushPromises();
+        await wrapper.setProps({ show: false });
+        await wrapper.setProps({ show: true });
+        await flushPromises();
+        expect(api.post).toHaveBeenCalledTimes(2);
+        expect(wrapper.text()).toContain('Demo HK');
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    });
+
+    it('reports cached and failed sources together in a partially available profile', async () => {
+        const result = cachedResult();
+        result.subscriptions.push({
+            subscriptionName: 'Unavailable',
+            success: false,
+            error: 'HTTP 500',
+        });
+        api.post.mockResolvedValueOnce(result);
+        const wrapper = mountPreview({ subscriptionId: undefined, profileId: 'profile-a' });
+        await flushPromises();
+        const alert = wrapper.get('[role="alert"]').text();
+        expect(alert).toContain('1 sources failed');
+        expect(alert).toContain('protective cached nodes');
+        expect(wrapper.text()).toContain('Cached Node');
+    });
 
     it('keeps the last nodes visible while reopening the same source and cancels a pending request on close', async () => {
         const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);

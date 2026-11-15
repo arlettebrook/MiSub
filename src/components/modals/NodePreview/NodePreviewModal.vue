@@ -14,7 +14,7 @@
     import NodePagination from './components/NodePagination.vue';
 
     const isDev = import.meta.env.DEV;
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
 
     const props = defineProps({
         show: Boolean,
@@ -296,11 +296,41 @@
             allNodes.value = data.nodes || [];
             lastDataKey = key;
             const failedSources = (data.subscriptions || []).filter((source) => !source.success);
+            const warnings = [];
             if (failedSources.length) {
-                warning.value = t('nodePreview.partialFetchFailed', {
-                    count: failedSources.length,
-                });
+                warnings.push(
+                    t('nodePreview.partialFetchFailed', {
+                        count: failedSources.length,
+                    })
+                );
             }
+            const cachedSources = (data.subscriptions || []).filter((source) => source.fromCache);
+            if (!cachedSources.length && data.fromCache)
+                cachedSources.push({
+                    subscriptionName:
+                        props.subscriptionName ||
+                        props.profileName ||
+                        t('nodePreview.unknownSubscription'),
+                    cacheUpdatedAt: data.cacheUpdatedAt,
+                    error: data.error,
+                });
+            if (cachedSources.length) {
+                warnings.push(t('nodePreview.cachedPreview', { count: cachedSources.length }));
+                for (const source of cachedSources) {
+                    const date = source.cacheUpdatedAt ? new Date(source.cacheUpdatedAt) : null;
+                    warnings.push(
+                        t('nodePreview.cachedSource', {
+                            name: source.subscriptionName || t('nodePreview.unknownSubscription'),
+                            time:
+                                date && Number.isFinite(date.getTime())
+                                    ? date.toLocaleString(locale.value)
+                                    : t('nodePreview.cacheTimeUnknown'),
+                            error: source.error || t('nodePreview.fetchFailed'),
+                        })
+                    );
+                }
+            }
+            warning.value = warnings.join(' ');
             const currentUrls = new Set(allNodes.value.map((node) => node.url));
             selectedUrls.value = new Set(
                 [...selectedUrls.value].filter((url) => currentUrls.has(url))
@@ -679,7 +709,7 @@
                 <div
                     v-if="warning"
                     role="alert"
-                    class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200 sm:px-8"
+                    class="break-words border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200 sm:px-8"
                 >
                     {{ warning }}
                 </div>

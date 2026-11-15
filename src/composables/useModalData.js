@@ -23,8 +23,11 @@ export function useModalData(name, { inherit = true } = {}) {
             (name === 'LogModal'
                 ? Array.isArray(data?.data)
                 : data?.success &&
+                  !data.fromCache &&
                   Array.isArray(data.nodes) &&
-                  !(data.subscriptions || []).some((source) => !source.success)),
+                  !(data.subscriptions || []).some(
+                      (source) => !source.success || source.fromCache
+                  )),
     });
     if (store)
         watch(
