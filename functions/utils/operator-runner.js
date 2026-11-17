@@ -5,7 +5,10 @@
 
 import * as NodeUtils from './node-transformer.js';
 import { extractNodeRegion, getRegionEmoji } from '../modules/utils/geo-utils.js';
+import { stripCountryFlagEmoji } from '../../shared/node-emoji.js';
 import { matchesDslCondition, renderDslTemplate } from './expression-dsl.js';
+import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
+import { hasEmojiTemplate } from '../../shared/node-flag-policy.js';
 
 /**
  * 辅助函数：将规则模式规范化为正则表达式数组
@@ -83,7 +86,9 @@ function opFilter(nodes, params) {
         // Ensure region info is present
         result = result.map((r) => NodeUtils.ensureRegionInfo(r, true));
         const allowed = new Set(regions.values);
-        result = result.filter((r) => allowed.has(r.regionZh) || allowed.has(r.region));
+        result = result.filter(
+            (r) => allowed.has(r.regionZh) || allowed.has(r.region) || allowed.has(r.regionCode)
+        );
     }
     return result;
 }
@@ -91,7 +96,7 @@ function opFilter(nodes, params) {
 /**
  * Rename Operator
  */
-function opRename(nodes, params) {
+function opRename(nodes, params, context = {}) {
     if (!params) return nodes;
     const { regex, template } = params;
     let result = [...nodes];
@@ -100,13 +105,17 @@ function opRename(nodes, params) {
         const rules = normalizeRules(regex.rules);
         if (rules.length > 0) {
             result = result.map((r) => {
-                const enriched = NodeUtils.ensureRegionInfo(r, true);
+                const enriched = NodeUtils.ensureRegionInfo(
+                    r,
+                    context.flagPolicy?.mode !== 'remove'
+                );
                 const vars = {
                     name: r.name,
                     protocol: r.protocol,
                     region: enriched.region,
                     regionZh: enriched.regionZh,
                     emoji: enriched.emoji,
+                    countryCode: r.metadata?.regionInfo?.code || '',
                     server: r.server,
                     port: r.port,
                 };
@@ -144,7 +153,7 @@ function opRename(nodes, params) {
         const scope = template.indexScope || template.scope || 'region'; // 默认按地区分组计数，符合用户直觉
 
         result = result.map((r, index) => {
-            const enriched = NodeUtils.ensureRegionInfo(r, true);
+            const enriched = NodeUtils.ensureRegionInfo(r, context.flagPolicy?.mode !== 'remove');
 
             // 确定索引分组键
             let groupKey = 'global';
@@ -157,11 +166,12 @@ function opRename(nodes, params) {
             counters.set(groupKey, groupIndex);
 
             const vars = {
-                name: r.name,
+                name: hasEmojiTemplate(template.template) ? stripCountryFlagEmoji(r.name) : r.name,
                 protocol: r.protocol,
                 region: enriched.region,
                 regionZh: enriched.regionZh,
                 emoji: enriched.emoji,
+                countryCode: r.metadata?.regionInfo?.code || '',
                 server: r.server,
                 port: r.port,
                 index: groupIndex + (Number(template.offset || template.indexStart) || 1) - 1,
@@ -244,15 +254,17 @@ export async function runOperatorChain(nodeUrls, operators, context = {}) {
     let records = NodeUtils.nodeUrlsToRecords(nodeUrls, {
         needServerPort: true,
         ensureRegion: false,
+        regionResolver: context.regionResolver,
+        regionHints: context.regionHints,
     });
     const metadataByUrl =
         context.nodeMetadataByUrl instanceof Map
             ? context.nodeMetadataByUrl
             : new Map(Object.entries(context.nodeMetadataByUrl || {}));
-    if (metadataByUrl.size > 0) {
-        records = records.map((record) => ({
+    if (metadataByUrl.size > 0 || Array.isArray(context.nodeMetadata)) {
+        records = records.map((record, index) => ({
             ...record,
-            ...(metadataByUrl.get(record.url) || {}),
+            ...(context.nodeMetadata?.[index] || metadataByUrl.get(record.url) || {}),
         }));
     }
 
@@ -269,18 +281,23 @@ export async function runOperatorChain(nodeUrls, operators, context = {}) {
     };
 
     const enrichedContext = { ...context, ...platform };
+    context.onStep?.(records);
 
     // 2. Run Operators sequentially
     for (const op of operators) {
         const { type, params, enabled } = op;
         if (enabled === false) continue;
 
+        const previousNames = context.regionResolver
+            ? new Map(records.map((record) => [record, record.name]))
+            : null;
+
         switch (type) {
             case 'filter':
                 records = opFilter(records, params);
                 break;
             case 'rename':
-                records = opRename(records, params);
+                records = opRename(records, params, enrichedContext);
                 break;
             case 'script':
                 records = await opScript(records, params, enrichedContext);
@@ -314,8 +331,25 @@ export async function runOperatorChain(nodeUrls, operators, context = {}) {
                 records = Array.from(seenNodes.values());
                 break;
         }
+        if (context.regionResolver && (type === 'rename' || type === 'script')) {
+            records = records.map((record) => {
+                if (previousNames.get(record) === record.name) return record;
+                const metadata = extractNodeMetadata(record.name, {
+                    regionResolver: context.regionResolver,
+                    regionHint: record.metadata?.regionInfo,
+                });
+                return { ...record, metadata, region: '', regionZh: '', regionCode: '', emoji: '' };
+            });
+        }
+        context.onStep?.(records);
     }
 
     // 3. Convert Records back to URLs
-    return NodeUtils.recordsToNodeUrls(records);
+    const urls = NodeUtils.recordsToNodeUrls(records);
+    urls.forEach((url, index) => {
+        if (records[index].metadata?.regionInfo)
+            context.regionResolver?.remember(url, records[index].metadata.regionInfo);
+    });
+    context.onComplete?.(records.map((record, index) => ({ ...record, url: urls[index] })));
+    return urls;
 }

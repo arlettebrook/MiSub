@@ -34,6 +34,8 @@ export const DEFAULT_SETTINGS = {
     NotifyThresholdPercent: 90,
     enableTrafficNode: false,
     enableFlagEmoji: true,
+    flagEmojiMode: '',
+    flagEmojiPosition: 'prefix',
     enablePublicPage: true,
     storageType: 'kv',
     // 新增：借鉴Sub-Store和miaomiaowu的功能

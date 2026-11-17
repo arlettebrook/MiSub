@@ -90,7 +90,7 @@ describe('Builtin template rule audit', () => {
         expect(autoGroup?.members).toContain('🇭🇰 香港节点');
         expect(autoGroup?.members).toContain('🇯🇵 日本节点');
         expect(autoGroup?.members).toContain('🇺🇸 美国节点');
-        expect(autoGroup?.members).toContain('🌍 狮城节点');
+        expect(autoGroup?.members).toContain('🇸🇬 狮城节点');
         expect(autoGroup?.members).not.toContain('🇺🇲 美国节点');
     });
 

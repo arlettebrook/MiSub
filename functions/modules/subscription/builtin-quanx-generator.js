@@ -1,3 +1,4 @@
+import { getRegionGroupName } from '../../../shared/node-regions.js';
 /**
  * 内置 Quantumult X 配置生成器
  * 输出格式对齐项目中的 Quantumult X parser，确保可解析回节点 URL。
@@ -320,7 +321,7 @@ export function generateBuiltinQuanxConfig(nodeList, options = {}) {
         '📲 Telegram': `${ICON_REPO}/Telegram.png`,
         '🎧 Spotify': `${ICON_REPO}/Spotify.png`,
         '🇭🇰 香港节点': `${ICON_REPO}/Hong_Kong.png`,
-        '🇹🇼 台湾节点': `${ICON_REPO}/Taiwan.png`,
+        [getRegionGroupName('台湾')]: `${ICON_REPO}/Taiwan.png`,
         '🇯🇵 日本节点': `${ICON_REPO}/Japan.png`,
         '🇸🇬 狮城节点': `${ICON_REPO}/Singapore.png`,
         '🇺🇸 美国节点': `${ICON_REPO}/United_States.png`,

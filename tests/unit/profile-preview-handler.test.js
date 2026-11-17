@@ -50,7 +50,7 @@ describe('handleProfileMode preview transforms', () => {
                     name: 'Test Sub',
                 },
             ]),
-            get: vi.fn().mockResolvedValue({ defaultOperators: [] }),
+            get: vi.fn().mockResolvedValue({ defaultOperators: [], enableFlagEmoji: false }),
         });
 
         fetchSubscriptionNodes.mockResolvedValue({

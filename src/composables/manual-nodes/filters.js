@@ -1,8 +1,9 @@
 import { isManualNodeSource } from '../../../shared/node-source.js';
+import { extractNodeRegion, normalizeRegionName } from '../../../shared/node-regions.js';
 
 export const countryCodeMap = {
     hk: ['🇭🇰', '香港', 'HK'],
-    tw: ['🇨🇳', '台湾', '臺灣'],
+    tw: ['🇹🇼', '台湾', '臺灣', 'TW'],
     sg: ['🇸🇬', '新加坡', '狮城'],
     jp: ['🇯🇵', '日本'],
     us: ['🇺🇸', '美国', '美國'],
@@ -67,6 +68,19 @@ export function isManualNodeEntry(item) {
     return isManualNodeSource(item);
 }
 
+export function matchesManualNodeSearch(name, query) {
+    if (typeof name !== 'string') return false;
+    const search = query.toLowerCase().trim();
+    const region = normalizeRegionName(search);
+    if (region && region !== '其他') return extractNodeRegion(name) === region;
+    return (
+        name.toLowerCase().includes(search) ||
+        (countryCodeMap[search] || []).some((term) =>
+            name.toLowerCase().includes(term.toLowerCase())
+        )
+    );
+}
+
 export function filterManualNodes(nodes, searchTerm, activeColorFilter) {
     let filtered = nodes;
 
@@ -82,16 +96,5 @@ export function filterManualNodes(nodes, searchTerm, activeColorFilter) {
         return filtered;
     }
 
-    const searchQuery = searchTerm.toLowerCase().trim();
-    const alternativeTerms = countryCodeMap[searchQuery] || [];
-
-    return filtered.filter((node) => {
-        if (!node.name) return false;
-        const nodeName = node.name.toLowerCase();
-        if (nodeName.includes(searchQuery)) return true;
-        for (const altTerm of alternativeTerms) {
-            if (nodeName.includes(altTerm.toLowerCase())) return true;
-        }
-        return false;
-    });
+    return filtered.filter((node) => matchesManualNodeSearch(node.name, searchTerm));
 }

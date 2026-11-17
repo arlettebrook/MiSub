@@ -1,4 +1,5 @@
 <script setup>
+    import { getRegionDisplayEmoji as getRegionEmoji } from '../../../../../shared/node-regions.js';
     import { computed } from 'vue';
     import { useI18n } from '../../../../i18n/index.js';
     import draggable from 'vuedraggable';
@@ -85,35 +86,6 @@
             keys[index] = next;
             return keys;
         });
-    };
-
-    const getRegionEmoji = (region) => {
-        if (!region) return '🌐';
-        const regionMap = {
-            香港: '🇭🇰',
-            台湾: '🇨🇳',
-            日本: '🇯🇵',
-            美国: '🇺🇸',
-            新加坡: '🇸🇬',
-            韩国: '🇰🇷',
-            英国: '🇬🇧',
-            德国: '🇩🇪',
-            法国: '🇫🇷',
-            俄罗斯: '🇷🇺',
-            加拿大: '🇨🇦',
-            澳门: '🇲🇴',
-            中国: '🇨🇳',
-            印度: '🇮🇳',
-            荷兰: '🇳🇱',
-            澳大利亚: '🇦🇺',
-            泰国: '🇹🇭',
-            越南: '🇻🇳',
-            印尼: '🇮🇩',
-            马来西亚: '🇲🇾',
-            菲律宾: '🇵🇭',
-            土耳其: '🇹🇷',
-        };
-        return regionMap[region] || '🌍';
     };
 
     const getTagsList = (item) => {

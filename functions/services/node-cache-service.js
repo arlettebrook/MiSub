@@ -3,6 +3,10 @@
  * 解决订阅拉取超时问题：缓存节点数据，快速响应客户端请求
  * @author MiSub Team
  */
+import {
+    NODE_PROCESSING_VERSION,
+    isNodeProcessingVersionCompatible,
+} from '../../shared/node-processing-version.js';
 
 /**
  * 缓存配置
@@ -106,12 +110,14 @@ function isSubscriptionNodeCacheKey(key) {
  * @param {string} cacheKey - 缓存键
  * @returns {Promise<{data: CacheEntry|null, status: 'fresh'|'stale'|'expired'|'miss'}>}
  */
-export async function getCache(storageAdapter, cacheKey) {
+export async function getCache(storageAdapter, cacheKey, processingVersion) {
     try {
         const cached = await storageAdapter.get(cacheKey);
         if (!cached) {
             return { data: null, status: 'miss' };
         }
+        if (processingVersion && !isNodeProcessingVersionCompatible(cached, processingVersion))
+            return { data: null, status: 'miss' };
 
         const now = Date.now();
         const age = now - cached.timestamp;
@@ -143,7 +149,12 @@ export async function getCache(storageAdapter, cacheKey) {
 export async function setCache(storageAdapter, cacheKey, nodes, sources = [], options = {}) {
     try {
         const nodeCount = nodes.split('\n').filter((line) => line.trim()).length;
-        const existing = await storageAdapter.get(cacheKey);
+        const saved = await storageAdapter.get(cacheKey);
+        const existing =
+            options.processingVersion &&
+            !isNodeProcessingVersionCompatible(saved, options.processingVersion)
+                ? null
+                : saved;
         const acceptFilteredReduction = canAcceptFilteredNodeReduction(existing, options);
         if (!acceptFilteredReduction && isLikelyPartialAggregateNodeList(nodes)) {
             console.warn(
@@ -172,10 +183,14 @@ export async function setCache(storageAdapter, cacheKey, nodes, sources = [], op
         }
 
         const cacheEntry = {
+            processingVersion: options.processingVersion || NODE_PROCESSING_VERSION,
             nodes,
             timestamp: Date.now(),
             nodeCount,
             sources,
+            ...(options.regionHints && Object.keys(options.regionHints).length
+                ? { regionHints: options.regionHints }
+                : {}),
             ...(typeof options.filterFingerprint === 'string'
                 ? {
                       filterFingerprint: options.filterFingerprint,

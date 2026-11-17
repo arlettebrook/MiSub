@@ -6,6 +6,8 @@ import {
     buildSubscriptionFilterFingerprint,
 } from '../../services/subscription-service.js';
 import { isLocalProxyEndpoint } from '../../utils/node-utils.js';
+import { createRegionResolver } from '../../../shared/node-region-context.js';
+import { resolveSourceFlagPolicyFingerprint } from '../../../shared/node-flag-policy.js';
 import {
     isCacheFilterCompatible,
     isSuspiciousNodeCountDrop,
@@ -45,7 +47,9 @@ export async function fetchSubscriptionNodes(
     enableNodeCache = false,
     forceRefresh = false,
     storageAdapter = null,
-    subscription = null
+    subscription = null,
+    regionResolver = null,
+    flagPolicy
 ) {
     // 自动检测调试 Token
     const shouldDebug = debug || (url && url.includes('b0b422857bb46aba65da8234c84f38c6'));
@@ -63,13 +67,29 @@ export async function fetchSubscriptionNodes(
     };
     const failedResult = async (upstreamError) => {
         const cached = await readCacheEntry();
+        const sourceFlagFingerprint = resolveSourceFlagPolicyFingerprint(subscription, flagPolicy);
         if (
             cached &&
-            isCacheFilterCompatible(cached, buildSubscriptionFilterFingerprint(subscription))
+            isCacheFilterCompatible(cached, buildSubscriptionFilterFingerprint(subscription)) &&
+            (sourceFlagFingerprint === undefined ||
+                cached.flagPolicyFingerprint === sourceFlagFingerprint) &&
+            (!regionResolver ||
+                !cached.regionOverridesFingerprint ||
+                cached.regionOverridesFingerprint === regionResolver.overridesFingerprint)
         ) {
             // These URLs already carry the source's filters/operators. Reapplying
             // them can remove renamed nodes or execute an operator twice.
             const nodes = parseNodeList(cached.nodes.join('\n'), { plusAsSpace });
+            const cachedRegions = regionResolver || createRegionResolver();
+            cachedRegions.importHints(cached.nodes.join('\n'), cached.regionHints);
+            for (const node of nodes) {
+                const info = cachedRegions.hint(node.url);
+                if (info)
+                    Object.assign(node, {
+                        region: info.region,
+                        groupRegion: info.groupRegion || info.region,
+                    });
+            }
             if (nodes.length > 0 || cached.nodes.length === 0) {
                 return {
                     subscriptionName,

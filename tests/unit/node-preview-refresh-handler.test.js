@@ -68,7 +68,7 @@ describe('node preview refresh requests', () => {
             );
             const data = await response.json();
             expect(data.success).toBe(true);
-            expect(data.nodes[0].name).toBe('Fresh Node');
+            expect(data.nodes[0].name).toBe(mode.profileId ? '🌍 Fresh Node' : 'Fresh Node');
 
             const [fetchUrl, options] = globalThis.fetch.mock.calls[0];
             const requestUrl = new URL(fetchUrl);
@@ -90,7 +90,7 @@ describe('node preview refresh requests', () => {
             previewRequest({ profileId: 'profile-1', forceRefresh: true }),
             {}
         );
-        expect((await response.json()).nodes[0].name).toBe('Fresh Node');
+        expect((await response.json()).nodes[0].name).toBe('🌍 Fresh Node');
         const upstream = new URL(
             new URL(globalThis.fetch.mock.calls[0][0]).searchParams.get('url')
         );
@@ -159,7 +159,7 @@ describe('node preview refresh requests', () => {
         );
         const data = await response.json();
         expect(data.success).toBe(true);
-        expect(data.nodes[0].name).toBe('Fresh Node');
+        expect(data.nodes[0].name).toBe('🌍 Fresh Node');
         expect(data.subscriptions.filter((result) => !result.success)).toHaveLength(1);
     });
 });

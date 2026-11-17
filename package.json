@@ -16,6 +16,9 @@
     "test:node-preview-scroll": "node tests/browser/node-preview-scroll.mjs",
     "test:modal-loading": "node tests/browser/modal-loading.mjs",
     "test:browser-storage": "node tests/browser/browser-storage-resilience.mjs",
+    "test:node-flags-ui": "node tests/browser/node-flags-settings.mjs",
+    "benchmark:node-flags": "node --expose-gc scripts/benchmark-node-flags.mjs",
+    "benchmark:node-processing": "node --expose-gc scripts/benchmark-node-processing.mjs",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "format": "prettier --write \"functions/**/*.js\" \"src/**/*.{js,vue}\" \"tests/**/*.js\" \"docs/**/*.md\"",
     "format:check": "prettier --check \"functions/**/*.js\" \"src/**/*.{js,vue}\" \"tests/**/*.js\" \"docs/**/*.md\""

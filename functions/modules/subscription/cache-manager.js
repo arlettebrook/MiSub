@@ -48,10 +48,11 @@ export async function resolveNodeListWithCache({
     targetMisubsCount,
     expectedNodeCount = 0,
     filterFingerprint,
+    processingVersion,
 }) {
     const { data: cachedData, status: cacheStatus } = forceRefresh
         ? { data: null, status: 'miss' }
-        : await getCache(storageAdapter, cacheKey);
+        : await getCache(storageAdapter, cacheKey, processingVersion);
 
     let combinedNodeList;
     let cacheHeaders = {};
@@ -79,11 +80,13 @@ export async function resolveNodeListWithCache({
     }
 
     if (cacheStatus === 'fresh' && canUseCachedData) {
+        context?.regionResolver?.importHints(cachedData.nodes, cachedData.regionHints);
         const cachedNodeCount = countCachedNodes(cachedData);
         combinedNodeList = cachedData.nodes;
         cacheHeaders = createCacheHeaders('HIT', cachedNodeCount);
         populateCachedStats(context, cachedNodeCount, targetMisubsCount);
     } else if ((cacheStatus === 'stale' || cacheStatus === 'expired') && canUseCachedData) {
+        context?.regionResolver?.importHints(cachedData.nodes, cachedData.regionHints);
         const cachedNodeCount = countCachedNodes(cachedData);
         combinedNodeList = cachedData.nodes;
         cacheHeaders = createCacheHeaders('REFRESHING', cachedNodeCount);

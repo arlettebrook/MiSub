@@ -11,6 +11,16 @@ import {
     buildSubscriptionFilterFingerprint,
 } from '../../services/subscription-service.js';
 import { fixNodeUrlEncoding } from '../../utils/node-utils.js';
+import {
+    resolveEffectiveNodeTransform,
+    resolveNodeOperators,
+    resolveNodeFlagPolicy,
+} from '../../utils/node-transform-settings.js';
+import {
+    createRegionResolver,
+    resolveRegionOverrides,
+} from '../../../shared/node-region-context.js';
+import { parseNodeInfo } from '../utils/geo-utils.js';
 import { sendEnhancedTgNotification, tgEscape } from '../notifications.js';
 import {
     KV_KEY_SUBS,
@@ -30,6 +40,10 @@ import {
 } from '../../services/node-cache-service.js';
 import { resolveRequestContext } from './request-context.js';
 import { resolveNodeListWithCache } from './cache-manager.js';
+import {
+    NODE_PROCESSING_VERSION,
+    isNodeProcessingVersionCompatible,
+} from '../../../shared/node-processing-version.js';
 import { ProcessorService } from '../../services/processor-service.js';
 import { logAccessSuccess, shouldSkipLogging as shouldSkipAccessLog } from './access-logger.js';
 import {
@@ -853,12 +867,51 @@ export async function handleMisubRequest(context) {
             resolvedGlobalLevel;
     }
 
+    // 在刷新闭包外解析，缓存刷新和两处输出入口复用相同的转换与国旗策略。
+    const effectiveNodeTransform = resolveEffectiveNodeTransform(
+        currentProfile,
+        config,
+        url.searchParams
+    );
+    const requestOperators = resolveNodeOperators(currentProfile);
+    if (urlRename) {
+        urlRename.split('|').forEach((group) => {
+            const [regex, replace] = group.split('@');
+            if (!regex) return;
+            requestOperators.push({
+                type: 'rename',
+                enabled: true,
+                params: {
+                    regex: {
+                        enabled: true,
+                        rules: [{ pattern: regex, replacement: replace || '', flags: 'gi' }],
+                    },
+                },
+            });
+        });
+    }
+    const effectiveOperators = resolveNodeOperators(
+        { operators: requestOperators },
+        config,
+        effectiveNodeTransform
+    );
+    const flagPolicy = resolveNodeFlagPolicy(
+        currentProfile,
+        config,
+        effectiveOperators,
+        url.searchParams
+    );
+    const addFlagEmoji = flagPolicy.mode === 'auto';
+    const effectiveRegionOverrides = resolveRegionOverrides(currentProfile, config);
+    context.regionResolver = createRegionResolver(effectiveRegionOverrides);
+
     // === 缓存机制：快速响应客户端请求 ===
     const cacheKey = generateCacheKey(
         profileIdentifier ? 'profile' : 'token',
         profileIdentifier || token
     );
     const filterFingerprint = JSON.stringify([
+        NODE_PROCESSING_VERSION,
         targetMisubs.map((sub) => [sub.id, sub.url, buildSubscriptionFilterFingerprint(sub)]),
         currentProfile
             ? [
@@ -875,6 +928,9 @@ export async function handleMisubRequest(context) {
             config.defaultNodeTransform,
             config.nodeTransformPresets,
             config.defaultPrefixSettings,
+            addFlagEmoji,
+            flagPolicy,
+            effectiveRegionOverrides,
         ],
         [urlInclude, urlExclude, urlRename, urlEmoji],
     ]);
@@ -887,10 +943,14 @@ export async function handleMisubRequest(context) {
 
     // 定义刷新函数（用于后台刷新）
     const refreshNodes = async (isBackground = false) => {
+        // 后台刷新不能覆盖前台缓存响应的统计或挤出其地区提示。
+        const refreshContext = isBackground
+            ? { ...context, regionResolver: createRegionResolver(effectiveRegionOverrides) }
+            : context;
         const isDebugToken = token === 'b0b422857bb46aba65da8234c84f38c6';
         // 组合节点列表
         // 传递 context 对象以获取请求信息用于日志记录
-        context.startTime = Date.now();
+        refreshContext.startTime = Date.now();
 
         // Prepare log metadata to pass down
         const clientIp =
@@ -901,7 +961,7 @@ export async function handleMisubRequest(context) {
         const country = request.headers.get('CF-IPCountry') || 'N/A';
         const domain = url.hostname;
 
-        context.logMetadata = {
+        refreshContext.logMetadata = {
             clientIp,
             geoInfo: {
                 country,
@@ -950,72 +1010,21 @@ export async function handleMisubRequest(context) {
             }
         }
 
-        // nodeTransform 回退逻辑
-        const globalNodeTransform = config.defaultNodeTransform || {};
-        const globalNodeTransformPresets = Array.isArray(config.nodeTransformPresets)
-            ? config.nodeTransformPresets
-            : [];
-        const profileNodeTransform = activeProfile?.nodeTransform ?? null;
-        const profileNodeTransformPresetId = activeProfile?.nodeTransformPresetId || '';
-        const profilePresetNodeTransform = profileNodeTransformPresetId
-            ? globalNodeTransformPresets.find((item) => item?.id === profileNodeTransformPresetId)
-                  ?.config || null
-            : null;
-        const hasProfileNodeTransform =
-            profileNodeTransform && Object.keys(profileNodeTransform).length > 0;
-
-        // nodeTransform 使用整体覆盖逻辑
-        const effectiveNodeTransform = hasProfileNodeTransform
-            ? profileNodeTransform
-            : profilePresetNodeTransform || globalNodeTransform;
-
         const generationSettings = {
             ...effectivePrefixSettings,
             nodeTransform: { ...effectiveNodeTransform },
             name: subName,
-            operators: Array.isArray(activeProfile?.operators) ? [...activeProfile.operators] : [],
+            operators: [...effectiveOperators],
             exclude: urlExclude || activeProfile?.exclude,
             include: urlInclude || activeProfile?.include,
-            // [Issue #345] 透传 emoji 开关到内置生成器
-            addFlagEmoji: effectiveNodeTransform.addFlagEmoji,
+            addFlagEmoji,
+            flagPolicy,
+            regionOverrides: effectiveRegionOverrides,
+            regionOverrideMode: 'replace',
         };
 
-        // [Subconverter API] 动态注入更名算子 (rename=old@new|A@B)
-        if (urlRename) {
-            const renameGroups = urlRename.split('|');
-            renameGroups.forEach((group) => {
-                const [regex, replace] = group.split('@');
-                if (regex) {
-                    generationSettings.operators.push({
-                        type: 'rename',
-                        enabled: true,
-                        params: {
-                            regex: {
-                                enabled: true,
-                                rules: [
-                                    {
-                                        pattern: regex,
-                                        replacement: replace || '',
-                                        flags: 'gi',
-                                    },
-                                ],
-                            },
-                        },
-                    });
-                }
-            });
-        }
-
-        // [Subconverter API] 控制 Emoji 注入
-        if (urlEmoji === 'false') {
-            generationSettings.nodeTransform.addFlagEmoji = false;
-            generationSettings.nodeTransform.removeFlagEmoji = true;
-        } else if (urlEmoji === 'true') {
-            generationSettings.nodeTransform.addFlagEmoji = true;
-        }
-
         const freshNodes = await generateCombinedNodeList(
-            context, // 传入完整 context
+            refreshContext,
             { ...config, enableAccessLog: false }, // [Deferred Logging] Disable service-side logging, we will log manually in handler
             userAgentHeader,
             targetMisubs,
@@ -1031,10 +1040,17 @@ export async function handleMisubRequest(context) {
             .map((s) => s.name || s.url);
         // 仅在至少一个订阅源真正从远程拉取成功时才刷新缓存时间
         // 如果没有 HTTP 订阅源（纯手动节点/过期订阅组），则始终写入缓存
-        const stats = context.generationStats;
+        const stats = refreshContext.generationStats;
         if (!stats?.sourceCount || stats.upstreamSuccessCount > 0) {
             const cacheOptions = {
+                processingVersion: NODE_PROCESSING_VERSION,
                 filterFingerprint,
+                regionHints: refreshContext.regionResolver.exportHints(
+                    freshNodes.trim().split('\n'),
+                    (node) =>
+                        parseNodeInfo(node, { normalizeFlagDisplay: false, identifyRegion: false })
+                            .name
+                ),
                 upstreamNodeCount: stats?.upstreamNodeCount,
                 // 所有源都真实拉取成功时，才允许正常筛选结果替换较大的缓存。
                 filteredNodeReduction:
@@ -1057,6 +1073,7 @@ export async function handleMisubRequest(context) {
                     .filter((line) => line.trim()).length;
             if (
                 !cacheSaved &&
+                isNodeProcessingVersionCompatible(existingCache) &&
                 isCacheFilterCompatible(existingCache, filterFingerprint) &&
                 !canAcceptFilteredNodeReduction(existingCache, cacheOptions) &&
                 (isSuspiciousNodeCountDrop(existingNodeCount, freshNodeCount) ||
@@ -1069,6 +1086,10 @@ export async function handleMisubRequest(context) {
                 ) {
                     console.warn(
                         '[MiSub Cache] Serving preserved aggregate cache after rejecting a suspicious refresh'
+                    );
+                    refreshContext.regionResolver.importHints(
+                        existingCache.nodes,
+                        existingCache.regionHints
                     );
                     return existingCache.nodes;
                 }
@@ -1096,6 +1117,7 @@ export async function handleMisubRequest(context) {
         targetMisubsCount: targetMisubs.length,
         expectedNodeCount: expectedRemoteNodeCount,
         filterFingerprint,
+        processingVersion: NODE_PROCESSING_VERSION,
     });
 
     console.log(`[MiSub Nodes] Count/Length: ${combinedNodeList ? combinedNodeList.length : 0}`);
@@ -1173,6 +1195,9 @@ export async function handleMisubRequest(context) {
                 );
                 const builtinOptions = {
                     manualNodeUrls,
+                    addFlagEmoji,
+                    flagPolicy,
+                    regionResolver: context.regionResolver,
                     ...resolveBuiltinRequestOptions({
                         searchParams: url.searchParams,
                         userAgent: userAgentHeader,
@@ -1184,9 +1209,7 @@ export async function handleMisubRequest(context) {
                     enableUdp: shouldEnableUdp,
                     enableTfo: urlTfo === 'true' || urlTfo === '1',
                     ruleLevel,
-                    regionOverrides: Array.isArray(config.regionOverrides)
-                        ? config.regionOverrides
-                        : [],
+                    regionOverrides: effectiveRegionOverrides,
                     isMeta: isMetaCore(userAgentHeader, url.searchParams),
                     customDnsOverride: config.customDnsOverride || '',
                     dnsMode:
@@ -1262,6 +1285,16 @@ export async function handleMisubRequest(context) {
             templateSource,
             subName,
         });
+        // 新模式已在本地完成添旗和位置控制，让第三方跳过额外添旗。
+        if (
+            ['auto', 'preserve', 'remove'].includes(config.flagEmojiMode) ||
+            ['auto', 'preserve', 'remove'].includes(currentProfile?.flagEmojiMode) ||
+            config.flagEmojiPosition === 'suffix' ||
+            currentProfile?.flagEmojiPosition === 'suffix' ||
+            url.searchParams.has('emoji-mode') ||
+            url.searchParams.has('emoji-position')
+        )
+            externalUrl.searchParams.set('emoji', 'false');
 
         // [Access Log] Send notification for external redirection
         if (
@@ -1357,6 +1390,9 @@ export async function handleMisubRequest(context) {
 
     const builtinOptions = {
         manualNodeUrls,
+        addFlagEmoji,
+        flagPolicy,
+        regionResolver: context.regionResolver,
         ...resolveBuiltinRequestOptions({
             searchParams: url.searchParams,
             userAgent: userAgentHeader,
@@ -1368,7 +1404,7 @@ export async function handleMisubRequest(context) {
         enableUdp: finalEnableUdp,
         enableTfo: finalEnableTfo,
         ruleLevel: ruleLevel, // 统一后的规则等级
-        regionOverrides: Array.isArray(config.regionOverrides) ? config.regionOverrides : [],
+        regionOverrides: effectiveRegionOverrides,
         isMeta: isMetaCore(userAgentHeader, url.searchParams),
         customDnsOverride: config.customDnsOverride || '',
         dnsMode:

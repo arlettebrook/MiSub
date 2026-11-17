@@ -4,8 +4,9 @@
  */
 
 // [修复] 使用正确的相对路径引用 modules/utils 下的 geo-utils
-import { extractNodeRegion, getRegionEmoji } from '../modules/utils/geo-utils.js';
+import { extractNodeRegion, parseNodeInfo } from '../modules/utils/geo-utils.js';
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
+import { formatNodeFlagName, stripCountryFlagEmoji } from '../../shared/node-emoji.js';
 
 /**
  * 节点协议正则表达式
@@ -47,10 +48,15 @@ export function isLocalProxyEndpoint(proxy) {
 }
 
 function normalizeBase64(input) {
-    let normalized = String(input || '')
-        .replace(/\s+/g, '')
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
+    let raw = String(input || '');
+    if (raw.includes('%')) {
+        try {
+            raw = decodeURIComponent(raw);
+        } catch {
+            /* 保留非法编码的原始载荷。 */
+        }
+    }
+    let normalized = raw.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
     const padding = normalized.length % 4;
     if (padding) normalized += '='.repeat(4 - padding);
     return normalized;
@@ -82,8 +88,7 @@ function updateSsrRemarks(link, updater) {
             ? base64UrlSafeDecodeUtf8(params.get('remarks'))
             : '';
         const newRemarks = updater(oldRemarks);
-        if (!newRemarks || newRemarks === oldRemarks)
-            return `ssr://${base64UrlSafeEncodeUtf8(decoded)}`;
+        if (typeof newRemarks !== 'string' || newRemarks === oldRemarks) return link;
         params.set('remarks', base64UrlSafeEncodeUtf8(newRemarks));
         return `ssr://${base64UrlSafeEncodeUtf8(mainPart + params.toString())}`;
     } catch (e) {
@@ -94,14 +99,37 @@ function updateSsrRemarks(link, updater) {
 /**
  * 为节点名称添加前缀
  */
-export function prependNodeName(link, prefix) {
+export function prependNodeName(link, prefix, options = {}) {
     if (!prefix) return link;
+    const remember = (renamed) => {
+        if (options.regionResolver) {
+            const before = parseNodeInfo(link, {
+                normalizeFlagDisplay: false,
+                identifyRegion: false,
+            }).name;
+            const origin =
+                options.regionResolver.hint(link) ||
+                extractNodeMetadata(before, { regionResolver: options.regionResolver }).regionInfo;
+            const after = parseNodeInfo(renamed, {
+                normalizeFlagDisplay: false,
+                identifyRegion: false,
+            }).name;
+            const info = extractNodeMetadata(after, {
+                regionResolver: options.regionResolver,
+                regionHint: { ...origin, prefixOrigin: true },
+            }).regionInfo;
+            options.regionResolver.remember(renamed, info);
+        }
+        return renamed;
+    };
 
     if (link?.toLowerCase?.().startsWith('ssr://')) {
-        return updateSsrRemarks(link, (originalName) => {
-            if (originalName.startsWith(prefix)) return originalName;
-            return originalName ? `${prefix} - ${originalName}` : prefix;
-        });
+        return remember(
+            updateSsrRemarks(link, (originalName) => {
+                if (originalName.startsWith(prefix)) return originalName;
+                return originalName ? `${prefix} - ${originalName}` : prefix;
+            })
+        );
     }
 
     const appendToFragment = (baseLink, namePrefix) => {
@@ -140,13 +168,13 @@ export function prependNodeName(link, prefix) {
             }
             const newJsonString = JSON.stringify(nodeConfig);
             const newBase64Part = btoa(unescape(encodeURIComponent(newJsonString)));
-            return 'vmess://' + newBase64Part;
+            return remember('vmess://' + newBase64Part);
         } catch (e) {
             console.error('为 vmess 节点添加名称前缀失败，将回退到通用方法。', e);
-            return appendToFragment(link, prefix);
+            return remember(appendToFragment(link, prefix));
         }
     }
-    return appendToFragment(link, prefix);
+    return remember(appendToFragment(link, prefix));
 }
 
 /**
@@ -159,27 +187,41 @@ export function extractRegionFromNodeName(nodeName) {
 /**
  * 为节点链接添加国旗 Emoji
  */
-export function addFlagEmoji(link) {
+export function addFlagEmoji(link, options = {}) {
     if (!link) return link;
     const appendEmoji = (name) => {
-        if (!name) return name;
+        if (!name) {
+            if (options.flagPolicy?.mode === 'preserve') return name;
+            name =
+                parseNodeInfo(link, { normalizeFlagDisplay: false, identifyRegion: false })
+                    .server || 'Node';
+        }
 
-        // 更全面的 Emoji 检测正则 (涵盖国旗、地区符号等)
-        const HAS_EMOJI_REGEX =
-            /[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}/u;
-        if (HAS_EMOJI_REGEX.test(name)) return name;
-
-        const metadata = extractNodeMetadata(name);
-        if (!metadata.flag) return name;
-
-        return `${metadata.flag} ${name}`;
+        const metadata = extractNodeMetadata(name, {
+            regionResolver: options.regionResolver,
+            regionHint: options.regionResolver?.hint(link),
+        });
+        const group = options.regionResolver?.resolve(name, 'group');
+        const info = {
+            ...metadata.regionInfo,
+            ...(group?.source === 'override'
+                ? { groupRegion: group.region, groupRuleIndex: group.ruleIndex }
+                : {}),
+        };
+        options.regionResolver?.remember(link, info);
+        const newName = formatNodeFlagName(
+            name,
+            options.flagPolicy || { mode: 'auto', position: options.position || 'prefix' },
+            info
+        );
+        return newName;
     };
 
     if (link.toLowerCase().startsWith('ssr://')) {
         return updateSsrRemarks(link, appendEmoji);
     }
 
-    if (link.startsWith('vmess://')) {
+    if (link.toLowerCase().startsWith('vmess://')) {
         try {
             const base64Part = link.substring('vmess://'.length);
             const binaryString = atob(normalizeBase64(base64Part));
@@ -187,15 +229,13 @@ export function addFlagEmoji(link) {
                 new Uint8Array(Array.from(binaryString, (c) => c.charCodeAt(0)))
             );
             const nodeConfig = JSON.parse(decodedStr);
-            if (nodeConfig.ps) {
-                const updatedPs = appendEmoji(nodeConfig.ps);
-                if (updatedPs === nodeConfig.ps) return link;
-                nodeConfig.ps = updatedPs;
-                const newJsonString = JSON.stringify(nodeConfig);
-                const newBase64Part = btoa(unescape(encodeURIComponent(newJsonString)));
-                return 'vmess://' + newBase64Part;
-            }
-            return link;
+            const oldPs = nodeConfig.ps || '';
+            const updatedPs = appendEmoji(oldPs);
+            if (updatedPs === oldPs) return link;
+            nodeConfig.ps = updatedPs;
+            const newJsonString = JSON.stringify(nodeConfig);
+            const newBase64Part = btoa(unescape(encodeURIComponent(newJsonString)));
+            return 'vmess://' + newBase64Part;
         } catch (e) {
             return link;
         }
@@ -208,11 +248,8 @@ export function addFlagEmoji(link) {
             basePart = link.substring(0, hashIndex);
             const rawName = link.substring(hashIndex + 1);
             try {
-                // [关键修复] VLESS/Trojan 节点名通常被层层编码，这里需要确保解码透彻
+                // URI 片段只解码一次，保留名称中的字面 %xx 和非法百分号。
                 originalName = decodeURIComponent(rawName);
-                if (originalName.includes('%')) {
-                    originalName = decodeURIComponent(originalName);
-                }
             } catch (e) {
                 originalName = rawName;
             }
@@ -220,19 +257,15 @@ export function addFlagEmoji(link) {
             // 没有 # 片段，根据 URL 结构提取一个逻辑名称以便注入国旗
             const protocolMatch = link.match(/^(.*?):\/\//);
             if (protocolMatch) {
-                const protocol = protocolMatch[1];
-                const rest = link.substring(protocol.length + 3);
-                const atIdx = rest.lastIndexOf('@');
-                const hostPortPart = (atIdx !== -1 ? rest.substring(atIdx + 1) : rest).split(
-                    /[?#]/
-                )[0];
-                originalName = hostPortPart.split(':')[0] || 'Node';
+                originalName =
+                    parseNodeInfo(link, { normalizeFlagDisplay: false, identifyRegion: false })
+                        .server || 'Node';
             }
         }
 
         if (!originalName) return link;
         const newName = appendEmoji(originalName);
-        if (newName === originalName && hashIndex === -1) return link;
+        if (newName === originalName) return link;
 
         return `${basePart}#${encodeURIComponent(newName)}`;
     }
@@ -241,21 +274,7 @@ export function addFlagEmoji(link) {
 export function removeFlagEmoji(link) {
     if (!link) return link;
 
-    const stripFlagEmoji = (name) => {
-        if (!name) return name;
-        let cleaned = name;
-        const patterns = [
-            /[\u{1F1E6}-\u{1F1FF}]{2}/gu, // 区旗字母对
-            /\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}/gu, // 标签序列旗帜
-            /\u{1F3F3}\uFE0F?\u200D\u{1F308}/gu, // 彩虹旗
-            /\u{1F3F3}\uFE0F?\u200D\u{26A7}/gu, // 跨性别旗
-            /[\u{1F3F1}\u{1F3F3}\u{1F3F4}\u{1F6A9}\u{1F3C1}\u{1F38C}]/gu, // 常见旗帜符号
-        ];
-        for (const pattern of patterns) {
-            cleaned = cleaned.replace(pattern, '');
-        }
-        return cleaned.replace(/\s{2,}/g, ' ').trim();
-    };
+    const stripFlagEmoji = stripCountryFlagEmoji;
     const decodeVmessPayload = (raw) => {
         try {
             let base64Part = raw;
@@ -277,7 +296,7 @@ export function removeFlagEmoji(link) {
         }
     };
 
-    if (link.startsWith('vmess://')) {
+    if (link.toLowerCase().startsWith('vmess://')) {
         try {
             const payload = link.substring('vmess://'.length);
             const nodeConfig = decodeVmessPayload(payload);
@@ -292,6 +311,10 @@ export function removeFlagEmoji(link) {
         } catch (e) {
             return link;
         }
+    }
+
+    if (link.toLowerCase().startsWith('ssr://')) {
+        return updateSsrRemarks(link, stripFlagEmoji);
     }
 
     const hashIndex = link.lastIndexOf('#');

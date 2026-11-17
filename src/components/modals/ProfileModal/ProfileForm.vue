@@ -1,4 +1,6 @@
 <script setup>
+    import NodeFlagSettings from '../../settings/NodeFlagSettings.vue';
+    import RegionOverrideSettings from '../../settings/RegionOverrideSettings.vue';
     import { computed, ref, watch } from 'vue';
     import TransformSelector from '../../forms/TransformSelector.vue';
     import Input from '../../ui/Input.vue';
@@ -535,6 +537,12 @@
                     }}</span>
                 </div>
 
+                <NodeFlagSettings :model="localProfile" inherit :global-settings="globalSettings" />
+                <RegionOverrideSettings
+                    :model="localProfile"
+                    inherit
+                    :global-settings="globalSettings"
+                />
                 <OperatorChain v-model="localProfile.operators" />
             </div>
         </div>

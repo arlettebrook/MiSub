@@ -1,4 +1,5 @@
 <script setup>
+    import { getRegionEmoji } from '../../../shared/node-regions.js';
     import { computed, ref, watch } from 'vue';
     import { useToastStore } from '../../stores/toast.js';
     import { useI18n } from '../../i18n/index.js';
@@ -29,15 +30,15 @@
 
     // 预设标签
     const presetRegions = [
-        { label: '香港', pattern: '(香港|HK|Hong Kong)', icon: '🇭🇰' },
-        { label: '台湾', pattern: '(台湾|TW|Taiwan)', icon: '🇨🇳' },
-        { label: '日本', pattern: '(日本|JP|Japan)', icon: '🇯🇵' },
-        { label: '新加坡', pattern: '(新加坡|SG|Singapore)', icon: '🇸🇬' },
-        { label: '美国', pattern: '(美国|US|USA)', icon: '🇺🇸' },
-        { label: '韩国', pattern: '(韩国|KR|Korea)', icon: '🇰🇷' },
-        { label: '德国', pattern: '(德国|DE|Germany)', icon: '🇩🇪' },
-        { label: '英国', pattern: '(英国|UK|Britain)', icon: '🇬🇧' },
-    ];
+        { label: '香港', pattern: '(香港|HK|Hong Kong)' },
+        { label: '台湾', pattern: '(台湾|TW|Taiwan)' },
+        { label: '日本', pattern: '(日本|JP|Japan)' },
+        { label: '新加坡', pattern: '(新加坡|SG|Singapore)' },
+        { label: '美国', pattern: '(美国|US|USA)' },
+        { label: '韩国', pattern: '(韩国|KR|Korea)' },
+        { label: '德国', pattern: '(德国|DE|Germany)' },
+        { label: '英国', pattern: '(英国|UK|Britain)' },
+    ].map((region) => ({ ...region, icon: getRegionEmoji(region.label) }));
 
     const presetProtocols = [
         { label: 'SS', pattern: 'proto:ss' },

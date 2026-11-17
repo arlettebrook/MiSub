@@ -1,3 +1,4 @@
+import { NODE_PROCESSING_VERSION } from '../../shared/node-processing-version.js';
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchSubscriptionNodes } from '../../functions/modules/subscription/node-fetcher.js';
@@ -43,6 +44,7 @@ function cache(sub = SOURCE, overrides = {}) {
         nodes: [NODE],
         nodeCount: 1,
         upstreamNodeCount: 1,
+        processingVersion: NODE_PROCESSING_VERSION,
         updatedAt: UPDATED,
         sourceUrl: sub.url,
         sourceId: sub.id,
@@ -257,7 +259,11 @@ describe('saved-source preview protective cache', () => {
     });
 
     it('keeps supporting legacy caches without fingerprint/source metadata', async () => {
-        store.set(buildSubscriptionNodeCacheKey(SOURCE), { nodes: [NODE], updatedAt: UPDATED });
+        store.set(buildSubscriptionNodeCacheKey(SOURCE), {
+            processingVersion: NODE_PROCESSING_VERSION,
+            nodes: [NODE],
+            updatedAt: UPDATED,
+        });
         expect((await fetchNodes()).fromCache).toBe(true);
     });
 
@@ -339,7 +345,11 @@ describe('preview endpoint modes', () => {
             );
             expect(result.success).toBe(true);
             expect(result.fromCache).toBe(true);
-            expect(result.nodes[0].url).toBe(NODE);
+            expect(result.nodes[0].url).toBe(
+                mode === 'subscription'
+                    ? NODE
+                    : 'trojan://synthetic@cached.example:443#%F0%9F%8C%8D%20Cached%20Node'
+            );
             expect(result.stats.protocols).toEqual({ trojan: { count: 1, percentage: 100 } });
             expect(result.subscriptions[0]).toMatchObject({
                 fromCache: true,
@@ -413,9 +423,9 @@ describe('preview endpoint modes', () => {
         const result = await preview({ profileId: 'profile-a' });
         expect(result.success).toBe(true);
         expect(result.nodes.map((node) => node.name)).toEqual([
-            'Profile-Cached Node',
-            'Profile-Fresh',
-            'Profile-Manual',
+            '🌍 Profile-Cached Node',
+            '🌍 Profile-Fresh',
+            '🌍 Profile-Manual',
         ]);
         expect(result.subscriptions.filter((sub) => sub.fromCache)).toHaveLength(1);
         expect(result.subscriptions.filter((sub) => !sub.success)).toHaveLength(1);

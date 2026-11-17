@@ -10,7 +10,6 @@ import {
     extractNodeRegion,
     getRegionEmoji,
     REGION_KEYWORDS,
-    REGION_EMOJI,
 } from '../modules/utils/geo-utils.js';
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { base64EncodeUtf8 } from '../modules/utils.js';
@@ -270,13 +269,22 @@ export function matchesRegexRules(name, rules) {
 }
 
 export function ensureRegionInfo(record, enableEmoji = false) {
-    if (record.regionZh) return record;
+    if (record.regionZh)
+        return record.regionCode
+            ? record
+            : {
+                  ...record,
+                  regionCode: record.metadata?.regionInfo?.code || toRegionCode(record.regionZh),
+              };
 
     // 优先使用预解析的元数据
-    let regionZh = record.metadata?.regionZh || extractNodeRegion(record.name);
+    let regionZh =
+        record.metadata?.regionInfo?.region ||
+        record.metadata?.regionZh ||
+        extractNodeRegion(record.name);
     let regionCode = record.metadata?.region || '';
 
-    if (regionZh === '其他' && record.server) {
+    if (!record.metadata?.regionInfo && regionZh === '其他' && record.server) {
         regionZh = extractNodeRegion(record.server);
     }
 
@@ -285,7 +293,13 @@ export function ensureRegionInfo(record, enableEmoji = false) {
     }
 
     const emoji = enableEmoji ? record.metadata?.flag || getRegionEmoji(regionZh) : '';
-    return { ...record, region: regionCode, regionZh, emoji };
+    return {
+        ...record,
+        region: regionCode,
+        regionZh,
+        regionCode: record.metadata?.regionInfo?.code || toRegionCode(regionZh),
+        emoji,
+    };
 }
 
 function isUselessNode(record) {
@@ -797,10 +811,13 @@ export function nodeUrlsToRecords(nodeUrls, options = {}) {
         ? nodeUrls.map((s) => String(s || '').trim()).filter(Boolean)
         : [];
 
-    return input.map((url) => {
-        // 使用统一的解析引擎
-        const nodeInfo = parseNodeInfo(url);
-        const metadata = extractNodeMetadata(nodeInfo.name);
+    return input.map((url, index) => {
+        // 工作流保留原始旗帜以识别地区，显示层再应用旗帜映射。
+        const nodeInfo = parseNodeInfo(url, { normalizeFlagDisplay: false, identifyRegion: false });
+        const metadata = extractNodeMetadata(nodeInfo.name, {
+            regionResolver: options.regionResolver,
+            regionHint: options.regionHints?.[index] || options.regionResolver?.hint(url),
+        });
 
         const record = {
             url,

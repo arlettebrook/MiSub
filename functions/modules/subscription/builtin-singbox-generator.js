@@ -321,7 +321,7 @@ export function generateBuiltinSingboxConfig(nodeList, options = {}) {
         const outbound = buildOutbound(clashProxy);
         if (outbound) {
             outbounds.push(outbound);
-            nodeEntries.push({ tag: outbound.tag, outbound });
+            nodeEntries.push({ tag: outbound.tag, outbound, metadata: clashProxy.metadata });
         }
     }
 
@@ -333,7 +333,12 @@ export function generateBuiltinSingboxConfig(nodeList, options = {}) {
     const levelKey = (ruleLevel || 'std').toUpperCase();
     // 获取内置策略组
     const policyGroupsFactory = POLICY_GROUPS[levelKey] || POLICY_GROUPS.STD;
-    let proxyGroups = policyGroupsFactory(outbounds, options);
+    // 分组保留地区身份，最终出站仍只输出 Sing-box 支持的字段。
+    const policyNodes = outbounds.map((outbound, index) => ({
+        ...outbound,
+        metadata: nodeEntries[index]?.metadata,
+    }));
+    let proxyGroups = policyGroupsFactory(policyNodes, options);
     proxyGroups = pruneProxyGroups(proxyGroups, outbounds);
 
     if (levelKey === 'RELAY') {

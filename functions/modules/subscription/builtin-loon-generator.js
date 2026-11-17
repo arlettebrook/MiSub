@@ -1,3 +1,4 @@
+import { getRegionGroupName } from '../../../shared/node-regions.js';
 /**
  * 内置 Loon 配置生成器 (加强版)
  * 不依赖外部 subconverter，直接将节点 URL 转换为高质量 Loon 配置
@@ -410,7 +411,7 @@ resource-parser = https://raw.githubusercontent.com/sub-store-org/Sub-Store/mast
         '📲 Telegram': `${iconRepo}/Telegram.png`,
         '🎧 Spotify': `${iconRepo}/Spotify.png`,
         '🇭🇰 香港节点': `${iconRepo}/Hong_Kong.png`,
-        '🇹🇼 台湾节点': `${iconRepo}/Taiwan.png`,
+        [getRegionGroupName('台湾')]: `${iconRepo}/Taiwan.png`,
         '🇯🇵 日本节点': `${iconRepo}/Japan.png`,
         '🇸🇬 狮城节点': `${iconRepo}/Singapore.png`,
         '🇺🇸 美国节点': `${iconRepo}/United_States.png`,

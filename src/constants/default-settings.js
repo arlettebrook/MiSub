@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS = {
     NotifyThresholdPercent: 90,
     enableTrafficNode: false,
     enableFlagEmoji: true,
+    flagEmojiMode: '',
+    flagEmojiPosition: 'prefix',
     enablePublicPage: true,
     storageType: 'kv',
     autoUpdateInterval: 0, // 分钟，0表示禁用自动更新
@@ -209,4 +211,8 @@ export const DEFAULT_PROFILE_FORM = {
     },
     nodeTransform: null,
     nodeTransformPresetId: '',
+    flagEmojiMode: 'inherit',
+    flagEmojiPosition: 'inherit',
+    regionOverrideMode: 'inherit',
+    regionOverrides: [],
 };

@@ -3,6 +3,8 @@
  */
 
 import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
+import { formatNodeFlagName, normalizeNodeFlagEmoji } from '../../shared/node-emoji.js';
+import { createRegionResolver } from '../../shared/node-region-context.js';
 import { isLocalProxyEndpoint } from './node-utils.js';
 import { normalizeProxyHost, splitUriHostPort } from '../../shared/proxy-address.js';
 import { parseHttpProxyEndpoint } from '../../shared/node-source.js';
@@ -1521,12 +1523,15 @@ export function urlToClashProxy(url) {
  * @returns {Object[]} Clash 代理对象数组
  */
 export function urlsToClashProxies(urls, options = {}) {
+    if (!options.regionResolver && options.regionOverrides?.length)
+        options = { ...options, regionResolver: createRegionResolver(options.regionOverrides) };
     if (!Array.isArray(urls)) return [];
     urls = urls.flatMap((url) =>
         /^mierus?:\/\//i.test(url || '')
             ? parseMieruLinks(url).map(convertMieruToUrl).filter(Boolean)
             : [url]
     );
+    const regionHints = options.regionResolver?.hintsFor(urls);
 
     const manualProxyIdentities = new Set(
         (Array.isArray(options.manualNodeUrls) ? options.manualNodeUrls : [])
@@ -1537,7 +1542,7 @@ export function urlsToClashProxies(urls, options = {}) {
     );
 
     return urls
-        .map((url) => {
+        .map((url, index) => {
             const proxy = urlToClashProxy(url);
             if (!proxy) return null;
             if (
@@ -1569,17 +1574,18 @@ export function urlsToClashProxies(urls, options = {}) {
             if (options.skipCertVerify) proxy['skip-cert-verify'] = true;
 
             // [智能增强] 注入元数据
-            proxy.metadata = extractNodeMetadata(proxy.name);
-
-            // [自动补全] 仅在名称中完全没有国旗/地球 Emoji 时才尝试补全，避免重复添加或干扰用户重命名
-            const HAS_EMOJI_REGEX = /([\u{1F1E6}-\u{1F1FF}]{2}|[\u{1F30D}-\u{1F30F}])/u;
-            if (
-                options.addFlagEmoji !== false &&
-                proxy.metadata.flag &&
-                !HAS_EMOJI_REGEX.test(proxy.name)
-            ) {
-                proxy.name = `${proxy.metadata.flag} ${proxy.name}`;
-            }
+            const originalName = proxy.name;
+            proxy.metadata = extractNodeMetadata(originalName, {
+                regionResolver: options.regionResolver,
+                regionHint: regionHints?.[index],
+            });
+            const policy = options.flagPolicy || {
+                mode: options.addFlagEmoji === false ? 'preserve' : 'auto',
+                position: 'prefix',
+            };
+            proxy.name = formatNodeFlagName(originalName, policy, proxy.metadata.regionInfo);
+            if (policy.mode !== 'preserve' || !options.flagPolicy)
+                proxy.name = normalizeNodeFlagEmoji(proxy.name);
 
             return proxy;
         })

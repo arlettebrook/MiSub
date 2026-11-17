@@ -1,3 +1,4 @@
+import { processNodeUrls, resolveNodeProcessing } from '../../utils/node-processing.js';
 import { StorageFactory } from '../../storage-adapter.js';
 import { createJsonResponse } from '../utils.js';
 import { parseNodeInfo } from '../utils/geo-utils.js';
@@ -6,93 +7,11 @@ import {
     calculateRegionStats,
     parseNodeList,
 } from '../utils/node-parser.js';
-import { applyNodeTransformPipeline } from '../../utils/node-transformer.js';
-import { runOperatorChain } from '../../utils/operator-runner.js';
+import { extractNodeMetadata } from '../utils/metadata-extractor.js';
 import { KV_KEY_SUBS, KV_KEY_PROFILES, KV_KEY_SETTINGS, DEFAULT_SETTINGS } from '../config.js';
 import { fetchSubscriptionNodes } from './node-fetcher.js';
 import { applyManualNodeName } from '../utils/node-cleaner.js';
 import { isManualNodeSource, isRemoteSubscriptionSource } from '../../../shared/node-source.js';
-
-function ensureArray(data) {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if (typeof data === 'string') {
-        try {
-            const parsed = JSON.parse(data);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    }
-    return [];
-}
-
-function adaptLegacyTransform(config) {
-    if (!config || !config.enabled) return [];
-
-    const ops = [];
-    const filter = config.filter;
-    if (
-        filter &&
-        (filter.include?.enabled ||
-            filter.exclude?.enabled ||
-            filter.protocols?.enabled ||
-            filter.regions?.enabled ||
-            filter.script?.enabled ||
-            filter.useless?.enabled)
-    ) {
-        ops.push({ id: 'legacy-filter', type: 'filter', enabled: true, params: { ...filter } });
-    }
-
-    const regex = config.rename?.regex;
-    if (regex?.enabled && regex.rules?.length > 0) {
-        ops.push({
-            id: 'legacy-rename-regex',
-            type: 'rename',
-            enabled: true,
-            params: { regex: { ...regex } },
-        });
-    }
-
-    const template = config.rename?.template;
-    if (template?.enabled) {
-        ops.push({
-            id: 'legacy-rename-template',
-            type: 'rename',
-            enabled: true,
-            params: {
-                template: {
-                    enabled: true,
-                    template: template.template || '{emoji}{region}-{protocol}-{index}',
-                    offset: template.indexStart || 1,
-                    indexScope: template.indexScope || 'region',
-                },
-            },
-        });
-    }
-
-    const renameScript = config.rename?.script;
-    if (renameScript?.enabled && renameScript.expression) {
-        ops.push({
-            id: 'legacy-rename-script',
-            type: 'script',
-            enabled: true,
-            params: { dsl: [{ action: 'rename', template: renameScript.expression }] },
-        });
-    }
-
-    const dedup = config.dedup;
-    if (dedup?.enabled) {
-        ops.push({ id: 'legacy-dedup', type: 'dedup', enabled: true, params: { ...dedup } });
-    }
-
-    const sort = config.sort;
-    if (sort?.enabled && sort.keys?.length > 0) {
-        ops.push({ id: 'legacy-sort', type: 'sort', enabled: true, params: { ...sort } });
-    }
-
-    return ops;
-}
 
 /**
  * 处理订阅组模式的节点获取
@@ -129,6 +48,9 @@ export async function handleProfileMode(
     if (!profile || !profile.enabled) {
         return createJsonResponse({ error: '订阅组不存在或已禁用' }, 404);
     }
+
+    const processing = resolveNodeProcessing(profile, settings, new URL(request.url).searchParams);
+    const regionResolver = processing.regionResolver;
 
     const relatedIds = [
         ...(Array.isArray(profile.subscriptions)
@@ -181,6 +103,27 @@ export async function handleProfileMode(
     const manualNodeResults = targetManualNodes.map((node) => {
         const customName = typeof node.name === 'string' ? node.name.trim() : '';
         const effectiveUrl = customName ? applyManualNodeName(node.url, customName) : node.url;
+        if (applyTransform && customName) {
+            const before = extractNodeMetadata(
+                parseNodeInfo(node.url, { normalizeFlagDisplay: false }).name,
+                { regionResolver }
+            ).regionInfo;
+            const after = extractNodeMetadata(customName, { regionResolver }).regionInfo;
+            regionResolver.remember(
+                effectiveUrl,
+                after.region === '其他' && before.region !== '其他'
+                    ? {
+                          ...before,
+                          ...(after.groupRegion
+                              ? {
+                                    groupRegion: after.groupRegion,
+                                    groupRuleIndex: after.groupRuleIndex,
+                                }
+                              : {}),
+                      }
+                    : after
+            );
+        }
 
         const nodeInfo = parseNodeInfo(effectiveUrl);
         const expanded = /^(v2rayn|mierus?):\/\//i.test(node.url)
@@ -218,7 +161,9 @@ export async function handleProfileMode(
                 sub?.enableNodeCache === true,
                 forceRefresh,
                 storageAdapter,
-                sub
+                sub,
+                regionResolver,
+                applyTransform ? processing.flagPolicy : undefined
             )
         )
     );
@@ -242,81 +187,61 @@ export async function handleProfileMode(
     const allNodes = [];
     allResults.forEach((result) => {
         if (result.success) {
-            allNodes.push(...result.nodes);
+            allNodes.push(
+                ...result.nodes.map((node) => ({
+                    ...node,
+                    subscriptionName: node.subscriptionName || result.subscriptionName || '',
+                    group: node.group || result.group || '',
+                }))
+            );
         }
     });
 
     // 如果需要应用转换规则，则处理节点名称
     let processedNodes = allNodes;
-    const presetNodeTransform = profile.nodeTransformPresetId
-        ? Array.isArray(settings.nodeTransformPresets)
-            ? settings.nodeTransformPresets.find(
-                  (item) => item?.id === profile.nodeTransformPresetId
-              )?.config
-            : null
-        : null;
-    const effectiveNodeTransform = profile.nodeTransform?.enabled
-        ? profile.nodeTransform
-        : presetNodeTransform;
-
     if (applyTransform) {
-        const nodeUrls = allNodes.map((node) => node.url);
-        const nodeMetadataByUrl = new Map(
-            allNodes.map((node) => [node.url, { group: node.group || '' }])
-        );
+        let nodeUrls = allNodes.map((node) => node.url);
+        const nodeMetadataByUrl = new Map();
+        for (const node of allNodes)
+            if (!nodeMetadataByUrl.has(node.url))
+                nodeMetadataByUrl.set(node.url, {
+                    group: node.group || '',
+                    subscriptionName: node.subscriptionName || '',
+                });
 
-        let activeOperators = ensureArray(profile?.operators);
-        if (
-            !activeOperators.length &&
-            profile?.nodeTransform?.enabled &&
-            profile.nodeTransform?.operators
-        ) {
-            activeOperators = ensureArray(profile.nodeTransform.operators);
-        }
-        if (!activeOperators.length && settings?.defaultOperators) {
-            activeOperators = ensureArray(settings.defaultOperators);
-        }
-        if (!activeOperators.length && effectiveNodeTransform?.enabled) {
-            activeOperators = adaptLegacyTransform({
-                ...effectiveNodeTransform,
-                enableEmoji: settings.enableFlagEmoji !== false,
-            });
-        }
+        const { operators: activeOperators, flagPolicy } = processing;
+        const { urls: transformedUrls, records } = await processNodeUrls(nodeUrls, {
+            operators: activeOperators,
+            flagPolicy,
+            regionResolver,
+            config: settings,
+            profile,
+            subName: profile?.name,
+            userAgent,
+            nodeMetadataByUrl,
+            captureRecords: true,
+        });
 
-        let transformedUrls = nodeUrls;
-        if (activeOperators.length > 0) {
-            transformedUrls = await runOperatorChain(nodeUrls, activeOperators, {
-                subName: profile?.name,
-                userAgent,
-                config: settings,
-                nodeMetadataByUrl,
+        processedNodes = transformedUrls.map((transformedUrl, index) => {
+            const nodeInfo = parseNodeInfo(transformedUrl, {
+                normalizeFlagDisplay: flagPolicy.mode !== 'preserve',
             });
-        } else if (effectiveNodeTransform?.enabled) {
-            const defaultTemplate = '{emoji}{region}-{protocol}-{index}';
-            const effectiveTemplate =
-                effectiveNodeTransform.rename?.template?.template || defaultTemplate;
-            transformedUrls = applyNodeTransformPipeline(nodeUrls, {
-                ...effectiveNodeTransform,
-                enableEmoji:
-                    settings.enableFlagEmoji !== false && effectiveTemplate.includes('{emoji}'),
-            });
-        }
-
-        processedNodes = transformedUrls.map((transformedUrl) => {
-            const nodeInfo = parseNodeInfo(transformedUrl);
-            const originalNode = allNodes.find((n) => {
-                try {
-                    const origUrl = new URL(n.url);
-                    const transUrl = new URL(transformedUrl);
-                    return origUrl.hostname === transUrl.hostname && origUrl.port === transUrl.port;
-                } catch {
-                    return false;
-                }
-            });
+            const record = records[index];
+            const hint = record.regionInfo || regionResolver.hint(transformedUrl);
             return {
                 ...nodeInfo,
-                subscriptionName:
-                    originalNode?.subscriptionName || nodeInfo.subscriptionName || '未知',
+                ...(hint
+                    ? {
+                          region: hint.region,
+                          regionSource: hint.source,
+                          regionMatch: hint.matched,
+                          regionCandidates: hint.candidates || [],
+                          regionConflict: Boolean(hint.conflict),
+                          groupRegion: hint.groupRegion || hint.region,
+                      }
+                    : {}),
+                subscriptionName: record.subscriptionName || nodeInfo.subscriptionName || '未知',
+                group: record.group || '',
             };
         });
     }

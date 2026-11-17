@@ -1,3 +1,4 @@
+import { getRegionGroupName } from '../../../shared/node-regions.js';
 import { groupNodeLinesByRegion } from './region-groups.js';
 import { DNS_PROXY_GROUP, SINGBOX_CN_RULE_SET } from './safe-dns.js';
 
@@ -271,7 +272,7 @@ export const POLICY_GROUPS = {
                 proxies: [
                     '🇸🇬 狮城节点',
                     '🇭🇰 香港节点',
-                    '🇹🇼 台湾节点',
+                    getRegionGroupName('台湾'),
                     '🇯🇵 日本节点',
                     AUTO_SELECT_GROUP,
                     MANUAL_SELECT_GROUP,
@@ -336,7 +337,7 @@ export const POLICY_GROUPS = {
                 proxies: [
                     '🇸🇬 狮城节点',
                     '🇭🇰 香港节点',
-                    '🇹🇼 台湾节点',
+                    getRegionGroupName('台湾'),
                     '🇯🇵 日本节点',
                     AUTO_SELECT_GROUP,
                     MANUAL_SELECT_GROUP,
@@ -440,7 +441,7 @@ export const POLICY_GROUPS = {
                 proxies: [
                     '🇸🇬 狮城节点',
                     '🇭🇰 香港节点',
-                    '🇹🇼 台湾节点',
+                    getRegionGroupName('台湾'),
                     '🇯🇵 日本节点',
                     AUTO_SELECT_GROUP,
                     MANUAL_SELECT_GROUP,

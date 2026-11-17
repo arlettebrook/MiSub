@@ -1,7 +1,8 @@
 <script setup>
+    import NodeFlagSettings from '../NodeFlagSettings.vue';
+    import RegionOverrideSettings from '../RegionOverrideSettings.vue';
     import { watch } from 'vue';
     import OperatorChain from '../../features/Operators/OperatorChain.vue';
-    import Input from '../../ui/Input.vue';
     import SectionHeader from '../SectionHeader.vue';
     import { useI18n } from '../../../i18n/index.js';
 
@@ -41,17 +42,6 @@
             props.settings.regionOverrides = [];
         }
     }
-
-    function addRegionOverride() {
-        ensureDefaults();
-        props.settings.regionOverrides.push({ pattern: '', region: '美国', flags: 'i' });
-    }
-
-    function removeRegionOverride(index) {
-        ensureDefaults();
-        props.settings.regionOverrides.splice(index, 1);
-    }
-
     watch(() => props.settings, ensureDefaults, { immediate: true });
 </script>
 
@@ -191,38 +181,7 @@
                     </div>
                 </div>
 
-                <div>
-                    <label
-                        class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 ml-1"
-                        >{{ t('settings.globalFlagEmojiSwitch') }}</label
-                    >
-                    <div class="relative">
-                        <select
-                            v-model="settings.enableFlagEmoji"
-                            class="w-full bg-gray-50 dark:bg-gray-800 border border-transparent dark:border-gray-700 misub-radius-md py-2 px-4 text-sm text-gray-900 dark:text-white focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:outline-none transition-all appearance-none"
-                        >
-                            <option
-                                v-for="option in prefixToggleOptions"
-                                :key="String(option.value)"
-                                :value="option.value"
-                            >
-                                {{ t(option.labelKey) }}
-                            </option>
-                        </select>
-                        <div
-                            class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500 dark:text-gray-400"
-                        >
-                            <svg
-                                class="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
+                <NodeFlagSettings :model="settings" />
             </div>
         </div>
 
@@ -230,79 +189,7 @@
         <div
             class="rounded-xl border border-gray-100 bg-white/90 p-6 shadow-sm dark:border-white/10 dark:bg-gray-900/70"
         >
-            <div
-                class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between"
-            >
-                <SectionHeader
-                    :title="t('settings.regionOverridesTitle')"
-                    :description="t('settings.regionOverridesDesc')"
-                    tone="purple"
-                >
-                    <template #icon>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                            />
-                        </svg>
-                    </template>
-                </SectionHeader>
-                <button
-                    type="button"
-                    @click="addRegionOverride"
-                    class="w-full shrink-0 whitespace-nowrap rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold leading-5 text-white transition-colors hover:bg-purple-700 sm:w-auto sm:self-start"
-                >
-                    {{ t('settings.regionOverrideAdd') }}
-                </button>
-            </div>
-
-            <div
-                v-if="!settings.regionOverrides.length"
-                class="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400"
-            >
-                {{ t('settings.regionOverridesEmpty') }}
-            </div>
-
-            <div v-else class="mt-4 space-y-3">
-                <div
-                    v-for="(rule, index) in settings.regionOverrides"
-                    :key="index"
-                    class="grid grid-cols-1 gap-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-800/50 md:grid-cols-[1fr_160px_96px_auto]"
-                >
-                    <Input
-                        v-model="rule.pattern"
-                        :label="t('settings.regionOverridePattern')"
-                        :placeholder="t('settings.regionOverridePatternPlaceholder')"
-                    />
-                    <Input
-                        v-model="rule.region"
-                        :label="t('settings.regionOverrideRegion')"
-                        :placeholder="t('settings.regionOverrideRegionPlaceholder')"
-                    />
-                    <Input
-                        v-model="rule.flags"
-                        :label="t('settings.regionOverrideFlags')"
-                        placeholder="i"
-                    />
-                    <div class="flex items-end">
-                        <button
-                            type="button"
-                            @click="removeRegionOverride(index)"
-                            class="w-full rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"
-                        >
-                            {{ t('actions.delete') }}
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <RegionOverrideSettings :model="settings" />
         </div>
 
         <!-- Unified Operator Chain -->

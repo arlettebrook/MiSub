@@ -1,4 +1,6 @@
 <script setup>
+    import RegionFlag from '../../../ui/RegionFlag.vue';
+    import FlagNodeName from '../../../ui/FlagNodeName.vue';
     import { useI18n } from '../../../../i18n/index.js';
 
     const { t } = useI18n();
@@ -85,7 +87,7 @@
 
                     <div class="flex flex-col min-w-0">
                         <h4 class="truncate text-sm font-black text-gray-900 dark:text-white mb-1">
-                            {{ parseNodeInfo(node).name }}
+                            <FlagNodeName :name="parseNodeInfo(node).name" />
                         </h4>
                         <div class="flex items-center gap-2">
                             <span
@@ -195,7 +197,7 @@
                             <h4
                                 class="text-base font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 transition-colors"
                             >
-                                {{ parseNodeInfo(node).name }}
+                                <FlagNodeName :name="parseNodeInfo(node).name" />
                             </h4>
                             <div class="flex flex-wrap gap-2 mt-2">
                                 <span
@@ -207,7 +209,10 @@
                                 <span
                                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-gray-50 text-gray-500 dark:bg-white/5 dark:text-gray-400"
                                 >
-                                    {{ parseNodeInfo(node).region || 'UNKNOWN' }}
+                                    <RegionFlag
+                                        :region="parseNodeInfo(node).region || '其他'"
+                                        label
+                                    />
                                 </span>
                             </div>
                         </div>

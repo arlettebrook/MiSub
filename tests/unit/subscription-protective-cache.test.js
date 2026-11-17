@@ -1,3 +1,4 @@
+import { NODE_PROCESSING_VERSION } from '../../shared/node-processing-version.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     buildSubscriptionNodeCacheKey,
@@ -93,6 +94,7 @@ describe('subscription protective node cache', () => {
             [buildSubscriptionNodeCacheKey({ id: 'sub-a', url: 'https://example.com/sub' })]: {
                 nodes: ['trojan://cached@example.com:443#Cached'],
                 nodeCount: 1,
+                processingVersion: NODE_PROCESSING_VERSION,
                 updatedAt: '2026-01-01T00:00:00.000Z',
             },
         });
@@ -131,6 +133,7 @@ describe('subscription protective node cache', () => {
             [cacheKey]: {
                 nodes: ['trojan://cached@example.com:443#Cached'],
                 nodeCount: 1,
+                processingVersion: NODE_PROCESSING_VERSION,
                 updatedAt: '2026-01-01T00:00:00.000Z',
             },
         });
@@ -266,6 +269,7 @@ describe('subscription protective node cache', () => {
             [buildSubscriptionNodeCacheKey({ id: 'sub-a', url: 'https://example.com/sub' })]: {
                 nodes: ['trojan://cached@example.com:443#Cached'],
                 nodeCount: 1,
+                processingVersion: NODE_PROCESSING_VERSION,
                 updatedAt: '2026-01-01T00:00:00.000Z',
             },
         });
@@ -308,6 +312,7 @@ describe('subscription protective node cache', () => {
             [cacheKey]: {
                 nodes: cachedNodes,
                 nodeCount: cachedNodes.length,
+                processingVersion: NODE_PROCESSING_VERSION,
                 updatedAt: '2026-01-01T00:00:00.000Z',
             },
         });

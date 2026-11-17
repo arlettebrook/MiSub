@@ -1,3 +1,11 @@
+import { adaptLegacyTransform } from '../utils/legacy-node-transform.js';
+import { applyFilterRules } from '../utils/node-filter-rules.js';
+import { processNodeUrls } from '../utils/node-processing.js';
+import { resolveSourceFlagPolicyFingerprint } from '../../shared/node-flag-policy.js';
+import {
+    NODE_PROCESSING_VERSION,
+    isNodeProcessingVersionCompatible,
+} from '../../shared/node-processing-version.js';
 /**
  * 订阅处理服务
  * @author MiSub Team
@@ -7,15 +15,15 @@ import { parseNodeList } from '../modules/utils/node-parser.js';
 import { parseNodeInfo } from '../modules/utils/geo-utils.js';
 import { getProcessedUserAgent } from '../utils/format-utils.js';
 import { buildFetchProxyUrl } from '../utils/fetch-proxy-utils.js';
-import {
-    prependNodeName,
-    addFlagEmoji,
-    removeFlagEmoji,
-    fixNodeUrlEncoding,
-    sanitizeNodeForYaml,
-    isLocalProxyEndpoint,
-} from '../utils/node-utils.js';
+import { prependNodeName, fixNodeUrlEncoding, isLocalProxyEndpoint } from '../utils/node-utils.js';
 import { runOperatorChain } from '../utils/operator-runner.js';
+import {
+    resolveEffectiveNodeTransform,
+    resolveNodeOperators,
+    resolveNodeFlagPolicy,
+} from '../utils/node-transform-settings.js';
+import { createRegionResolver, resolveRegionOverrides } from '../../shared/node-region-context.js';
+import { extractNodeMetadata } from '../modules/utils/metadata-extractor.js';
 import { createTimeoutFetch } from '../modules/utils.js';
 import { assertPublicNetworkUrl } from '../modules/security-utils.js';
 import { isSuspiciousNodeCountDrop, isCacheFilterCompatible } from './node-cache-service.js';
@@ -117,6 +125,7 @@ export async function readSubscriptionNodeCache(storage, sub) {
     try {
         const cached = await storage.get(buildSubscriptionNodeCacheKey(sub));
         if (!cached || !Array.isArray(cached.nodes)) return null;
+        if (!isNodeProcessingVersionCompatible(cached)) return null;
         // A saved source can keep its ID while its URL is replaced. Do not reuse
         // nodes from the previous source; legacy entries without a URL still work.
         if (cached.sourceUrl && cached.sourceUrl !== sub?.url) return null;
@@ -132,18 +141,40 @@ export async function readSubscriptionNodeCache(storage, sub) {
     }
 }
 
-async function writeSubscriptionNodeCache(storage, sub, nodes, upstreamNodeCount = 0) {
+async function writeSubscriptionNodeCache(
+    storage,
+    sub,
+    nodes,
+    upstreamNodeCount = 0,
+    regionResolver,
+    flagPolicy
+) {
     if (!storage?.put) return false;
     const realNodes = Array.isArray(nodes) ? nodes.filter(isRealProxyNode) : [];
     if (realNodes.length === 0 && upstreamNodeCount === 0) return false;
 
     try {
         await storage.put(buildSubscriptionNodeCacheKey(sub), {
+            processingVersion: NODE_PROCESSING_VERSION,
             nodes: realNodes,
             nodeCount: realNodes.length,
             updatedAt: new Date().toISOString(),
             upstreamNodeCount,
             filterFingerprint: buildSubscriptionFilterFingerprint(sub),
+            flagPolicyFingerprint: resolveSourceFlagPolicyFingerprint(sub, flagPolicy),
+            ...(regionResolver
+                ? {
+                      regionOverridesFingerprint: regionResolver.overridesFingerprint,
+                      regionHints: regionResolver.exportHints(
+                          realNodes,
+                          (node) =>
+                              parseNodeInfo(node, {
+                                  normalizeFlagDisplay: false,
+                                  identifyRegion: false,
+                              }).name
+                      ),
+                  }
+                : {}),
             sourceId: sub?.id || null,
             sourceName: sub?.name || '',
             sourceUrl: sub?.url || '',
@@ -379,28 +410,52 @@ export async function generateCombinedNodeList(
     // 判断是否在节点名称前添加分组名称
     const prependGroupName = profilePrefixSettings?.prependGroupName ?? false;
 
-    // [修复] 多级 Emoji 开关控制逻辑
-    const nodeTransformConfig = profilePrefixSettings?.nodeTransform;
-    const templateEnabled =
-        nodeTransformConfig?.enabled && nodeTransformConfig?.rename?.template?.enabled;
-    const defaultTemplate = '{emoji}{region}-{protocol}-{index}';
-    const effectiveTemplate = nodeTransformConfig?.rename?.template?.template || defaultTemplate;
-    const templateContainsEmoji = templateEnabled && effectiveTemplate.includes('{emoji}');
-
-    // 确定最终是否保留/添加 Emoji
-    // 优先级：nodeTransform.addFlagEmoji (来自 URL 或组件设置) > config.enableFlagEmoji (全局设置)
-    const emojiEnabledByConfig = config.enableFlagEmoji !== false;
-    const emojiExplicitlyDisabled = nodeTransformConfig?.addFlagEmoji === false;
-    const emojiExplicitlyEnabled = nodeTransformConfig?.addFlagEmoji === true;
-
-    let shouldKeepEmoji = emojiEnabledByConfig;
-    if (emojiExplicitlyDisabled) shouldKeepEmoji = false;
-    if (emojiExplicitlyEnabled) shouldKeepEmoji = true;
-
-    // 强制约束：如果启用了模板命名且模板不含 {emoji}，则必须移除
-    if (templateEnabled && !templateContainsEmoji) {
-        shouldKeepEmoji = false;
-    }
+    // main-handler 已解析的设置直接复用，避免空预设被再次回退到全局配置。
+    const hasResolvedPolicy =
+        Boolean(profilePrefixSettings?.flagPolicy) ||
+        typeof profilePrefixSettings?.addFlagEmoji === 'boolean';
+    const nodeTransformConfig = hasResolvedPolicy
+        ? profilePrefixSettings.nodeTransform || {}
+        : resolveEffectiveNodeTransform(profilePrefixSettings, config);
+    let activeOperators = resolveNodeOperators(profilePrefixSettings, config, nodeTransformConfig);
+    if (!activeOperators.length) activeOperators = adaptLegacyTransform(nodeTransformConfig);
+    const flagPolicy =
+        profilePrefixSettings?.flagPolicy ||
+        resolveNodeFlagPolicy(
+            typeof profilePrefixSettings?.addFlagEmoji === 'boolean'
+                ? {
+                      ...profilePrefixSettings,
+                      flagEmojiMode: profilePrefixSettings.addFlagEmoji ? 'auto' : 'remove',
+                  }
+                : profilePrefixSettings || {},
+            hasResolvedPolicy ? { ...config, defaultNodeTransform: nodeTransformConfig } : config,
+            activeOperators
+        );
+    const shouldKeepEmoji = flagPolicy.mode !== 'remove';
+    context.regionResolver ||= createRegionResolver(
+        resolveRegionOverrides(profilePrefixSettings, config)
+    );
+    const renameManual = (url, name) => {
+        const before = extractNodeMetadata(
+            parseNodeInfo(url, { normalizeFlagDisplay: false, identifyRegion: false }).name,
+            { regionResolver: context.regionResolver }
+        ).regionInfo;
+        const renamed = applyManualNodeName(url, name);
+        const after = extractNodeMetadata(name, {
+            regionResolver: context.regionResolver,
+        }).regionInfo;
+        const info =
+            after.region === '其他' && before.region !== '其他'
+                ? {
+                      ...before,
+                      ...(after.groupRegion
+                          ? { groupRegion: after.groupRegion, groupRuleIndex: after.groupRuleIndex }
+                          : {}),
+                  }
+                : after;
+        context.regionResolver.remember(renamed, info);
+        return renamed;
+    };
 
     // 手动节点前缀文本
     const manualNodePrefix = profilePrefixSettings?.manualNodePrefix ?? '\u624b\u52a8\u8282\u70b9';
@@ -436,11 +491,13 @@ export async function generateCombinedNodeList(
                 subName: subSource?.name,
                 userAgent,
                 config,
+                flagPolicy,
+                regionResolver: context.regionResolver,
             });
         }
 
         // 2. 应用传统的文本过滤规则 (exclude/include)
-        currentNodes = applyFilterRules(currentNodes, subSource);
+        currentNodes = applyFilterRules(currentNodes, subSource, context.regionResolver);
 
         if (currentNodes.length < nodes.length) filteredNodeReduction = true;
 
@@ -475,9 +532,13 @@ export async function generateCombinedNodeList(
                         : node;
                     const group = typeof sub.group === 'string' ? sub.group.trim() : '';
                     if (prependGroupName && group && !skipPrefixDueToRenaming)
-                        current = prependNodeName(current, group);
+                        current = prependNodeName(current, group, {
+                            regionResolver: context.regionResolver,
+                        });
                     if (shouldPrependManualNodes && !skipPrefixDueToRenaming)
-                        current = prependNodeName(current, manualNodePrefix);
+                        current = prependNodeName(current, manualNodePrefix, {
+                            regionResolver: context.regionResolver,
+                        });
                     return current;
                 });
                 const transformed = await applySubscriptionTransforms(expanded, sub);
@@ -486,15 +547,19 @@ export async function generateCombinedNodeList(
                 continue;
             }
             const customNodeName = typeof sub.name === 'string' ? sub.name.trim() : '';
-            if (customNodeName) processedUrl = applyManualNodeName(processedUrl, customNodeName);
+            if (customNodeName) processedUrl = renameManual(processedUrl, customNodeName);
 
             const nodeGroup = typeof sub.group === 'string' ? sub.group.trim() : '';
             if (prependGroupName && nodeGroup && !skipPrefixDueToRenaming)
-                processedUrl = prependNodeName(processedUrl, nodeGroup);
+                processedUrl = prependNodeName(processedUrl, nodeGroup, {
+                    regionResolver: context.regionResolver,
+                });
 
             const shouldAddPrefix = shouldPrependManualNodes && !skipPrefixDueToRenaming;
             const finalRawUrl = shouldAddPrefix
-                ? prependNodeName(processedUrl, manualNodePrefix)
+                ? prependNodeName(processedUrl, manualNodePrefix, {
+                      regionResolver: context.regionResolver,
+                  })
                 : processedUrl;
 
             upstreamNodeCount++;
@@ -541,7 +606,18 @@ export async function generateCombinedNodeList(
         };
         const readCachedNodes = async () => {
             const cached = await readCacheEntry();
-            return isCacheFilterCompatible(cached, filterFingerprint) ? cached?.nodes || [] : [];
+            const sourceFlagFingerprint = resolveSourceFlagPolicyFingerprint(sub, flagPolicy);
+            if (
+                !isCacheFilterCompatible(cached, filterFingerprint) ||
+                (sourceFlagFingerprint !== undefined &&
+                    cached?.flagPolicyFingerprint !== sourceFlagFingerprint) ||
+                (cached?.regionOverridesFingerprint &&
+                    cached.regionOverridesFingerprint !==
+                        context.regionResolver.overridesFingerprint)
+            )
+                return [];
+            context.regionResolver.importHints(cached?.nodes.join('\n'), cached?.regionHints);
+            return cached?.nodes || [];
         };
 
         try {
@@ -639,7 +715,14 @@ export async function generateCombinedNodeList(
             if (validNodes.length === 0) acceptedEmptySourceCount++;
 
             if (cacheEnabled) {
-                await writeSubscriptionNodeCache(storage, sub, realNodes, rawNodeCount);
+                await writeSubscriptionNodeCache(
+                    storage,
+                    sub,
+                    realNodes,
+                    rawNodeCount,
+                    context.regionResolver,
+                    flagPolicy
+                );
             }
 
             const userInfo = parseSubscriptionUserInfoHeader(
@@ -658,7 +741,13 @@ export async function generateCombinedNodeList(
             const shouldAddSubPrefix = shouldPrependSubscriptions && !skipPrefixDueToRenaming;
 
             return shouldAddSubPrefix && sub.name
-                ? validNodes.map((node) => prependNodeName(node, sub.name)).join('\n')
+                ? validNodes
+                      .map((node) =>
+                          prependNodeName(node, sub.name, {
+                              regionResolver: context.regionResolver,
+                          })
+                      )
+                      .join('\n')
                 : validNodes.join('\n');
         } catch (e) {
             recordEmptyRuntimeInfo();
@@ -680,59 +769,15 @@ export async function generateCombinedNodeList(
     let currentLines = [...new Set(rawCombinedLines)];
     const nodesBeforeGlobalTransforms = rawCombinedLines.length;
 
-    if (!shouldKeepEmoji) {
-        currentLines = currentLines.map((line) => removeFlagEmoji(line));
-    }
-
-    // --- 阶段 2: 核心转换引擎 (Logic Transformation Engine) ---
-    // 优先级: 订阅组 Operator Chain > 全局默认 Operator Chain > 旧版 Node Pipeline (桥接模式)
-
-    let activeOperators = [];
-
-    // 获取工作流配置（支持字符串自动解析）
-    if (profilePrefixSettings?.operators) {
-        activeOperators = ensureArray(profilePrefixSettings.operators);
-    }
-
-    if (!activeOperators.length && config.defaultOperators) {
-        activeOperators = ensureArray(config.defaultOperators);
-    }
-
-    if (!activeOperators.length) {
-        const legacyConfig = nodeTransformConfig?.enabled
-            ? nodeTransformConfig
-            : config.defaultNodeTransform;
-        activeOperators = adaptLegacyTransform(legacyConfig);
-    }
-
-    // 2.1 执行 Workflow 链式处理 (算子操作)
-    if (activeOperators.length > 0) {
-        currentLines = await runOperatorChain(currentLines, activeOperators, {
-            subName: profilePrefixSettings?.name,
-            userAgent,
-            config,
-        });
-    }
-
-    // 2.2 [安全保险] 再次应用订阅组级别的全局过滤逻辑 (Profile-level)
-    if (profilePrefixSettings && (profilePrefixSettings.exclude || profilePrefixSettings.include)) {
-        currentLines = applyFilterRules(currentLines, profilePrefixSettings);
-    }
-
-    // 2.3 [兜底] 应用 Worker 级别的全局过滤逻辑 (Global-level)
-    if (config && (config.exclude || config.include)) {
-        currentLines = applyFilterRules(currentLines, config);
-    }
-
-    // --- 阶段 3: 后置格式化与增强 (Post-Formatting & Enhancement) ---
-
-    // 3.1 YAML 兼容性净化
-    currentLines = currentLines.map((line) => sanitizeNodeForYaml(line));
-
-    // 3.2 最终智能化补齐 (Flag Emoji)
-    const finalLines = shouldKeepEmoji
-        ? currentLines.map((line) => addFlagEmoji(line))
-        : currentLines;
+    const { urls: finalLines } = await processNodeUrls(currentLines, {
+        operators: activeOperators,
+        flagPolicy,
+        regionResolver: context.regionResolver,
+        config,
+        profile: profilePrefixSettings,
+        subName: profilePrefixSettings?.name,
+        userAgent,
+    });
 
     // --- 阶段 4: 结果拼装与返回 ---
     const finalNodeList = finalLines.join('\n');
@@ -929,42 +974,6 @@ function applyManualNodeName(nodeUrl, customName) {
  * @param {Object} sub - 订阅对象
  * @returns {Array} - 过滤后的节点列表
  */
-function applyFilterRules(validNodes, sub) {
-    const ruleText = sub.exclude;
-    if (!ruleText || ruleText.trim() === '') return validNodes;
-
-    const lines = ruleText
-        .split('\n')
-        .map((r) => r.trim())
-        .filter(Boolean);
-
-    if (lines.length === 0) return validNodes;
-
-    // 规则分割：--- 为分隔，keep: 为白名单
-    const dividerIndex = lines.findIndex((line) => line === '---');
-    const hasDivider = dividerIndex !== -1;
-
-    const excludeLines = hasDivider
-        ? lines.slice(0, dividerIndex)
-        : lines.filter((line) => !line.toLowerCase().startsWith('keep:'));
-
-    const keepLines = hasDivider
-        ? lines.slice(dividerIndex + 1)
-        : lines.filter((line) => line.toLowerCase().startsWith('keep:'));
-
-    const excludeRules = buildRuleSet(excludeLines, false);
-    const keepRules = buildRuleSet(keepLines, true);
-
-    const whitelistOnly = !hasDivider && keepRules.hasRules;
-    const shouldApplyWhitelist = (hasDivider && keepRules.hasRules) || whitelistOnly;
-
-    const afterExclude = whitelistOnly
-        ? [...validNodes]
-        : filterNodes(validNodes, excludeRules, 'exclude');
-
-    return shouldApplyWhitelist ? filterNodes(afterExclude, keepRules, 'include') : afterExclude;
-}
-
 /**
  * 应用订阅治理转换：算子链 + 基于文本的过滤
  * @param {string[]} nodeUrls
@@ -987,180 +996,11 @@ async function applySubscriptionTransforms(nodeUrls, sub) {
     return processed;
 }
 
-function buildRuleSet(lines, stripKeepPrefix = false) {
-    const protocols = new Set();
-    const patterns = [];
-
-    for (const rawLine of lines) {
-        let line = rawLine.trim();
-        if (!line || line === '---') continue;
-
-        if (stripKeepPrefix && line.toLowerCase().startsWith('keep:')) {
-            line = line.substring('keep:'.length).trim();
-        }
-        if (!line) continue;
-
-        if (line.toLowerCase().startsWith('proto:')) {
-            const parts = line
-                .substring('proto:'.length)
-                .split(',')
-                .map((p) => p.trim().toLowerCase())
-                .filter(Boolean);
-            parts.forEach((p) => protocols.add(p));
-            continue;
-        }
-
-        patterns.push(line);
-    }
-
-    const nameRegex = buildSafeRegex(patterns);
-    return {
-        protocols,
-        nameRegex,
-        hasRules: protocols.size > 0 || Boolean(nameRegex),
-    };
-}
-
-function buildSafeRegex(patterns) {
-    if (!patterns.length) return null;
-    try {
-        return new RegExp(patterns.join('|'), 'i');
-    } catch (e) {
-        console.warn('Invalid include/exclude regex, skipped:', e.message);
-        return null;
-    }
-}
-
-function filterNodes(nodes, rules, mode = 'exclude') {
-    if (!rules || !rules.hasRules) return nodes;
-    const isInclude = mode === 'include';
-
-    return nodes.filter((nodeLink) => {
-        // [升级] 传统过滤引擎现在也支持元数据/ISO感知
-        const nodeInfo = parseNodeInfo(nodeLink);
-        const protocol = nodeInfo.protocol || '';
-        const nodeName = nodeInfo.name || '';
-        const regionZh = nodeInfo.region || '';
-
-        // --- [ISO感知核心逻辑] ---
-        // 我们利用 geo-utils 中的 extractNodeRegion 来反查 ISO 代码
-        // 虽然 info 里没显式带 regionCode，但在 rules 匹配时增加深度检测
-        const protocolHit = protocol && rules.protocols.has(protocol);
-
-        let nameHit = false;
-        if (rules.nameRegex) {
-            // [双重匹配] 匹配原始名称、中文名，以及尝试匹配 ISO 关键词
-            nameHit = rules.nameRegex.test(nodeName) || rules.nameRegex.test(regionZh);
-
-            // 如果上述没中，但规则包含大写 ISO 代码，尝试深度匹配
-            if (!nameHit && /^[A-Z]{2}$/.test(rules.nameRegex.source)) {
-                // 这里可以进一步扩展，但为了性能目前保持双重匹配
-            }
-        }
-
-        if (isInclude) {
-            return protocolHit || nameHit;
-        }
-        return !(protocolHit || nameHit);
-    });
-}
-
 /**
  * 桥接模式：将旧版 NodeTransform 配置转换为新的 Operator 列表
  * @param {Object} config - 旧版配置对象
  * @returns {Array} - 转换后的操作符列表
  */
-function adaptLegacyTransform(config) {
-    if (!config || !config.enabled) return [];
-
-    const ops = [];
-
-    // 1. 过滤器 (Filter)
-    const filter = config.filter;
-    if (
-        filter &&
-        (filter.include?.enabled ||
-            filter.exclude?.enabled ||
-            filter.protocols?.enabled ||
-            filter.regions?.enabled ||
-            filter.script?.enabled ||
-            filter.useless?.enabled)
-    ) {
-        ops.push({
-            id: 'legacy-filter',
-            type: 'filter',
-            enabled: true,
-            params: { ...filter },
-        });
-    }
-
-    // 2. 正则重命名 (Regex Rename)
-    const regex = config.rename?.regex;
-    if (regex?.enabled && regex.rules?.length > 0) {
-        ops.push({
-            id: 'legacy-rename-regex',
-            type: 'rename',
-            enabled: true,
-            params: { regex: { ...regex } },
-        });
-    }
-
-    // 3. 模板重命名 (Template Rename)
-    const template = config.rename?.template;
-    if (template?.enabled) {
-        ops.push({
-            id: 'legacy-rename-template',
-            type: 'rename',
-            enabled: true,
-            params: {
-                template: {
-                    enabled: true,
-                    template: template.template || '{emoji}{region}-{protocol}-{index}',
-                    offset: template.indexStart || 1,
-                    indexScope: template.indexScope || 'region',
-                },
-            },
-        });
-    }
-
-    // 4. 重命名脚本 (Script Rename)
-    const renameScript = config.rename?.script;
-    if (renameScript?.enabled && renameScript.expression) {
-        ops.push({
-            id: 'legacy-rename-script',
-            type: 'script',
-            enabled: true,
-            params: {
-                code: `return ($nodes) => { return $nodes.map(n => { n.name = (${renameScript.expression})(n.name, n); return n; }); }`,
-            },
-        });
-    }
-
-    // 5. 去重 (Dedup)
-    const dedup = config.dedup;
-    if (dedup?.enabled) {
-        ops.push({
-            id: 'legacy-dedup',
-            type: 'dedup',
-            enabled: true,
-            params: { ...dedup },
-        });
-    }
-
-    // 6. 排序 (Sort)
-    const sort = config.sort;
-    if (sort?.enabled && sort.keys?.length > 0) {
-        ops.push({
-            id: 'legacy-sort',
-            type: 'sort',
-            enabled: true,
-            params: { ...sort },
-        });
-    }
-
-    return ops;
-}
-
 /**
  * ArrayBuffer -> Base64 ??
  */

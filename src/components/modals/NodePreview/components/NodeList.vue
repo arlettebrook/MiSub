@@ -1,4 +1,6 @@
 <script setup>
+    import RegionFlag from '../../../ui/RegionFlag.vue';
+    import FlagNodeName from '../../../ui/FlagNodeName.vue';
     import { useI18n } from '../../../../i18n/index.js';
 
     const { t } = useI18n();
@@ -127,7 +129,7 @@
                                             :title="parseNodeInfo(node).name"
                                             style="text-overflow: ellipsis; white-space: nowrap"
                                         >
-                                            {{ parseNodeInfo(node).name }}
+                                            <FlagNodeName :name="parseNodeInfo(node).name" />
                                         </span>
                                     </div>
 
@@ -169,7 +171,10 @@
                                             class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400"
                                             style="min-width: 60px"
                                         >
-                                            {{ parseNodeInfo(node).region }}
+                                            <RegionFlag
+                                                :region="parseNodeInfo(node).region || '其他'"
+                                                label
+                                            />
                                         </span>
                                     </div>
 

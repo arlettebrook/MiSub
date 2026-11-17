@@ -1,3 +1,4 @@
+import { NODE_PROCESSING_VERSION } from '../../shared/node-processing-version.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import yaml from 'js-yaml';
 
@@ -155,7 +156,8 @@ describe('handleMisubRequest regression coverage', () => {
                 expect(config).toHaveProperty('rule-providers');
             }
             expect(fetch).toHaveBeenCalledTimes(1);
-        }
+        },
+        15000 // 冷加载完整处理模块并渲染两次，允许并行 CI 的调度开销。
     );
 
     it.each([
@@ -978,6 +980,7 @@ describe('handleMisubRequest regression coverage', () => {
                 subscriptions,
             });
             adapter.store.set('node_cache_token_stable-token', {
+                processingVersion: NODE_PROCESSING_VERSION,
                 nodes: 'trojan://cached@example.com:443#Cached\n',
                 timestamp: Date.now(),
                 nodeCount: 1,
@@ -1039,6 +1042,7 @@ describe('handleMisubRequest regression coverage', () => {
                 (_, index) => `trojan://cached${index}@node${index}.example.com:443#Cached-${index}`
             ).join('\n') + '\n';
         adapter.store.set('node_cache_token_stable-token', {
+            processingVersion: NODE_PROCESSING_VERSION,
             nodes: healthyNodes,
             timestamp: Date.now(),
             nodeCount: 156,

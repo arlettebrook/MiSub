@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
+import { NODE_PROCESSING_VERSION } from '../../shared/node-processing-version.js';
 import {
     handleSubscriptionNodesRequest,
     handlePublicPreviewRequest,
@@ -19,6 +20,7 @@ const source = {
     enableNodeCache: true,
 };
 const entry = {
+    processingVersion: NODE_PROCESSING_VERSION,
     nodes: ['trojan://synthetic@cached.example:443#Cached%20Node'],
     nodeCount: 1,
     upstreamNodeCount: 1,

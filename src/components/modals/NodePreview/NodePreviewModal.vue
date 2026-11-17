@@ -1,4 +1,5 @@
 <script setup>
+    import { getRegionDisplayEmoji as getRegionEmoji } from '../../../../shared/node-regions.js';
     import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
     import { api, APIError } from '../../../lib/http.js';
     import { useModalData } from '../../../composables/useModalData.js';
@@ -455,89 +456,6 @@
             unknown: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
         };
         return styles[protocol] || styles.unknown;
-    };
-
-    // 获取地区 Emoji
-    const getRegionEmoji = (region) => {
-        if (!region) return '🌐';
-
-        // 常见国家/地区映射
-        const regionMap = {
-            HK: '🇭🇰',
-            'Hong Kong': '🇭🇰',
-            香港: '🇭🇰',
-            TW: '🇨🇳',
-            Taiwan: '🇨🇳',
-            台湾: '🇨🇳',
-            JP: '🇯🇵',
-            Japan: '🇯🇵',
-            日本: '🇯🇵',
-            US: '🇺🇸',
-            'United States': '🇺🇸',
-            美国: '🇺🇸',
-            SG: '🇸🇬',
-            Singapore: '🇸🇬',
-            新加坡: '🇸🇬',
-            KR: '🇰🇷',
-            Korea: '🇰🇷',
-            韩国: '🇰🇷',
-            UK: '🇬🇧',
-            'United Kingdom': '🇬🇧',
-            英国: '🇬🇧',
-            DE: '🇩🇪',
-            Germany: '🇩🇪',
-            德国: '🇩🇪',
-            FR: '🇫🇷',
-            France: '🇫🇷',
-            法国: '🇫🇷',
-            RU: '🇷🇺',
-            Russia: '🇷🇺',
-            俄罗斯: '🇷🇺',
-            CA: '🇨🇦',
-            Canada: '🇨🇦',
-            加拿大: '🇨🇦',
-            MO: '🇲🇴',
-            Macao: '🇲🇴',
-            澳门: '🇲🇴',
-            CN: '🇨🇳',
-            China: '🇨🇳',
-            中国: '🇨🇳',
-            IN: '🇮🇳',
-            India: '🇮🇳',
-            印度: '🇮🇳',
-            NL: '🇳🇱',
-            Netherlands: '🇳🇱',
-            荷兰: '🇳🇱',
-            AU: '🇦🇺',
-            Australia: '🇦🇺',
-            澳大利亚: '🇦🇺',
-            TH: '🇹🇭',
-            Thailand: '🇹🇭',
-            泰国: '🇹🇭',
-            VN: '🇻🇳',
-            Vietnam: '🇻🇳',
-            越南: '🇻🇳',
-            ID: '🇮🇩',
-            Indonesia: '🇮🇩',
-            印尼: '🇮🇩',
-            MY: '🇲🇾',
-            Malaysia: '🇲🇾',
-            马来西亚: '🇲🇾',
-            PH: '🇵🇭',
-            Philippines: '🇵🇭',
-            菲律宾: '🇵🇭',
-            TR: '🇹🇷',
-            Turkey: '🇹🇷',
-            土耳其: '🇹🇷',
-        };
-
-        if (regionMap[region]) return regionMap[region];
-
-        // 尝试在字符串中查找 Emoji
-        const emojiMatch = region.match(/(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u);
-        if (emojiMatch) return emojiMatch[0];
-
-        return '🌍';
     };
 
     // 解析节点信息
